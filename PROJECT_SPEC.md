@@ -50,8 +50,21 @@ Pirate.Update        : 船上待命 → agent.navPos.island 成立 → RemoveFro
 
 **强制依赖链**：`Landing.Spawn()` 内部读 `shipGroup.squad`，而 `ShipGroup.squad` 走 `wave.raid.island.vikings`。因此投放用的对象树**必须是 `Wave → ShipGroup → Landing → ShipLoad`，且 `wave.raid = island.raid`**，否则必然空引用。
 
-**点击链**：`ClickPasser.OnPointerClick(PointerEventData)` → `ClickPasser.GetHitAtMouse(eventData, clickMask0)`（内部 `Singleton<LevelCamera>.instance.cameraRef.ViewportPointToRay`）→ 命中体上的 `IPassedClick.OnPassedClick`。
-**注意**：输入走 Rewired（无 `UnityEngine.Input.GetMouseButtonDown`）；水面没有 navmesh，命中不到 `IPassedClick`，取点需自行计算。
+**陆地点击链路（v0.2.1 实测确认，改输入前必读）**
+```
+Unity EventSystem（StandaloneInputModule）
+  → PointerRationalizer（全屏手势接收器，实现 IPointer*Handler；状态机 None/Hover/ButtonDown/Dragging）
+  → 发布事件 onClick(button, screenPos) / onButtonDown / onDrag …（类型是 System.Core 3.5 的 Action`2）
+  → 订阅者：Navigator（选中/移动小队）、ConfirmButton（确认按钮）、CameraController（镜头拖动）
+  → 换算地面点：NavSpot.NavSpotCast(screenPos, out RaycastHit hit) → hit.point
+     （内部 = ViewportPointToRay(归一化屏幕坐标) + "Voxels" 层 + "Modules" 层各打一发）
+```
+三个由此得出的硬约束：
+1. **不要用 `EventSystem.IsPointerOverGameObject()` 判断"点 UI"**：这游戏所有世界交互都走 EventSystem，指针几乎恒为"over 某对象"，该判断会把点击**静默吞掉**（这是 v0.2.0 "点了没反应且无任何日志"的真凶）。
+2. **不要直接 `pointerRationalizer.onClick += 回调`**：该事件类型是 `System.Core 3.5` 的 `System.Action`2`，而 net472 编译时 C# 把它绑到 `mscorlib`，游戏运行时的 mscorlib 2.0 没有它 → `MissingMethodException`。必须用反射 `GetEvent("onClick")` + `Delegate.CreateDelegate(ev.EventHandlerType, this, mi)` + `ev.AddEventHandler(...)`。
+3. **不要对 `MemberInfo`/`EventInfo`/`MethodInfo` 用 `== null`**：这些类型的 `op_Equality` 是 .NET 4.0 才加的，mscorlib 2.0 没有；用 `object.ReferenceEquals`。
+
+**输入/生成的正确取点顺序（本 mod 采用）**：`island.navSpotter.NavSpotCast(screenPos, out hit)` → `hit.point`（原版路径）；失败再退 `ViewportPointToRay(归一化) × LayerMaster.voxelMask`（"Voxels" 层）；再失败不限层。
 
 ## 5. 机制设计
 
@@ -118,6 +131,12 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 `BadNorthNewMode.dll` → `<BadNorthDir>\BepInEx\plugins\`（0 警告 0 错误，SHA256 校验 MATCH）。
 
 **阶段范围（按作者要求收敛）**：热键 **F1**；敌人**只做一种**——最基础的普通小兵（剑兵 `Viking_Sword`，`EnemyName` 默认值）。想试别的兵种改 cfg 即可，代码不分兵种特化。
+
+**v0.2.1 变更（修复"点了没反应"）**：
+1. **输入改为订阅原版世界点击事件**：反射订阅 `IslandGameplayManager.pointerRationalizer.onClick`（与 `Navigator`/`ConfirmButton` 同源），拿到游戏自己认定的点击与屏幕坐标；订阅失败自动退回 `Input.GetMouseButtonDown` 轮询。
+2. **取点改为原版路径**：`island.navSpotter.NavSpotCast(screenPos, out hit)` → `hit.point`（内部 `ViewportPointToRay(归一化)` + "Voxels"/"Modules" 层），失败再退自制射线（归一化 viewport × `LayerMaster.voxelMask`），再失败不限层。
+3. **移除 `EventSystem.IsPointerOverGameObject()` 闸门**：该判断在本游戏里恒为真（世界交互全走 EventSystem），是 v0.2.0 静默吞掉全部点击的**真凶**。
+4. **点击全程日志**（前缀 `[NewMode][点击]`）：屏幕坐标与来源 → 地形命中（碰撞体名@层 + 世界点 + 海拔）→ 解析结果/原因 → 投放结果。以后"点了没反应"能直接从日志定位到卡在哪一步。
 
 **v0.2.0 变更（本轮微调）**：
 1. **输入从"点水面"改为"点滩头陆地"**：射线打 `LayerMaster.voxelMask`（原版 "Voxels" 层，`NavSpotter` 打地面同款），水面/天空一律不响应——对齐原版"只有陆地可交互"。
