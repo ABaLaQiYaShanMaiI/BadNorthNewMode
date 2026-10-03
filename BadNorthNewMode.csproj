@@ -7,7 +7,7 @@
     <!-- 不生成 [assembly: TargetFramework] 特性：该特性类型在游戏 mscorlib 2.0 里不存在，
          虽属无害（CLR 只在反射时才解析特性），但关掉能让 tools/check-api.ps1 的闸门完全干净。 -->
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <Version>0.2.1</Version>
+    <Version>0.2.3</Version>
     <!-- 游戏目录优先级：命令行 -p:BadNorthDir=xxx > 环境变量 > 本默认值。所有引用一律以它为准，勿写绝对路径。 -->
     <BadNorthDir Condition="'$(BadNorthDir)' == ''">D:\Steam\steamapps\common\BadNorth</BadNorthDir>
   </PropertyGroup>
@@ -32,6 +32,11 @@
     <!-- 仅用于 Physics.Raycast（点滩头陆地的地形射线） -->
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- 仅用于 Animator（下船看门狗的船动画状态诊断） -->
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <!-- 仅用于 UnityEngine.EventSystems.EventSystem（判断指针是否在 UI 上） -->

@@ -135,6 +135,7 @@ namespace BadNorthNewMode
             Wave wave = waveGo.AddComponent<Wave>();
             wave.raid = raid;
             wave.transform.SetParent(raid.landingContainer, false);   // 不进 raid.waves → 原版波次计时不受影响
+            SpawnLedger.Track(waveGo, island);                        // 登记：离开战局/换岛时统一销毁（防幽灵船）
 
             GameObject groupGo = new GameObject("Group");
             ShipGroup group = groupGo.AddComponent<ShipGroup>();
@@ -166,6 +167,7 @@ namespace BadNorthNewMode
             wave.approachAudioId = t.vikingRef.approachAudioId;        // 同 Raid.cs 给波次赋音频的做法
             wave.arriveAudioId = t.vikingRef.arriveAudioId;
             raid.StartCoroutine(wave.BeginWave());                     // 原版协程：Launch() → 船开 → 下船
+            DisembarkWatchdog.Get().Watch(landing);                    // 到岸后若卡住不下船 → 诊断 + 兜底（见 DisembarkWatchdog.cs）
 
             info = string.Format("已投放 {0} ×{1}（船 {2}，滩头离点击处 {3:F1}m）",
                 t.vikingRef.name, load.count, landing.shipPrefab.name, t.shoreDist);

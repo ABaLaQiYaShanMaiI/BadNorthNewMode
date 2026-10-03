@@ -8,6 +8,7 @@ namespace BadNorthNewMode
     {
         // ============ General ============
         public static ConfigEntry<KeyboardShortcut> Hotkey;
+        public static ConfigEntry<KeyboardShortcut> CleanupHotkey;
         public static ConfigEntry<bool> ShowHud;
         public static ConfigEntry<string> EnemyName;
         public static ConfigEntry<int> SquadSize;
@@ -19,6 +20,8 @@ namespace BadNorthNewMode
         public static ConfigEntry<float> WaterLevelY;
         public static ConfigEntry<bool> ShowHoverPreview;
         public static ConfigEntry<float> MarkerSeconds;
+        public static ConfigEntry<float> DisembarkGrace;
+        public static ConfigEntry<bool> DisembarkFix;
 
         // ============ Diag ============
         public static ConfigEntry<bool> VerboseLog;
@@ -38,6 +41,9 @@ namespace BadNorthNewMode
                 "进/出投放模式的按键。默认 F1。进入后点击水面投放敌舰，右键或 Esc 取消。");
             ShowHud = cfg.Bind("General", "ShowHud", true,
                 "左上角显示模式状态与上一次投放结果（纯 GUI 文本，不需要任何资源）。");
+            CleanupHotkey = cfg.Bind("General", "CleanupHotkey", new KeyboardShortcut(KeyCode.F2, new KeyCode[0]),
+                "一键清场：销毁本 mod 投放过的所有船/单位（调试用）。\n" +
+                "销毁是安全的——Agent.OnDestroy 会自行从 faction.agents 摘除，不会留脏数据卡结算。默认 F2。");
             EnemyName = cfg.Bind("General", "EnemyName", "Viking_Sword",
                 "投放的敌人种类（本阶段只做一种：最基础的普通小兵 = 剑兵 Viking_Sword）。\n" +
                 "取值来自 island.levelNode.enemies / 全局引用字典的名字，例如：\n" +
@@ -65,6 +71,12 @@ namespace BadNorthNewMode
                 "用来直观确认\"哪里是能登陆的滩头\"。");
             MarkerSeconds = cfg.Bind("Landing", "MarkerSeconds", 2.5f,
                 "落点光亮标记的保持时长（秒）。");
+            DisembarkGrace = cfg.Bind("Landing", "DisembarkGrace", 3f,
+                "下船看门狗宽限期（秒）：船到岸后超过这么久还没人下船，就判定为卡住。\n" +
+                "卡住时会打一条 [NewMode][下船] 完整诊断，并按 DisembarkFix 决定是否兜底。");
+            DisembarkFix = cfg.Bind("Landing", "DisembarkFix", true,
+                "卡住时的兜底下船开关（用原版公开成员完成，等价于原版 Pirate.MaybeAct 的后半段）。\n" +
+                "true=自动把滞留敌人移下船；false=只打印诊断、保持原样（用于对照排查）。");
         }
 
         static void BindDiag(ConfigFile cfg)

@@ -66,6 +66,24 @@ Unity EventSystem（StandaloneInputModule）
 
 **输入/生成的正确取点顺序（本 mod 采用）**：`island.navSpotter.NavSpotCast(screenPos, out hit)` → `hit.point`（原版路径）；失败再退 `ViewportPointToRay(归一化) × LayerMaster.voxelMask`（"Voxels" 层）；再失败不限层。
 
+**下船（disembark）机制（v0.2.2 实测确认）**
+```
+Agent.Spawn()（由 Longship.SpawnRoutine 逐帧调用，随船行进而推进）
+   └ 各 AgentComponent / Brain.Setup()
+        Brain.Setup(): actions.AddRange(GetComponentsInChildren<IBrainAction>())
+                       orderList.AddRange(GetComponentsInChildren<IAgentOrder>()) → PickNewOrder()
+船到岸：Longship.UpdateIncoming 在 interpolator ≥ 1 时 animator.SetTrigger(landId)
+   → 动画事件 Longship.LandAnimComplete() → landed = true（并且 agents 为空时 enabled=false、Invoke 1s 后关动画器）
+Pirate.MaybeAct(brain)：条件 longship && longship.landed && agent.orderDist < 0.01
+   → navPos = landing.navPos（岛屿网格）；navPos.wPos = agent.navPos.transform.TransformPoint(pos - border*0.3)
+   → RemoveFromShip() → longship.RemoveAgent(agent) + brain.RemoveAction(pirate) + brain.PickNewOrder()
+另有：Pirate.AddToLongship 里挂 body.hopping.OnUpdate → PirateUpdate()（条件 agent.navPos.island != null 就下船）
+空船撤离：agents 清空且 landed → Longship.enabled=false；随后 Longship.Launch()（outgoing=true，倒放 interpolator）驶离
+```
+⚠️ **已知易卡点**：`Squad.CreateAgent` 内部**同步**调用 `agent.Setup()`（`Brain.Setup` 就在其中），而 `Landing.Spawn` 是在这之后才 `GetOrAddComponent<Pirate>().AddToLongship()`——若 `Brain.Setup` 早于 Pirate 挂载（或船的 `LandAnimComplete` 动画事件没触发），船会停在岸边**不下人**。本 mod 用 `DisembarkWatchdog` 兜底：到岸 `DisembarkGrace` 秒后仍有人 → 打完整诊断（interpolator/landed/animator/agents + 每个敌人的 navPos.island、orderDist、brain 是否含 Pirate）→ 用原版公开成员（补登记 `brain.actions`/`brain.order` + 换成岛屿 navPos + 调 `PirateUpdate()`）完成下船。
+
+✅ **"乘船途中照常射击"是原版自带的、且与本 mod 不冲突**：敌人的弓箭手/巨弓手（`Archery : Brain`，它本身就是 Brain）由自己的状态机驱动开火，**与 Pirate / order 系统无关**，所以船在航行中照样射箭；`DisembarkWatchdog` 只在"到岸 + 宽限期之后"才动手，航行阶段完全不碰任何东西。下船后 `RemoveFromShip()` 只从 `brain.actions` 摘掉 Pirate 并 `PickNewOrder()`，**Archery 作为 Brain 本体继续工作**，所以"边射边下船、下船后继续射"都成立。
+
 ## 5. 机制设计
 
 - **触发**：战局内按热键（默认 `F1`，cfg 可改）进入投放模式 → **点击滩头陆地**投放 1 艘敌舰；`Esc`/右键取消。
@@ -131,6 +149,20 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 `BadNorthNewMode.dll` → `<BadNorthDir>\BepInEx\plugins\`（0 警告 0 错误，SHA256 校验 MATCH）。
 
 **阶段范围（按作者要求收敛）**：热键 **F1**；敌人**只做一种**——最基础的普通小兵（剑兵 `Viking_Sword`，`EnemyName` 默认值）。想试别的兵种改 cfg 即可，代码不分兵种特化。
+
+**v0.2.3 变更（幽灵船 + 自动清场 + 结算语义）**：
+1. **修复"退出战局后船残留 / 出现在同一岛下一场战局"**：新增 `SpawnLedger` 登记每次投放的根节点，**两条收场路径都自动清场**：
+   - **战局结束**（胜/败/撤离/放弃）：订阅原版 `EndOfLevel.postProcess`（`Action<Island>`，作用域 mscorlib 2.0 → 可直接订阅；`preProcess` 是 `Action`2`（System.Core）才需反射），四条路径都经 `ProcessEOL` 触发它 → 立刻销毁并打日志（带 `Reason`：None/Won/Wiped/Fled）。
+   - **中途退出到地图/主菜单**：`island.state != Playing`（`LeaveIsland` 会置 Idle）、岛屿换实例、或 `island.raid == null` → 同样统一销毁。
+   成因（源码证实）：`Faction.OnIslandWipe` 会销毁**所有 Agent**并清表，但**长船不是 Agent** —— 它只随 `Raid.IIslandWipe` 里对 `raid.waves` 各 landing 的 `Reset()`（销毁 `spawnedShip`）被清掉；我们的 Wave 有意不在 `raid.waves`，于是残留的是**空船**。
+2. **新增一键清场热键** `General.CleanupHotkey`（默认 `F2`）：销毁本 mod 投放过的全部船/单位，用于"生成了大量敌人清不完"的调试收尾。安全依据：`Agent.OnDestroy` 会自行 `faction.agents.Remove(this)`。
+3. **结算语义（实测确认，不是 bug）**：`IslandWinConditions.Update() → AllEnemiesDefeated() = raid.AllWavesSpawned() && island.vikings.agents.Count == 0`。我们投放的单位是真的维京人（`Squad.CreateAgent` 把 `faction` 设为 `island.vikings`，`Agent.spawned` 激活时加入 `faction.agents`），因此**只要还有未击杀的投放单位，关卡就不会结算**（这正是"自然生成"的应有代价）；要收尾就用 `F2` 清场或让玩家把它们清掉。
+
+**v0.2.2 变更（修复"敌人不下船"）**：
+1. 新增 `DisembarkWatchdog`（只盯本 mod 投放的船）：船到岸（`landed` 或 `interpolator ≥ 0.999`）超过 `DisembarkGrace` 秒仍有人在船上 → 判定卡住。
+2. 卡住时先打**完整诊断**（`longship` 的 interpolator/landed/enabled/agents/haveAllSpawned/animator + 每个敌人的 `navPos.island`、`orderDist`、`spawned`、`brain.actions` 是否含 `Pirate`、`brain.order` 是不是 `Pirate`），用来确定到底卡在哪一环。
+3. 然后**兜底下船**（`DisembarkFix`，默认开）：照抄 `Pirate.MaybeAct` 后半段——补登记 `brain.actions`/`brain.order`（等价于 `Brain.Setup` 时就有 Pirate）+ 把 `agent.navPos` 换成 `landing.navPos` 那套岛屿坐标 + 调公开的 `Pirate.PirateUpdate()`，由原版 `RemoveFromShip()` 完成下船。
+4. 新增 cfg：`Landing.DisembarkGrace`（默认 3s）、`Landing.DisembarkFix`（默认 true；设 false 可只诊断不动手，做对照）。
 
 **v0.2.1 变更（修复"点了没反应"）**：
 1. **输入改为订阅原版世界点击事件**：反射订阅 `IslandGameplayManager.pointerRationalizer.onClick`（与 `Navigator`/`ConfirmButton` 同源），拿到游戏自己认定的点击与屏幕坐标；订阅失败自动退回 `Input.GetMouseButtonDown` 轮询。
