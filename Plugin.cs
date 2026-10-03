@@ -18,7 +18,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "0.2.3";
+        public const string VERSION = "0.2.4";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }

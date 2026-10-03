@@ -80,7 +80,11 @@ Pirate.MaybeAct(brain)：条件 longship && longship.landed && agent.orderDist <
 另有：Pirate.AddToLongship 里挂 body.hopping.OnUpdate → PirateUpdate()（条件 agent.navPos.island != null 就下船）
 空船撤离：agents 清空且 landed → Longship.enabled=false；随后 Longship.Launch()（outgoing=true，倒放 interpolator）驶离
 ```
-⚠️ **已知易卡点**：`Squad.CreateAgent` 内部**同步**调用 `agent.Setup()`（`Brain.Setup` 就在其中），而 `Landing.Spawn` 是在这之后才 `GetOrAddComponent<Pirate>().AddToLongship()`——若 `Brain.Setup` 早于 Pirate 挂载（或船的 `LandAnimComplete` 动画事件没触发），船会停在岸边**不下人**。本 mod 用 `DisembarkWatchdog` 兜底：到岸 `DisembarkGrace` 秒后仍有人 → 打完整诊断（interpolator/landed/animator/agents + 每个敌人的 navPos.island、orderDist、brain 是否含 Pirate）→ 用原版公开成员（补登记 `brain.actions`/`brain.order` + 换成岛屿 navPos + 调 `PirateUpdate()`）完成下船。
+⚠️ **中途投放为什么不下船（v0.2.4 实证，之前的推测已纠正）**：日志实测 `brainOrder=KillAllEnemies(是Pirate=False)`、`orderDist=1000000`、`brainActions 含 Pirate=True`。
+即 **Pirate 已被 Brain 收集（早先"Brain.Setup 早于挂载"的猜测不成立）**，真正的问题是 **order 被 `KillAllEnemies` 抢走**：
+- `KillAllEnemies.WantsControl() = agent.faction.enemy.agents.Count > 0`（有英军就抢）；它在 `orderList` 里比运行期才加的 Pirate 更靠前 → `PickNewOrder()` 选中它 → `SampleOrder` 给出流场哨兵值 `orderDist=1000000` → `Pirate.MaybeAct` 的 `orderDist < 0.01` 永不成立 → 不下船。
+- 原版之所以天然正确：船与敌人在**关卡生成期**就备好，那时我方尚未部署，`KillAllEnemies.WantsControl()` 为假 → `PickNewOrder` 选中 Pirate；一旦拿到，`PickNewOrder` 只在 `order` 不再 `WantsControl()` 时才换（`Pirate.WantsControl() = longship != null`，乘船期间恒真）→ 一直保持。
+- **修法**（`LandingInjector.AttachPirateOrder`）：`landing.Spawn()` 之后立刻把每个敌人的 `brain.order`（与 `orderMono`）设为它的 `Pirate`，之后完全走原版节奏——航行中未 `landed` 不下船，靠岸后走到船头 `orderDist→0` 才跳下（与原版同速）；下船时 `longship` 置空 → `WantsControl` 变假 → `PickNewOrder` 自动切回 `KillAllEnemies` 冲锋。
 
 ✅ **"乘船途中照常射击"是原版自带的、且与本 mod 不冲突**：敌人的弓箭手/巨弓手（`Archery : Brain`，它本身就是 Brain）由自己的状态机驱动开火，**与 Pirate / order 系统无关**，所以船在航行中照样射箭；`DisembarkWatchdog` 只在"到岸 + 宽限期之后"才动手，航行阶段完全不碰任何东西。下船后 `RemoveFromShip()` 只从 `brain.actions` 摘掉 Pirate 并 `PickNewOrder()`，**Archery 作为 Brain 本体继续工作**，所以"边射边下船、下船后继续射"都成立。
 
@@ -149,6 +153,11 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 `BadNorthNewMode.dll` → `<BadNorthDir>\BepInEx\plugins\`（0 警告 0 错误，SHA256 校验 MATCH）。
 
 **阶段范围（按作者要求收敛）**：热键 **F1**；敌人**只做一种**——最基础的普通小兵（剑兵 `Viking_Sword`，`EnemyName` 默认值）。想试别的兵种改 cfg 即可，代码不分兵种特化。
+
+**v0.2.4 变更（下船恢复原速 + 投放失败率）**：
+1. **下船延迟根因修复**：见 §4 下船机制——order 被 `KillAllEnemies` 抢走使 `orderDist=1000000`，原版下船链根本没启动，之前是靠看门狗 3 秒兜底才下船（所以觉得"慢"）。现在 `landing.Spawn()` 后立刻 `AttachPirateOrder()` 把 order 交还 `Pirate` → **完全按原版节奏走到船头再跳下**，`DisembarkWatchdog` 退化为纯安全网（正常情况下不再触发）。
+2. **投放失败率修复**：实测失败样例命中的是 `MeshColliders@Modules`（建筑/岩石模块），而原版 `Landing.TryPlace` 最后一步 `Physics.SphereCast(..., LayerMaster.moduleMask)` 会因**进近廊道被 Modules 挡住**返回 false；原版在 `Raid.IIslandFirstEnter` 里是**遍历候选滩头反复 TryPlace**。现在 `TryResolve` 收集"岸线余量足够 + 与海面齐平 + 距点击处 ≤ MaxShoreDistance"的候选并按距离排序，`CorridorClear()` 预检廊道（复刻 TryPlace 那一步，供悬停预览准确显示可/不可投放），`TrySpawn` 再逐个 `TryPlace` 直到成功；全失败才报"附近 N 个滩头都被地形/建筑挡住或被占用"。
+3. 新增诊断：`VerboseLog=true` 时打印候选滩头数量、首选廊道是否通畅、最终采用第几个候选。
 
 **v0.2.3 变更（幽灵船 + 自动清场 + 结算语义）**：
 1. **修复"退出战局后船残留 / 出现在同一岛下一场战局"**：新增 `SpawnLedger` 登记每次投放的根节点，**两条收场路径都自动清场**：

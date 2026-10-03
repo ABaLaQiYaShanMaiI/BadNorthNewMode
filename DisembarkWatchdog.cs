@@ -107,6 +107,7 @@ namespace BadNorthNewMode
         internal static int ForceDisembark(Landing landing, Longship ship)
         {
             int moved = 0;
+            LandingInjector.AttachPirateOrder(ship);             // 先补 order（与正常投放路径同一套逻辑）
             for (int i = ship.agents.Count - 1; i >= 0; i--)     // 倒序：RemoveFromShip 会改动 agents 列表
             {
                 Agent a = ship.agents[i];
@@ -117,17 +118,6 @@ namespace BadNorthNewMode
                 {
                     Plugin.Log.LogWarning("[NewMode][下船]   该敌人没有 Pirate 组件，跳过（无法走原版下船逻辑）");
                     continue;
-                }
-
-                Brain brain = a.brain;
-                if (brain != null)
-                {
-                    if (!brain.actions.Contains(pirate)) brain.actions.Add(pirate);
-                    if (!object.ReferenceEquals(brain.order, pirate))
-                    {
-                        brain.order = pirate;                    // public 字段（Brain.Setup 本来就会这么设）
-                        brain.orderMono = pirate;
-                    }
                 }
 
                 NavPos islandPos = landing.navPos;
