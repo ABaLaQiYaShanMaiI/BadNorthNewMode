@@ -19,7 +19,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.2.1";
+        public const string VERSION = "1.2.2";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -337,10 +337,11 @@ namespace BadNorthNewMode
             float x = _menuRect.x + 10f;
             float w = _menuRect.width - 20f;
 
-            GUI.Label(new Rect(x, _menuRect.y + 6f, w, 20f), "兵种选择（左键点击）");
+            GUI.Label(new Rect(x, _menuRect.y + 6f, w, 20f), "兵种选择（按难度递增，左键点选；括号内为 cfg 内部名）");
 
             string cur = (ModConfig.EnemyName != null) ? ModConfig.EnemyName.Value : "";
-            GUI.Label(new Rect(x, _menuRect.y + 26f, w, 20f), "当前：" + (string.IsNullOrEmpty(cur) ? "随机" : cur));
+            GUI.Label(new Rect(x, _menuRect.y + 26f, w, 20f),
+                "当前：" + (string.IsNullOrEmpty(cur) ? "随机" : UnitNames.Of(cur) + "（" + cur + "）"));
 
             int curSize = (ModConfig.SquadSize != null) ? ModConfig.SquadSize.Value : 0;
             VikingReference sel = SelectedUnit();
@@ -373,9 +374,13 @@ namespace BadNorthNewMode
                                  string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
                     Rect r = new Rect(x, _menuRect.y + headH + i * rowH, w, rowH - 3f);
 
+                    int def = (_menuIsland != null) ? LandingInjector.DefaultSquadSize(_menuIsland, u) : 0;
+                    string label = string.Format("{0}{1}. {2}（{3}）   默认 {4} 个",
+                        isSel ? "▶ " : "     ", i + 1, UnitNames.Of(u.name), u.name, def);
+
                     Color old = GUI.color;
                     if (isSel) GUI.color = new Color(0.45f, 1f, 1f, 1f);
-                    if (GUI.Button(r, (isSel ? "▶ " : "     ") + UnitLabel(u))) SelectUnit(u);
+                    if (GUI.Button(r, label)) SelectUnit(u);
                     GUI.color = old;
                 }
             }
@@ -398,11 +403,6 @@ namespace BadNorthNewMode
 
             GUI.Label(new Rect(x, cy + countH, w, 34f),
                 "F1 关闭菜单 · F2 强制清场（销毁本 mod 投放的全部船与单位）");
-        }
-
-        static string UnitLabel(VikingReference u)
-        {
-            return u.name + "   (类型 " + u.type.ToString() + "，赏金 " + u.bounty + ")";
         }
 
         /// <summary>选中兵种：写回 cfg（BepInEx 会自动保存），下一次投放立即生效。</summary>

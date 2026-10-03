@@ -320,7 +320,7 @@ namespace BadNorthNewMode
                 }
             }
 
-            SortByName(result);
+            SortByDifficulty(result);
             return result;
         }
 
@@ -333,24 +333,47 @@ namespace BadNorthNewMode
             list.Add(vr);
         }
 
-        static void SortByName(List<VikingReference> list)
+        /// <summary>
+        /// 按难度曲线排序（递增）。用原版自己的难度权重 `bounty` 作主键（它本就是原版生成器
+        /// 把波次填到目标难度时的"造价"），再以单体面积、内部名为次序 → 弱兵在前、精锐在后。
+        /// （`bounty` 只用于排序，不再显示在 UI 上。）
+        /// </summary>
+        static void SortByDifficulty(List<VikingReference> list)
         {
             for (int i = 1; i < list.Count; i++)
             {
                 VikingReference v = list[i];
                 int j = i - 1;
-                while (j >= 0 && string.CompareOrdinal(list[j].name, v.name) > 0) { list[j + 1] = list[j]; j--; }
+                while (j >= 0 && CompareDifficulty(v, list[j]) < 0) { list[j + 1] = list[j]; j--; }
                 list[j + 1] = v;
             }
         }
 
+        static int CompareDifficulty(VikingReference a, VikingReference b)
+        {
+            if (a == null || b == null) return 0;
+            if (a.bounty != b.bounty) return (a.bounty < b.bounty) ? -1 : 1;
+
+            float aa = (a.agent != null) ? a.agent.area : 0f;
+            float ba = (b.agent != null) ? b.agent.area : 0f;
+            if (Mathf.Abs(aa - ba) > 0.0001f) return (aa < ba) ? -1 : 1;
+
+            return string.CompareOrdinal(a.name, b.name);
+        }
+
         /// <summary>
-        /// 该兵种的"原版默认装载数"：完全照抄 Raid.IIslandFirstEnter 的算法
-        /// `Mathf.Max(1, RoundToInt(最小长船容量 / 该兵种单体 area))` —— 弱兵装得多、强兵装得少，天然阶梯。
+        /// 该兵种的默认装载数：**优先用 `UnitNames.DefaultCount` 的显式梯度表**（弱兵多、巨人 1 个），
+        /// 表里没有（例如未来新增的自定义兵种）才回退到原版算法
+        /// `Mathf.Max(1, RoundToInt(最小长船容量 / 该兵种单体 area))`（同 Raid.IIslandFirstEnter）。
         /// </summary>
         internal static int DefaultSquadSize(Island island, VikingReference vr)
         {
-            if (island == null || island.levelNode == null || vr == null || vr.agent == null) return 1;
+            if (vr == null || vr.agent == null) return 1;
+
+            int explicitCount = UnitNames.DefaultCount(vr.name);
+            if (explicitCount > 0) return explicitCount;
+
+            if (island == null || island.levelNode == null) return 1;
 
             List<Longship> ships = island.levelNode.possibleShips;
             float minArea = 0f;
