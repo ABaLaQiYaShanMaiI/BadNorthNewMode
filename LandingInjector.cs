@@ -5,86 +5,170 @@ using Voxels.TowerDefense.RaidGeneration;
 
 namespace BadNorthNewMode
 {
+    /// <summary>一次投放的目标要素（鼠标预览与实投共用同一套解析结果）。</summary>
+    internal struct DropTarget
+    {
+        internal Beaches.Beach.Pos beach;
+        internal VikingReference vikingRef;
+        internal Longship shipPrefab;
+        internal int squadSize;
+        internal Vector3 dir;
+        internal float shoreDist;
+    }
+
     /// <summary>
-    /// 只用原版对象树 + 原版协程投放敌舰：Wave → ShipGroup → Landing → ShipLoad，
-    /// 再走 Spawn() / BeginWave()，因此"驶来 → 靠岸 → 下船 → 转入战斗"全部由原版逻辑承担。
+    /// 只用原版对象树 + 原版协程投放敌舰：Wave → ShipGroup → Landing → ShipLoad
+    /// → TryPlace → Spawn → BeginWave，因此"驶来 → 靠岸 → 下船 → 转入战斗"全由原版承担。
+    /// 输入是"点击到的陆地地块"：只接受与海面齐平的沙滩，悬崖/高台一律拒绝。
     /// </summary>
     internal static class LandingInjector
     {
-        /// <summary>投放一艘敌舰。失败时 info 里是原因；失败会自动清理已建对象。</summary>
-        internal static bool TrySpawn(Island island, Vector3 waterPoint, out string info)
+        static Island _cacheIsland;
+        static List<Beaches.Beach.Pos> _cacheBeaches;
+
+        /// <summary>本关岸线采样点（生成后不变，缓存以免鼠标预览时每帧重建列表）。</summary>
+        internal static List<Beaches.Beach.Pos> BeachPositions(Island island)
         {
-            info = null;
+            if (!object.ReferenceEquals(_cacheIsland, island) || _cacheBeaches == null)
+            {
+                _cacheIsland = island;
+                List<Beaches.Beach.Pos> list = (island.beaches != null) ? island.beaches.GetBeachPositions(0.1f) : null;
+                _cacheBeaches = list ?? new List<Beaches.Beach.Pos>();
+            }
+            return _cacheBeaches;
+        }
+
+        /// <summary>
+        /// 把"点击到的陆地地块"解析成可投放目标：
+        /// ① 点击处海拔须与海面齐平（挡掉悬崖/高台）；② 取最近的可登陆岸线点；
+        /// ③ 落点滩头自身也须与海面齐平；④ 水平距离不超过 MaxShoreDistance。
+        /// </summary>
+        internal static bool TryResolve(Island island, Vector3 landPoint, out DropTarget target, out string reason)
+        {
+            target = default(DropTarget);
+            reason = null;
+
             Raid raid = island.raid;
-            if (raid == null || raid.landingContainer == null) { info = "Raid / landingContainer 未就绪"; return false; }
+            if (raid == null || raid.landingContainer == null) { reason = "Raid / landingContainer 未就绪"; return false; }
 
             List<VikingReference> pool = (island.levelNode != null) ? island.levelNode.enemies : null;
             List<Longship> ships = (island.levelNode != null) ? island.levelNode.possibleShips : null;
-            if (pool == null || pool.Count == 0) { info = "敌人生成池为空"; return false; }
-            if (ships == null || ships.Count == 0) { info = "possibleShips 为空"; return false; }
-            if (island.beaches == null) { info = "Beaches 未就绪"; return false; }
+            if (pool == null || pool.Count == 0) { reason = "敌人生成池为空"; return false; }
+            if (ships == null || ships.Count == 0) { reason = "possibleShips 为空"; return false; }
+            if (island.beaches == null) { reason = "Beaches 未就绪"; return false; }
 
             VikingReference vikingRef = PickEnemy(pool, ModConfig.EnemyName.Value);
-            if (vikingRef == null || vikingRef.agent == null) { info = "没有可用的 VikingReference"; return false; }
+            if (vikingRef == null || vikingRef.agent == null) { reason = "没有可用的 VikingReference"; return false; }
+
+            // ---- 落差校验①：点击到的地块本身必须与海面齐平 ----
+            float seaY = ModConfig.WaterLevelY.Value;
+            float maxH = ModConfig.MaxLandHeight.Value;
+            float clickHeight = Mathf.Abs(landPoint.y - seaY);
+            if (clickHeight > maxH)
+            {
+                reason = string.Format("这里是高地/悬崖（海拔 {0:F2}m，上限 {1:F2}m）——请点与海面齐平的滩头",
+                    clickHeight, maxH);
+                return false;
+            }
+
+            int squadSize = ClampSquadSize(ships, vikingRef, ModConfig.SquadSize.Value);
+            Longship ship = PickShipForLoad(ships, vikingRef, squadSize);
+            if (ship == null) { reason = "没有可用长船"; return false; }
+
+            // ---- 最近的可登陆岸线点（同原版：岸线余量 > 船半径；且落点必须在海平面）----
+            List<Beaches.Beach.Pos> positions = BeachPositions(island);
+            if (positions.Count == 0) { reason = "本关没有可用滩头"; return false; }
+
+            float radius = ship.radius;
+            float bestSq = float.MaxValue;
+            float nearSq = float.MaxValue;
+            Beaches.Beach.Pos best = default(Beaches.Beach.Pos);
+            bool found = false;
+            for (int i = 0; i < positions.Count; i++)
+            {
+                Beaches.Beach.Pos p = positions[i];
+                if (p.distToEdge <= radius) continue;                          // 岸线余量不足，原版同样不用
+                if (Mathf.Abs(p.navPos.pos.y - seaY) > maxH) continue;         // 落差校验②：落点滩头也必须在海平面
+
+                Vector3 flat = landPoint - p.navPos.pos;
+                flat.y = 0f;
+                float sq = flat.sqrMagnitude;
+                if (sq < nearSq) nearSq = sq;
+                if (sq < bestSq) { bestSq = sq; best = p; found = true; }
+            }
+
+            float dist = Mathf.Sqrt(found ? bestSq : nearSq);
+            if (!found) { reason = "附近没有与海面齐平的滩头（可能全是悬崖，或岸线余量不足）"; return false; }
+            if (dist > ModConfig.MaxShoreDistance.Value)
+            {
+                reason = string.Format("离最近滩头 {0:F1}m，超过上限 {1:F1}m（点得更靠近沙滩）",
+                    dist, ModConfig.MaxShoreDistance.Value);
+                return false;
+            }
+
+            target.beach = best;
+            target.vikingRef = vikingRef;
+            target.shipPrefab = ship;
+            target.squadSize = squadSize;
+            target.dir = best.dir + best.navPos.pos.normalized * 0.3f;         // 照抄原版 Raid 的朝向公式
+            target.shoreDist = dist;
+            return true;
+        }
+
+        /// <summary>按解析结果投放一艘敌舰；失败时 info 是原因，并自动清理已建对象。</summary>
+        internal static bool TrySpawn(Island island, Vector3 landPoint, out string info)
+        {
+            DropTarget t;
+            string reason;
+            if (!TryResolve(island, landPoint, out t, out reason)) { info = reason; return false; }
+
+            if (ModConfig.VerboseLog.Value && Plugin.Log != null)
+                Plugin.Log.LogInfo(string.Format(
+                    "[NewMode] 点击陆地 {0}（海拔 {1:F2}m）→ 滩头 {2} 距离 {3:F2}m 船 {4}",
+                    Fmt(landPoint), landPoint.y - ModConfig.WaterLevelY.Value,
+                    Fmt(t.beach.navPos.pos), t.shoreDist, t.shipPrefab.name));
+
+            Raid raid = island.raid;
 
             // ---- 原版对象树，顺序照抄 Raid.IIslandFirstEnter ----
             GameObject waveGo = new GameObject("ModWave");
             Wave wave = waveGo.AddComponent<Wave>();
             wave.raid = raid;
-            wave.transform.SetParent(raid.landingContainer, false); // 不进 raid.waves → 原版波次计时不受影响
+            wave.transform.SetParent(raid.landingContainer, false);   // 不进 raid.waves → 原版波次计时不受影响
 
             GameObject groupGo = new GameObject("Group");
             ShipGroup group = groupGo.AddComponent<ShipGroup>();
-            wave.AddShipGroup(group);                               // 回填 group.wave + SetParent
+            wave.AddShipGroup(group);                                 // 回填 group.wave + SetParent
 
             GameObject landingGo = new GameObject("Landing");
             Landing landing = landingGo.AddComponent<Landing>();
-            group.AddLanding(landing);                              // 回填 landing.shipGroup + SetParent
-            landing.Init(island);                                   // island + landings 层 + timeOffset
+            group.AddLanding(landing);                                // 回填 landing.shipGroup + SetParent
+            landing.Init(island);                                     // island + landings 层 + timeOffset
 
             GameObject loadGo = new GameObject("Load");
             ShipLoad load = loadGo.AddComponent<ShipLoad>();
-            load.vikingRef = vikingRef;
-            load.count = ClampSquadSize(ships, vikingRef, ModConfig.SquadSize.Value);
-            landing.AddShipLoad(load);                              // 回填 load.landing + SetParent
+            load.vikingRef = t.vikingRef;
+            load.count = t.squadSize;
+            landing.AddShipLoad(load);                                // 回填 load.landing + SetParent
 
-            landing.shipPrefab = PickShip(ships, landing);          // 必须在 AddShipLoad 之后（要用 agentArea）
+            landing.shipPrefab = t.shipPrefab;
 
-            // ---- 选滩头 ----
-            Beaches.Beach.Pos beach;
-            float shoreDist;
-            if (!TryPickBeach(island, landing, waterPoint, out beach, out shoreDist))
+            if (!landing.TryPlace(t.beach.navPos, t.dir, ModConfig.ShipSpeedMultiplier.Value, CollectPlaced(raid)))
             {
                 UnityEngine.Object.Destroy(waveGo);
-                info = string.Format("附近没有可用滩头（最近岸线 {0:F1}m / 上限 {1:F1}m，或方向校验未过）",
-                    shoreDist, ModConfig.MaxShoreDistance.Value);
-                return false;
-            }
-
-            Vector3 dir = waterPoint - beach.navPos.pos;
-            dir.y = 0f;
-            if (dir.sqrMagnitude < 0.000001f) dir = beach.dir; else dir.Normalize();
-
-            if (ModConfig.VerboseLog.Value && Plugin.Log != null)
-                Plugin.Log.LogInfo(string.Format("[NewMode] 水面 {0} → 滩头 {1} 距离 {2:F2}m dir {3}",
-                    Fmt(waterPoint), Fmt(beach.navPos.pos), shoreDist, Fmt(dir)));
-
-            if (!landing.TryPlace(beach.navPos, dir, ModConfig.ShipSpeedMultiplier.Value, CollectPlaced(raid)))
-            {
-                UnityEngine.Object.Destroy(waveGo);
-                info = "该滩头被占用或被阻挡（原版 TryPlace 返回 false）";
+                info = "该滩头被占用或被阻挡（原版 TryPlace 返回 false），换个滩头试试";
                 return false;
             }
 
             // ---- 原版发射流程：预生成 → 发射协程（Launch + 靠岸到达回调 + 音乐）----
-            wave.RefreshLandings();                                 // 同 Raid.IIslandPlay
-            landing.Spawn();                                        // Longship + 舱内敌人（原版）
-            wave.approachAudioId = vikingRef.approachAudioId;       // 同 Raid.cs 给波次赋音频的做法
-            wave.arriveAudioId = vikingRef.arriveAudioId;
-            raid.StartCoroutine(wave.BeginWave());                  // 原版协程：Launch() → 船开 → 下船
+            wave.RefreshLandings();                                   // 同 Raid.IIslandPlay
+            landing.Spawn();                                          // Longship + 舱内敌人（原版）
+            wave.approachAudioId = t.vikingRef.approachAudioId;        // 同 Raid.cs 给波次赋音频的做法
+            wave.arriveAudioId = t.vikingRef.arriveAudioId;
+            raid.StartCoroutine(wave.BeginWave());                     // 原版协程：Launch() → 船开 → 下船
 
-            info = string.Format("已投放 {0} ×{1}（船 {2}，离岸 {3:F1}m）",
-                vikingRef.name, load.count, landing.shipPrefab.name, shoreDist);
+            info = string.Format("已投放 {0} ×{1}（船 {2}，滩头离点击处 {3:F1}m）",
+                t.vikingRef.name, load.count, landing.shipPrefab.name, t.shoreDist);
             return true;
         }
 
@@ -111,54 +195,14 @@ namespace BadNorthNewMode
             return list;
         }
 
-        /// <summary>原版岸线采样点里挑一个：方向朝海、岸线余量够、且离点击处最近。</summary>
-        static bool TryPickBeach(Island island, Landing landing, Vector3 waterPoint,
-            out Beaches.Beach.Pos beach, out float bestDist)
-        {
-            beach = default(Beaches.Beach.Pos);
-            bestDist = 0f;
-            List<Beaches.Beach.Pos> positions = island.beaches.GetBeachPositions(0.1f);
-            if (positions == null || positions.Count == 0) return false;
-
-            float radius = landing.shipPrefab.radius;
-            float minDot = ModConfig.MinOutwardDot.Value;
-            float bestOkSq = float.MaxValue;
-            float bestAnySq = float.MaxValue;
-            bool found = false;
-            for (int i = 0; i < positions.Count; i++)
-            {
-                Beaches.Beach.Pos p = positions[i];
-                if (p.distToEdge <= radius) continue;               // 同原版：岸线余量不足的滩头不用
-
-                Vector3 flat = waterPoint - p.navPos.pos;
-                flat.y = 0f;
-                float sq = flat.sqrMagnitude;
-                if (sq < bestAnySq) bestAnySq = sq;
-
-                // 方向校验：点击方向须与滩头朝海外法线大致同向，否则是"点在岛上/点进海湾里"
-                if (minDot > 0f && sq > 0.000001f)
-                {
-                    Vector3 outward = p.dir;
-                    outward.y = 0f;
-                    if (outward.sqrMagnitude > 0.000001f &&
-                        Vector3.Dot(flat.normalized, outward.normalized) < minDot) continue;
-                }
-
-                if (sq < bestOkSq) { bestOkSq = sq; found = true; beach = p; }
-            }
-
-            bestDist = Mathf.Sqrt(found ? bestOkSq : bestAnySq);
-            if (!found) return false;
-            return bestDist <= ModConfig.MaxShoreDistance.Value;
-        }
-
         /// <summary>按 area 选船：照抄原版（首个 area 够用的船，否则用最后一艘）。</summary>
-        static Longship PickShip(List<Longship> ships, Landing landing)
+        static Longship PickShipForLoad(List<Longship> ships, VikingReference vikingRef, int count)
         {
+            float need = vikingRef.agent.area * count;
             for (int i = 0; i < ships.Count; i++)
             {
                 Longship s = ships[i];
-                if (s != null && s.area >= landing.agentArea) return s;
+                if (s != null && s.area >= need) return s;
             }
             for (int i = ships.Count - 1; i >= 0; i--)
                 if (ships[i] != null) return ships[i];

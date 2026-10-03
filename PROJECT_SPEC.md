@@ -55,10 +55,11 @@ Pirate.Update        : 船上待命 → agent.navPos.island 成立 → RemoveFro
 
 ## 5. 机制设计
 
-- **触发**：战局内按热键（默认 `F9`，cfg 可改）进入投放模式 → 点击水面方格投放 1 艘敌舰；`Esc`/右键取消。
-- **水面取点**：`LevelCamera.instance.cameraRef` 射线与海平面求交（备选：对水面层 Raycast）得 `worldPos`。
-- **找滩头**：`island.beaches.GetBeachPositions(0.1f)` 中取离点击点最近、`distToEdge` 足够且未被占用的 `Pos`。
-- **方向**：`dir = (点击点 - 滩头).GetZeroY().normalized`（滩头指向海面，即原版 `Landing.dir` 语义）。
+- **触发**：战局内按热键（默认 `F1`，cfg 可改）进入投放模式 → **点击滩头陆地**投放 1 艘敌舰；`Esc`/右键取消。
+- **输入必须是陆地**（v0.2.0 起）：鼠标射线 × `LayerMaster.voxelMask`（原版 "Voxels" 层，和 `NavSpotter` 打地面同一个掩码）→ 命中点的**真实世界坐标（含海拔）**；水面/天空取不到 → 不响应（对齐原版"只有陆地可交互"）。
+- **落差校验**（v0.2.0 起）：点击处海拔、以及最终落点滩头的海拔，与 `WaterLevelY`（默认 0 = 海平面）之差都必须 ≤ `MaxLandHeight`（默认 0.5m）→ 挡掉悬崖顶/高台地。
+- **找滩头**：`island.beaches.GetBeachPositions(0.1f)`（按岛屿实例缓存，供鼠标预览每帧复用）中取 `distToEdge > 船半径`（同原版）、自身与海面齐平、离点击点最近的 `Pos`。
+- **方向**：照抄原版 Raid 的公式 `dir = beachPos.dir + beachPos.navPos.pos.normalized * 0.3f`。
 - **生成（必须沿用原版路径，不得自建私有航行/生成实现）**：
 
 ```csharp
@@ -88,16 +89,16 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 |---|---|---|
 | T1 | 投放船挂在自己新建的 `Wave` 上后，`Raid.waves` 列表不含它 → `AllWavesLaunched()`/结算与 UI 进度是否受影响；直接 `Launch()` 会跳过 `Wave.BeginWave()` 内的 approach/arrive 音频与 `OnShipArrival` 回调 | 优先挂到 `raid.waves` 末波（若语义允许）；或新建 wave 但不入 `raid.waves`，仅用于满足 `squad` 链，`waveStartTime = 0`；音效需完整则改调 `wave.BeginWave()` 协程 |
 | T2 | `TryPlace` 的 `existingLandings` 在原版只是生成期局部 list | 运行时自建集合，装入全部已存在 `Landing.placed` 者 |
-| T3 | 水面精确取点方式 | 优先相机射线 × `y = 0` 平面；否则对水面层 Raycast |
+| T3 | ~~水面精确取点~~ → v0.2.0 已改为**点陆地地形**（`LayerMaster.voxelMask`），原问题消失 | 已完成；若某些岛地形没有 "Voxels" 层碰撞，代码有 `~0` 兜底并在 VerboseLog 打印 mask |
 | T4 | `Spawn()` 中 `BatchedSprite.Awake()`/`CorpseManager.Precache()` 在运行中重复调用的副作用 | 单独实测；必要时改为延迟到帧末 |
 | T5 | 非战局误触发 | 判 `Singleton<IslandGameplayManager>.instance` 与 `island.state` 后再响应输入 |
 
 ## 7. 里程碑与验收
 
-- **M1** 热键 + 水面点击取点（只打日志，不生成）
-- **M2** 最近滩头求解 + `TryPlace` 占位（Gizmo 可视化）
-- **M3** `Spawn()` + `Launch()`：肉眼可见完整靠岸流程
-- **M4** cfg（热键/船型/兵种/人数/冷却）+ 失败提示 + 与既有 mod 共存回归
+- **M1** 热键 + ~~水面点击取点~~ → 已完成（v0.2.0 改为点击滩头陆地 + 高亮预览）
+- **M2** 最近滩头求解 + 落差校验 + `TryPlace` 占位 → 已完成（可视化用 HUD 文本 + 光亮标记，不用发行版不可见的 Gizmo）
+- **M3** `Spawn()` + `BeginWave()`：肉眼可见完整靠岸流程 → 代码就位，待实机确认
+- **M4** cfg（热键/兵种/人数/速度/落差/标记）+ 失败提示 + 与既有 mod 共存回归 → 部分完成
 
 验收标准：
 1. 战局内 `F9` + 点水面 → 立刻有船自海面驶来；
@@ -112,20 +113,25 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 - 部署路径：`<BadNorthDir>\BepInEx\plugins\BadNorthNewMode.dll`。
 - 文档纪律：只本文件（+ 可选 `开发日志.md`）；不写长注释、不做文档膨胀。
 
-## 9. 实现状态（v0.1.0，已编译并部署）
+## 9. 实现状态（v0.2.0，已编译并部署）
 
 `BadNorthNewMode.dll` → `<BadNorthDir>\BepInEx\plugins\`（0 警告 0 错误，SHA256 校验 MATCH）。
 
 **阶段范围（按作者要求收敛）**：热键 **F1**；敌人**只做一种**——最基础的普通小兵（剑兵 `Viking_Sword`，`EnemyName` 默认值）。想试别的兵种改 cfg 即可，代码不分兵种特化。
 
+**v0.2.0 变更（本轮微调）**：
+1. **输入从"点水面"改为"点滩头陆地"**：射线打 `LayerMaster.voxelMask`（原版 "Voxels" 层，`NavSpotter` 打地面同款），水面/天空一律不响应——对齐原版"只有陆地可交互"。
+2. **落差/悬崖校验**：点击处与落点滩头的海拔都必须与 `WaterLevelY`（海平面）之差 ≤ `MaxLandHeight`（默认 0.5m），杜绝把船生成到悬崖或高台地上。
+3. **光亮落点 UI**：新增 `PlacementMarker`——运行时生成环形+内芯贴图（零资源）、优先加法混合着色器、呼吸缩放闪烁、平铺在地面；**投放模式下鼠标扫过即实时预览**（亮青=可投放，暗红=不可投放），投放后加长显示。观感对齐技能落点高亮。
+
 已实现：
-- **触发**：热键 `KeyboardShortcut`（默认 `F1`）开关投放模式 → 左键点水面投放；右键 / `Esc` 取消；仅 `Island.State.Playing` 且 `island.raid != null` 时生效；指针在 UI 上时不响应（`EventSystem.IsPointerOverGameObject`）。
-- **水面取点**：`Singleton<LevelCamera>.instance.cameraRef` 的鼠标射线 × `y = WaterLevelY`（默认 0）平面。
-- **滩头选择**：`island.beaches.GetBeachPositions(0.1f)` 中取满足「`distToEdge > 船半径`（同原版）+ 方向与滩头朝海法线点积 `≥ MinOutwardDot`（判掉点在岛上/海湾内侧）+ 离点击点最近」，且距离 `≤ MaxShoreDistance`。
+- **触发**：热键 `KeyboardShortcut`（默认 `F1`）开关投放模式 → 左键点滩头陆地投放；右键 / `Esc` 取消；仅 `Island.State.Playing` 且 `island.raid != null` 时生效；指针在 UI 上时不响应（`EventSystem.IsPointerOverGameObject`）。
+- **地形输入**：`Singleton<LevelCamera>.instance.cameraRef` 鼠标射线 × `LayerMaster.voxelMask` → 命中点真实坐标（含海拔）；拿不到 mask 时退 `~0` 兜底。
+- **滩头选择**：`island.beaches.GetBeachPositions(0.1f)`（按岛缓存）中取满足「`distToEdge > 船半径`（同原版）+ 自身与海面齐平 + 离点击点最近」，且水平距离 `≤ MaxShoreDistance`。
 - **敌人选取**：先查 `island.levelNode.enemies`；不在本关池里则退回 `LevelStateObjectReferences.dict` 取**同名**单位（保证"始终同一种小兵"不被随机化）；都取不到才随机并打警告。
 - **投放**：原版对象树 `Wave → ShipGroup → Landing → ShipLoad`（**不进 `raid.waves`**，故不影响原版波次计时）→ `TryPlace(navPos, dir, speedMul, 全岛已放置 Landing 集合)` → `RefreshLandings()` → `Spawn()` → `raid.StartCoroutine(wave.BeginWave())`（原版协程：`Launch()` + 靠岸到达回调 + 取自 `VikingReference` 的 approach/arrive 音乐）。失败自动销毁已建对象并回报原因。
-- **cfg**：`General`（Hotkey/ShowHud/EnemyName/SquadSize）、`Landing`（ShipSpeedMultiplier/MaxShoreDistance/MinOutwardDot/WaterLevelY）、`Diag`（VerboseLog）。
-- **HUD**：纯 `GUI` 文本（零资源），显示模式状态与上一次结果。
+- **cfg**：`General`（Hotkey/ShowHud/EnemyName/SquadSize）、`Landing`（ShipSpeedMultiplier/MaxShoreDistance/MaxLandHeight/WaterLevelY/ShowHoverPreview/MarkerSeconds）、`Diag`（VerboseLog）。
+- **HUD**：纯 `GUI` 文本（零资源），显示模式状态 + 悬停地形判定 + 上一次结果。
 - **`.vscode/settings.json`**：把 .NET Install Tool 指向本机已装 `dotnet`（`existingDotnetPath`）+ 加大 `installTimeoutValue`，规避国内 CDN 导致的语言服务运行时下载超时。
 
 目标框架（实测踩坑，必须记住）：游戏 `BadNorth_Data\Managed` 里是 **mscorlib 2.0.0.0 / System 2.0.0.0 / System.Core 3.5.0.0**，BepInEx 自报 `CLR runtime version: 2.0.50727.1433` → 运行期是 Unity 2018.4 的 **.NET 2.0/3.5 级别**。
@@ -140,6 +146,6 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 1. **不使用 Harmony / MonoMod 补丁**：本机制只需"构造原版对象 + 触发原版协程"，零补丁即零侵入，也不与既有 mod 抢补丁点。
 2. **M2 的 Gizmo 可视化改为 HUD 文本 + 日志**：发行版没有 Unity 编辑器，Gizmo 只在编辑器可见，对实机验证无用。
 
-仍须游戏内实测（源码静态分析覆盖不到）：T1（投放波次对 `AllWavesLaunched()`/结算与 UI 进度的影响）、T3/T4（水面点精度、运行期 `Spawn()` 的副作用）、以及 §7 的五条验收。
+仍须游戏内实测（源码静态分析覆盖不到）：T1（投放波次对 `AllWavesLaunched()`/结算与 UI 进度的影响）、T4（运行期 `Spawn()` 的副作用）、以及 §7 的验收；另外需实机确认 v0.2.0 的三项手感——陆地判定是否顺手、`MaxLandHeight` 默认 0.5m 是否过严/过松、光亮标记的可见度与时长。
 
 

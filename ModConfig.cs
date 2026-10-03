@@ -15,8 +15,10 @@ namespace BadNorthNewMode
         // ============ Landing ============
         public static ConfigEntry<float> ShipSpeedMultiplier;
         public static ConfigEntry<float> MaxShoreDistance;
-        public static ConfigEntry<float> MinOutwardDot;
+        public static ConfigEntry<float> MaxLandHeight;
         public static ConfigEntry<float> WaterLevelY;
+        public static ConfigEntry<bool> ShowHoverPreview;
+        public static ConfigEntry<float> MarkerSeconds;
 
         // ============ Diag ============
         public static ConfigEntry<bool> VerboseLog;
@@ -50,18 +52,25 @@ namespace BadNorthNewMode
         {
             ShipSpeedMultiplier = cfg.Bind("Landing", "ShipSpeedMultiplier", 1f,
                 "航行速度倍率，对应原版 TryPlace 的 speedMultiplier（原版用关卡难度里的 shipSpeedMultiplier）。");
-            MaxShoreDistance = cfg.Bind("Landing", "MaxShoreDistance", 6f,
-                "点击水面处到最近滩头岸线点的最大距离（米）。超过就判定为\"离岸太远\"并拒绝投放。");
-            MinOutwardDot = cfg.Bind("Landing", "MinOutwardDot", 0.25f,
-                "方向校验阈值：点击方向与滩头朝海外法线的点积下限。\n用于把\"点在岛上/点在海湾内侧\"判掉——否则船会从陆地深处开过来。0=不校验。");
+            MaxShoreDistance = cfg.Bind("Landing", "MaxShoreDistance", 3f,
+                "点击处到最近可登陆岸线点的最大水平距离（米）。超过就判定为\"离滩头太远\"并拒绝投放。");
+            MaxLandHeight = cfg.Bind("Landing", "MaxLandHeight", 0.5f,
+                "落差判定上限（米）：点击到的地块、以及最终落点滩头，其海拔与海平面的差值都必须 ≤ 此值。\n" +
+                "用于把\"悬崖顶/高台地\"判掉——原版只有与海面齐平的沙滩才能登陆。\n" +
+                "若发现明明点的是沙滩却被判\"高地\"，把这个值调大一点（比如 0.8）。");
             WaterLevelY = cfg.Bind("Landing", "WaterLevelY", 0f,
-                "海平面世界高度，用于把鼠标射线换算成水面点。原版海面≈0，一般不用改。");
+                "海平面世界高度，作为落差判定的基准（原版海面 ≈ 0，一般不用改）。");
+            ShowHoverPreview = cfg.Bind("Landing", "ShowHoverPreview", true,
+                "投放模式下把鼠标扫过的地形实时算一遍并显示落点标记（亮青=可投放，暗红=不可投放），\n" +
+                "用来直观确认\"哪里是能登陆的滩头\"。");
+            MarkerSeconds = cfg.Bind("Landing", "MarkerSeconds", 2.5f,
+                "落点光亮标记的保持时长（秒）。");
         }
 
         static void BindDiag(ConfigFile cfg)
         {
             VerboseLog = cfg.Bind("Diag", "VerboseLog", false,
-                "详细日志：打印每次点击的水面点、滩头点、方向点积、最终 shipPrefab 与失败原因。排查时开。");
+                "详细日志：打印点击命中的地形点/海拔、滩头点、距离、最终 shipPrefab 与失败原因。排查时开。");
         }
     }
 }
