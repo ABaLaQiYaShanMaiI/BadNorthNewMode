@@ -54,14 +54,25 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "dotnet build 失败（exit=$LASTEXITCODE）" }
 } finally { Pop-Location }
 
-$builtDll = Join-Path $root "bin\$Configuration\net472\$dllName"
-if (-not (Test-Path $builtDll)) { Write-Error "找不到编译产物: $builtDll" }
+# 产物路径按 TFM 自动查找（net35 等），不写死
+$builtDll = (Get-ChildItem (Join-Path $root "bin\$Configuration") -Recurse -Filter $dllName -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty FullName)
+if (-not $builtDll) { Write-Error "找不到编译产物: $root\bin\$Configuration\<tfm>\$dllName" }
+# ---------- 3. 运行时 API 校验（构建闸门：防"净 net472 能编过、游戏 Mono 2.0 却跑不了"的 API）----------
+$apiCheck = Join-Path $root 'tools\check-api.ps1'
+if (Test-Path $apiCheck) {
+    & $apiCheck -Dll $builtDll -GameDir $BadNorthDir
+    if ($LASTEXITCODE -ne 0) { throw "运行时 API 校验失败（见上方 api-check 输出）" }
+} else {
+    Write-Host "[build] 未找到 tools\check-api.ps1，跳过运行时 API 校验" -ForegroundColor Yellow
+}
+
 if ($SkipDeploy) {
-    Write-Host "[build] SkipDeploy=true，仅编译。产物: $builtDll"
+    Write-Host "[build] SkipDeploy=true，仅编译+校验。产物: $builtDll"
     exit 0
 }
 
-# ---------- 3. 部署到 plugins ----------
+# ---------- 4. 部署到 plugins ----------
 if (-not (Test-Path $plugins)) { Write-Error "BepInEx/plugins 不存在: $plugins" }
 $target = Join-Path $plugins $dllName
 if (Test-Path $target) {
@@ -72,7 +83,7 @@ if (Test-Path $target) {
 }
 Copy-Item $builtDll $target -Force
 
-# ---------- 4. SHA256 校验 ----------
+# ---------- 5. SHA256 校验 ----------
 $hashSrc = (Get-FileHash $builtDll -Algorithm SHA256).Hash
 $hashDst = (Get-FileHash $target -Algorithm SHA256).Hash
 if ($hashSrc -ne $hashDst) { Write-Error "哈希校验失败: $builtDll != $target" }

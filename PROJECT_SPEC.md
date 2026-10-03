@@ -14,7 +14,7 @@
 4. **文档从简**：全项目只保留本文件（+ 可选极简 `开发日志.md`）；代码内只写"为什么"的必要注释，不写逐行解释。
 5. **场景隔离**：仅在战局（island gameplay）中生效；战役地图/主菜单不响应。
 6. **互不干扰**：不与既有 mod（BadNorthBlackSpearman 1.3、BadNorthMixedSquad 1.0）冲突；不干扰原版波次计时与关卡结算。
-7. **技术基线**：`net472` + `LangVersion 7.3`（与参考工程一致，兼容 Unity Mono）。
+7. **技术基线**：`net472` + `LangVersion 7.3`。**不能用 net35**（游戏那批 DLL（Assembly-CSharp/UnityEngine/BepInEx）元数据依赖 `mscorlib 4.0.0.0`，net35 会让 MSBuild 丢弃这些引用、编不过）；而**运行时 Mono 是 mscorlib 2.0.0.0（.NET 2.0/3.5 级别，没有 `Array.Empty`）**，所以 net472 下**严禁"params 空数组"调用**——`new KeyboardShortcut(KeyCode.F1)` 会被 Roslyn 优化成 `Array.Empty<T>()`，必须写 `new KeyboardShortcut(KeyCode.F1, new KeyCode[0])`，否则运行期 `MissingMethodException`。`build.ps1` 调用 `tools/check-api.ps1` 作为构建闸门自动拦截此类 API。
 
 ## 3. 环境与参考（已实测）
 
@@ -128,7 +128,13 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 - **HUD**：纯 `GUI` 文本（零资源），显示模式状态与上一次结果。
 - **`.vscode/settings.json`**：把 .NET Install Tool 指向本机已装 `dotnet`（`existingDotnetPath`）+ 加大 `installTimeoutValue`，规避国内 CDN 导致的语言服务运行时下载超时。
 
-目标框架说明：模组编译为 **`.NETFramework,Version=v4.7.2`**（mscorlib 4.0.0.0），与 Unity 2018 Mono 同代，**与 .NET 10 无关**；本机的 .NET 10 SDK 只是编译器/构建工具。
+目标框架（实测踩坑，必须记住）：游戏 `BadNorth_Data\Managed` 里是 **mscorlib 2.0.0.0 / System 2.0.0.0 / System.Core 3.5.0.0**，BepInEx 自报 `CLR runtime version: 2.0.50727.1433` → 运行期是 Unity 2018.4 的 **.NET 2.0/3.5 级别**。
+- 只能编 **`net472`**：改 net35 后 MSBuild 对 Assembly-CSharp/UnityEngine/BepInEx/UnityEngine.UI 全部报 MSB3258（它们元数据里依赖 mscorlib 4.0.0.0，高于 2.0.0.0）并丢弃引用 → 40 个编译错误。
+- 后果：net472 能编过、但**运行时缺 .NET 4.x 的 API**。已实测踩到的第一个：`new KeyboardShortcut(KeyCode.F1)`（params 空数组）被 Roslyn 优化成 `Array.Empty<T>()` → `MissingMethodException: Method not found: 'System.Array.Empty'`，表现为"BepInEx 说插件已加载，但游戏内毫无反馈"（Awake 抛异常后组件不再被驱动）。修法：显式传 `new KeyCode[0]`。
+- 现已加**构建闸门** `tools/check-api.ps1`（`build.ps1` 第 3 步调用）：用 Mono.Cecil 逐一核对模组 DLL 对 mscorlib/System/System.Core 的全部成员引用是否存在于**游戏自带**的同名程序集，缺一个就让构建失败。当前 33 个引用全通过。
+- 另：`<GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>` 关掉了 `[assembly: TargetFramework]`（该特性类型在 mscorlib 2.0 里没有；虽属无害（CLR 仅反射时解析特性），关掉让闸门完全干净）。
+
+与 mod 无关的原版报错（勿误判）：`[Unity Log] Not enough beach!` 是原版岛屿生成器的正常拒绝信息；随后的 `NullReferenceException`（`Island.get_meshPool` → `MeshMerger2.OnIslandDestroy` → `CampaignManager.ClearCampaign`，以及 `Fake3dTex.GetIndex` → `Painter.Paint` → `IslandGenerator`）是**原版"岛屿生成中途退出/清场"的竞态**，链路里没有任何本 mod 的类型。旧版插件 Awake 失败时插件完全未运行，因此那两次 F1 与这些报错无因果关系。
 
 两处与原计划的有意偏差：
 1. **不使用 Harmony / MonoMod 补丁**：本机制只需"构造原版对象 + 触发原版协程"，零补丁即零侵入，也不与既有 mod 抢补丁点。

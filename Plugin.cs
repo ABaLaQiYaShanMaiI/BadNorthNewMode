@@ -1,4 +1,5 @@
 using BepInEx;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -28,12 +29,22 @@ namespace BadNorthNewMode
         {
             Instance = this;
             Log = Logger;
-            ModConfig.Bind(Config);
-            Log.LogInfo(string.Format("[NewMode] v{0} 已加载：{1} 开关投放模式，点击水面投放敌舰。", VERSION, ModConfig.Hotkey.Value));
+            try { ModConfig.Bind(Config); }
+            catch (System.Exception e)
+            {
+                // 配置绑定失败不再让整个插件在 Awake 抛异常（否则游戏里完全无反馈），只报错后降级。
+                Log.LogError("[NewMode] 配置绑定失败：" + e);
+            }
+
+            ConfigEntry<KeyboardShortcut> hk = ModConfig.Hotkey;
+            Log.LogInfo(string.Format("[NewMode] v{0} 已加载：{1} 开关投放模式，点击水面投放敌舰。",
+                VERSION, (hk != null) ? hk.Value.ToString() : "(热键未绑定)"));
         }
 
         void Update()
         {
+            if (ModConfig.Hotkey == null) return;
+
             if (ModConfig.Hotkey.Value.IsDown())
             {
                 _armed = !_armed;

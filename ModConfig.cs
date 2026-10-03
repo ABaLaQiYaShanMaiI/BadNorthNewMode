@@ -30,7 +30,9 @@ namespace BadNorthNewMode
 
         static void BindGeneral(ConfigFile cfg)
         {
-            Hotkey = cfg.Bind("General", "Hotkey", new KeyboardShortcut(KeyCode.F1),
+            // 显式传空数组：不能写 new KeyboardShortcut(KeyCode.F1) —— params 空数组会被 Roslyn
+            // 优化成 Array.Empty<T>()，而游戏运行时 mscorlib 2.0 没有该 API（见 csproj 注释）。
+            Hotkey = cfg.Bind("General", "Hotkey", new KeyboardShortcut(KeyCode.F1, new KeyCode[0]),
                 "进/出投放模式的按键。默认 F1。进入后点击水面投放敌舰，右键或 Esc 取消。");
             ShowHud = cfg.Bind("General", "ShowHud", true,
                 "左上角显示模式状态与上一次投放结果（纯 GUI 文本，不需要任何资源）。");
