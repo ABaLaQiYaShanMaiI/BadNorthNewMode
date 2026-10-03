@@ -19,7 +19,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.2.0";
+        public const string VERSION = "1.2.1";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -320,28 +320,47 @@ namespace BadNorthNewMode
             GUI.Label(new Rect(16f, 12f, 640f, 62f), text);
         }
 
-        /// <summary>兵种菜单：列出本关可投放的兵种，左键点击即选中（写回 cfg EnemyName，立即生效）。</summary>
+        /// <summary>兵种菜单：上排选兵种、下排选数量，均为左键点击（写回 cfg，立即生效）。</summary>
         void DrawMenu()
         {
             int n = (_menuUnits != null) ? _menuUnits.Count : 0;
             float rowH = 26f;
-            float headH = 52f;
+            float headH = 74f;                                   // 标题 + 当前 + 数量信息
             float rows = Mathf.Max(1, n);
-            _menuRect = new Rect(8f, 82f, 420f, headH + rows * rowH + 42f);
+            float countH = 50f;                                  // "数量（…）" + 按钮行
+            _menuRect = new Rect(8f, 82f, 470f, headH + rows * rowH + countH + 40f);
 
             GUI.color = new Color(0f, 0f, 0f, 0.82f);
             GUI.DrawTexture(_menuRect, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + 6f, _menuRect.width - 20f, 20f), "兵种选择（左键点击）");
+            float x = _menuRect.x + 10f;
+            float w = _menuRect.width - 20f;
+
+            GUI.Label(new Rect(x, _menuRect.y + 6f, w, 20f), "兵种选择（左键点击）");
+
             string cur = (ModConfig.EnemyName != null) ? ModConfig.EnemyName.Value : "";
-            GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + 26f, _menuRect.width - 20f, 20f),
-                "当前：" + (string.IsNullOrEmpty(cur) ? "随机" : cur));
+            GUI.Label(new Rect(x, _menuRect.y + 26f, w, 20f), "当前：" + (string.IsNullOrEmpty(cur) ? "随机" : cur));
+
+            int curSize = (ModConfig.SquadSize != null) ? ModConfig.SquadSize.Value : 0;
+            VikingReference sel = SelectedUnit();
+            string sizeInfo;
+            if (sel != null && _menuIsland != null)
+            {
+                int def = LandingInjector.DefaultSquadSize(_menuIsland, sel);
+                int cap = LandingInjector.MaxSquadSize(_menuIsland, sel);
+                sizeInfo = string.Format("数量：{0}（本兵种默认 {1}，上限 {2}）",
+                    (curSize > 0) ? curSize.ToString() : "默认 " + def, def, cap);
+            }
+            else
+            {
+                sizeInfo = "数量：" + ((curSize > 0) ? curSize.ToString() : "默认（按兵种原版算法）");
+            }
+            GUI.Label(new Rect(x, _menuRect.y + 46f, w, 20f), sizeInfo);
 
             if (n == 0)
             {
-                GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + headH + 2f, _menuRect.width - 20f, 20f),
-                    "（进入战局后才会列出可用兵种）");
+                GUI.Label(new Rect(x, _menuRect.y + headH + 2f, w, 20f), "（进入战局后才会列出可用兵种）");
             }
             else
             {
@@ -350,18 +369,34 @@ namespace BadNorthNewMode
                     VikingReference u = _menuUnits[i];
                     if (u == null) continue;
 
-                    bool sel = !string.IsNullOrEmpty(cur) &&
-                               string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
-                    Rect r = new Rect(_menuRect.x + 10f, _menuRect.y + headH + i * rowH, _menuRect.width - 20f, rowH - 3f);
+                    bool isSel = !string.IsNullOrEmpty(cur) &&
+                                 string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
+                    Rect r = new Rect(x, _menuRect.y + headH + i * rowH, w, rowH - 3f);
 
                     Color old = GUI.color;
-                    if (sel) GUI.color = new Color(0.45f, 1f, 1f, 1f);
-                    if (GUI.Button(r, (sel ? "▶ " : "     ") + UnitLabel(u))) SelectUnit(u);
+                    if (isSel) GUI.color = new Color(0.45f, 1f, 1f, 1f);
+                    if (GUI.Button(r, (isSel ? "▶ " : "     ") + UnitLabel(u))) SelectUnit(u);
                     GUI.color = old;
                 }
             }
 
-            GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + headH + rows * rowH + 4f, _menuRect.width - 20f, 34f),
+            // ---- 数量预设（0 = 默认：按兵种原版算法）----
+            float cy = _menuRect.y + headH + rows * rowH + 2f;
+            GUI.Label(new Rect(x, cy, w, 18f), "数量（左键点击；默认 = 按该兵种原版算法）");
+
+            int[] presets = { 0, 1, 2, 3, 4, 6, 8, 10, 12 };
+            float bw = 44f, gap = 4f;
+            for (int i = 0; i < presets.Length; i++)
+            {
+                int v = presets[i];
+                Rect br = new Rect(x + i * (bw + gap), cy + 20f, bw, 24f);
+                Color old = GUI.color;
+                if (curSize == v) GUI.color = new Color(0.45f, 1f, 1f, 1f);
+                if (GUI.Button(br, (v == 0) ? "默认" : v.ToString())) SelectCount(v);
+                GUI.color = old;
+            }
+
+            GUI.Label(new Rect(x, cy + countH, w, 34f),
                 "F1 关闭菜单 · F2 强制清场（销毁本 mod 投放的全部船与单位）");
         }
 
@@ -396,6 +431,43 @@ namespace BadNorthNewMode
             _menuIsland = island;
             _menuUnits = LandingInjector.AvailableUnits(island);
             if (Log != null) Log.LogInfo("[NewMode] 兵种菜单：本关可用 " + _menuUnits.Count + " 种");
+        }
+
+        /// <summary>当前 cfg 里选中的兵种对象（用于显示该兵种的默认/上限数量）。</summary>
+        VikingReference SelectedUnit()
+        {
+            if (_menuUnits == null || ModConfig.EnemyName == null) return null;
+            string cur = ModConfig.EnemyName.Value;
+            if (string.IsNullOrEmpty(cur)) return null;
+
+            for (int i = 0; i < _menuUnits.Count; i++)
+            {
+                VikingReference u = _menuUnits[i];
+                if (u != null && string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase)) return u;
+            }
+            return null;
+        }
+
+        /// <summary>设定装载数量：0 = 默认（按该兵种的原版算法），&gt;0 = 固定数量。</summary>
+        void SelectCount(int value)
+        {
+            if (ModConfig.SquadSize == null) return;
+            if (ModConfig.SquadSize.Value == value) return;
+
+            ModConfig.SquadSize.Value = value;
+            Say(value > 0 ? ("已设定数量：" + value + "（超出船容量会自动裁剪）") : "数量：按兵种默认（原版算法）");
+            if (Log != null) Log.LogInfo("[NewMode] 数量设定：" + ((value > 0) ? value.ToString() : "默认(原版算法)"));
+        }
+
+        static readonly List<string> _loggedOnce = new List<string>();
+
+        /// <summary>同一 key 只打一次日志。悬停预览每帧都会走投放解析，这条是给那些"每帧都会命中"的提示用的。</summary>
+        internal static void LogOnce(string key, string message)
+        {
+            if (Log == null || string.IsNullOrEmpty(key)) return;
+            if (_loggedOnce.Contains(key)) return;
+            _loggedOnce.Add(key);
+            Log.LogInfo(message);
         }
 
         void Say(string msg)

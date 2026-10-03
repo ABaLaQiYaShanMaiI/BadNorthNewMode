@@ -169,7 +169,13 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 | v1.1.0 | 0.2.4 | 下船恢复原版节奏（order 交还 Pirate）+ 候选滩头修复投放失败（实机验证通过） |
 | **v1.2.0** | **1.2.0** | **版本编号统一；F1 兵种选择菜单（左键点选）+ F2 清场说明** |
 
+**v1.2.1 变更（日志去噪 + 装载数量阶梯化 + 玩家手选数量）**：
+1. **日志去噪**：`[NewMode] "X" 不在本关生成池…` 这类提示原本在**每帧的悬停预览**里都会被触发（实测一次选兵刷了 19 行）。现在：① `PickEnemy` 的解析结果按 **(岛屿, 兵种名)** 缓存，悬停时不再重复查池/查字典；② 新增 `Plugin.LogOnce(key,msg)`，同一 key 只打一次。
+2. **装载数量阶梯化（完全对齐原版公式）**：默认值改为 `Mathf.Max(1, RoundToInt(该关最小长船 area ÷ 该兵种单体 area))` —— 与 `Raid.IIslandFirstEnter` 里 `shipLoad.count = Mathf.Max(1, RoundToInt(minArea / vikingRef.agent.area))` 一致（`Longship.area = (extents.x+0.1)*(extents.z+0.1)*3.2`；`Agent.area = radius²*3.2`，`radius = scale*0.12`）。于是**弱兵装得多、强兵装得少**，天然呈阶梯，不再是"一律 6 个"。
+3. **玩家可手动选数量**：cfg `SquadSize` 语义改为 `0 = 按兵种默认（原版算法，新默认值）` / `>0 = 固定数量`（仍被最大长船容量上限裁剪）。F1 菜单新增"数量"一排预设按钮（**默认 / 1 / 2 / 3 / 4 / 6 / 8 / 10 / 12**），左键点选即写回 cfg 并立即生效；信息行显示 `数量：X（本兵种默认 D，上限 C）`。
+
 **v1.2.0 变更（兵种选择菜单 + 版本统一）**：
+
 1. **版本统一**：`Plugin.VERSION`/`csproj Version` 改为与仓库提交同一套 `vX.Y.Z`（本版 1.2.0），日志与提交可一一对应。
 2. **F1 唤起兵种选择菜单**（沿用原有 IMGUI HUD，零资源）：面板列出可选兵种（`island.levelNode.enemies` ∪ 全局 `LevelStateObjectReferences.dict` 里的 `Viking_*`，按名字去重排序），**鼠标左键点击条目即选中**（写回 `cfg EnemyName` 并立即生效，当前选中项高亮 `▶`）；条目显示 `名字 (类型 T，赏金 N)`。
 3. **菜单与投放互不干扰**：`PointerInMenu()` 用菜单矩形（注意 IMGUI 的 y 轴向下，需 `Screen.height - mouse.y` 翻转）屏蔽"点菜单被当成投放"；`OnWorldClick` 与悬停预览都会跳过菜单区域。其余释放逻辑（点滩头陆地 → 候选滩头 → TryPlace → 原版 Spawn/BeginWave）**完全不变**。

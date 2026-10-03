@@ -50,8 +50,11 @@ namespace BadNorthNewMode
                 "Viking_Sword（基础剑兵·默认）、Viking_SwordShield、Viking_Archer、Viking_AxeThrower、\n" +
                 "Viking_Twohanded、Viking_Berserker、Viking_Tank、Viking_TankArcher。\n" +
                 "留空 = 每次随机；名字不在本关生成池时会退回全局引用字典取同一单位，再不行才随机并打警告。");
-            SquadSize = cfg.Bind("General", "SquadSize", 6,
-                "每艘船搭载的敌人数。会按最大船的容量自动裁剪上限（与原版 SetLoadCount 同一套 area 算法）。");
+            SquadSize = cfg.Bind("General", "SquadSize", 0,
+                "每艘船搭载的敌人数。\n" +
+                "0 = 按原版算法自动（用最小长船容量 ÷ 该兵种单体面积 → 弱兵多、强兵少，天然呈阶梯），默认 0。\n" +
+                ">0 = 固定该数量（仍会被最大长船容量上限裁剪）。\n" +
+                "游戏内 F1 菜单里的\"数量\"一排按钮就是改这个值（默认/1/2/3/4/6/8/10/12）。");
         }
 
         static void BindLanding(ConfigFile cfg)

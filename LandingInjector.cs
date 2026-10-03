@@ -58,7 +58,7 @@ namespace BadNorthNewMode
             if (ships == null || ships.Count == 0) { reason = "possibleShips 为空"; return false; }
             if (island.beaches == null) { reason = "Beaches 未就绪"; return false; }
 
-            VikingReference vikingRef = PickEnemy(pool, ModConfig.EnemyName.Value);
+            VikingReference vikingRef = PickEnemy(island, pool, ModConfig.EnemyName.Value);
             if (vikingRef == null || vikingRef.agent == null) { reason = "没有可用的 VikingReference"; return false; }
 
             // ---- 落差校验①：点击到的地块本身必须与海面齐平 ----
@@ -72,7 +72,7 @@ namespace BadNorthNewMode
                 return false;
             }
 
-            int squadSize = ClampSquadSize(ships, vikingRef, ModConfig.SquadSize.Value);
+            int squadSize = EffectiveSquadSize(island, ships, vikingRef, ModConfig.SquadSize.Value);
             Longship ship = PickShipForLoad(ships, vikingRef, squadSize);
             if (ship == null) { reason = "没有可用长船"; return false; }
 
@@ -344,6 +344,53 @@ namespace BadNorthNewMode
             }
         }
 
+        /// <summary>
+        /// 该兵种的"原版默认装载数"：完全照抄 Raid.IIslandFirstEnter 的算法
+        /// `Mathf.Max(1, RoundToInt(最小长船容量 / 该兵种单体 area))` —— 弱兵装得多、强兵装得少，天然阶梯。
+        /// </summary>
+        internal static int DefaultSquadSize(Island island, VikingReference vr)
+        {
+            if (island == null || island.levelNode == null || vr == null || vr.agent == null) return 1;
+
+            List<Longship> ships = island.levelNode.possibleShips;
+            float minArea = 0f;
+            for (int i = 0; i < ships.Count; i++)
+            {
+                Longship s = ships[i];
+                if (s == null || s.area <= 0f) continue;
+                if (minArea <= 0f || s.area < minArea) minArea = s.area;
+            }
+
+            float unitArea = vr.agent.area;
+            if (minArea <= 0f || unitArea <= 0.0001f) return 1;
+            return Mathf.Max(1, Mathf.RoundToInt(minArea / unitArea));
+        }
+
+        /// <summary>该兵种在最大长船上的容量上限（菜单里显示"上限 N"用）。</summary>
+        internal static int MaxSquadSize(Island island, VikingReference vr)
+        {
+            if (island == null || island.levelNode == null || vr == null || vr.agent == null) return 1;
+
+            List<Longship> ships = island.levelNode.possibleShips;
+            float maxArea = 0f;
+            for (int i = 0; i < ships.Count; i++)
+            {
+                Longship s = ships[i];
+                if (s != null && s.area > maxArea) maxArea = s.area;
+            }
+
+            float unitArea = vr.agent.area;
+            if (maxArea <= 0f || unitArea <= 0.0001f) return 1;
+            return Mathf.Max(1, Mathf.RoundToInt(maxArea / unitArea));
+        }
+
+        /// <summary>实际装载数：cfg SquadSize&gt;0 用它，否则用该兵种的原版默认值；两者都受容量上限裁剪。</summary>
+        internal static int EffectiveSquadSize(Island island, List<Longship> ships, VikingReference vr, int cfgSize)
+        {
+            int want = (cfgSize > 0) ? cfgSize : DefaultSquadSize(island, vr);
+            return ClampSquadSize(ships, vr, want);
+        }
+
         /// <summary>收集全岛已放置的 Landing —— 原版 TryPlace 靠它做占位互斥，运行时需自建。</summary>
         static List<Landing> CollectPlaced(Raid raid)
         {
@@ -382,36 +429,58 @@ namespace BadNorthNewMode
         }
 
         /// <summary>
-        /// 按名字取敌人：先查本关生成池，再退回全局引用字典（保证"始终同一种小兵"不被随机化），
-        /// 都取不到才随机并打警告。
+        /// 按名字取敌人：先查本关生成池，再退回全局引用字典（保证"始终同一种兵种"不被随机化），都取不到才随机。
+        /// 结果按 (岛, 兵种名) 缓存——悬停预览每帧都会调用，必须避免重复查找与重复日志（v1.2.1 去噪）。
         /// </summary>
-        static VikingReference PickEnemy(List<VikingReference> pool, string name)
+        static VikingReference PickEnemy(Island island, List<VikingReference> pool, string name)
         {
-            if (!string.IsNullOrEmpty(name))
-            {
-                for (int i = 0; i < pool.Count; i++)
-                {
-                    VikingReference v = pool[i];
-                    if (v != null && string.Equals(v.name, name, System.StringComparison.OrdinalIgnoreCase)) return v;
-                }
+            if (string.IsNullOrEmpty(name)) return pool[Random.Range(0, pool.Count)];
 
+            if (object.ReferenceEquals(_pickIsland, island) &&
+                string.Equals(_pickName, name, System.StringComparison.Ordinal) &&
+                _pickUnit != null)
+            {
+                return _pickUnit;
+            }
+
+            VikingReference found = null;
+            for (int i = 0; i < pool.Count; i++)
+            {
+                VikingReference v = pool[i];
+                if (v != null && string.Equals(v.name, name, System.StringComparison.OrdinalIgnoreCase)) { found = v; break; }
+            }
+
+            if (found == null)
+            {
                 UnityEngine.Object obj;
                 if (LevelStateObjectReferences.dict.TryGetValue(name, out obj))
                 {
                     VikingReference v = obj as VikingReference;
                     if (v != null && v.agent != null)
                     {
-                        if (Plugin.Log != null)
-                            Plugin.Log.LogInfo("[NewMode] \"" + name + "\" 不在本关生成池，改用全局引用字典里的同一单位。");
-                        return v;
+                        found = v;
+                        Plugin.LogOnce("fallback:" + name,
+                            "[NewMode] \"" + name + "\" 不在本关生成池，改用全局引用字典里的同一单位。");
                     }
                 }
-
-                if (Plugin.Log != null)
-                    Plugin.Log.LogWarning("[NewMode] cfg EnemyName=\"" + name + "\" 既不在生成池也不在引用字典，退回随机。");
             }
-            return pool[Random.Range(0, pool.Count)];
+
+            if (found == null)
+            {
+                Plugin.LogOnce("missing:" + name,
+                    "[NewMode] cfg EnemyName=\"" + name + "\" 既不在生成池也不在引用字典，退回随机。");
+                found = pool[Random.Range(0, pool.Count)];
+            }
+
+            _pickIsland = island;
+            _pickName = name;
+            _pickUnit = found;
+            return found;
         }
+
+        static Island _pickIsland;
+        static string _pickName;
+        static VikingReference _pickUnit;
 
         /// <summary>人数上限 = 最大船容量 / 单人 area（与原版 SetLoadCount 同一套算法）。</summary>
         static int ClampSquadSize(List<Longship> ships, VikingReference vikingRef, int want)
