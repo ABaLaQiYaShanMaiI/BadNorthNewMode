@@ -97,7 +97,7 @@ namespace BadNorthNewMode
         internal static int ForceDisembark(Landing landing, Longship ship)
         {
             int moved = 0;
-            LandingInjector.AttachPirateOrder(ship);             // 先补 order（与正常投放路径同一套逻辑）
+            LandingInjector.AttachAgentBehaviours(landing);      // 先补 order（与正常投放路径同一套逻辑）
             for (int i = ship.agents.Count - 1; i >= 0; i--)     // 倒序：RemoveFromShip 会改动 agents 列表
             {
                 Agent a = ship.agents[i];

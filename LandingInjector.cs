@@ -106,7 +106,7 @@ namespace BadNorthNewMode
             float spacing = baseSpacing + ship.length;
             float occDist;
             string occWho;
-            if (IsOccupied(CollectPlaced(raid), nearest.navPos.pos, spacing, out occDist, out occWho))
+            if (IsOccupied(island, raid, nearest.navPos.pos, spacing, out occDist, out occWho))
             {
                 reason = string.Format("该滩头已有船只（离 {0} {1:F1}m，需要 {2:F1}m = 基础 {3:F1} + 船长 {4:F1}）——换个滩头或减少人数",
                     occWho, occDist, spacing, baseSpacing, ship.length);
@@ -158,16 +158,17 @@ namespace BadNorthNewMode
 
             Raid raid = island.raid;
 
-            // ---- 原版对象树，顺序照抄 Raid.IIslandFirstEnter ----
-            GameObject waveGo = new GameObject("ModWave");
-            Wave wave = waveGo.AddComponent<Wave>();
-            wave.raid = raid;
-            wave.transform.SetParent(raid.landingContainer, false);   // 不进 raid.waves → 原版波次计时不受影响
-            SpawnLedger.Track(waveGo, island);                        // 登记：离开战局/换岛时统一销毁（防幽灵船）
+            // 船速：可选跟随关卡难度倍率（原版 TryPlace 的 speedMultiplier 语义）
+            float speedMult = ModConfig.ShipSpeedMultiplier.Value;
+            if (ModConfig.FollowDifficultyShipSpeed.Value && island.levelNode != null && island.levelNode.diffiucltySettings != null)
+                speedMult *= island.levelNode.diffiucltySettings.shipSpeedMultiplier;
 
-            GameObject groupGo = new GameObject("Group");
-            ShipGroup group = groupGo.AddComponent<ShipGroup>();
-            wave.AddShipGroup(group);                                 // 回填 group.wave + SetParent
+            // 原版对象树：Wave/ShipGroup 交给编队发射器分配（窗口内多艘共用同一个 Wave → 只播一条接近音乐）
+            Wave wave;
+            bool createdNew;
+            ShipGroup group = FlotillaLauncher.Reserve(island, raid, ModConfig.FlotillaDelay.Value,
+                ModConfig.FlotillaSpread.Value, out wave, out createdNew);
+            if (createdNew) SpawnLedger.Track(wave.gameObject, island);   // 不进 raid.waves → 需自己登记清场
 
             GameObject landingGo = new GameObject("Landing");
             Landing landing = landingGo.AddComponent<Landing>();
@@ -194,7 +195,7 @@ namespace BadNorthNewMode
                     Beaches.Beach.Pos c = t.candidates[i];
                     Vector3 d = c.dir + c.navPos.pos.normalized * 0.3f;
                     tried++;
-                    if (landing.TryPlace(c.navPos, d, ModConfig.ShipSpeedMultiplier.Value, placed))
+                    if (landing.TryPlace(c.navPos, d, speedMult, placed))
                     {
                         placedOk = true;
                         used = c;
@@ -205,23 +206,24 @@ namespace BadNorthNewMode
 
             if (!placedOk)
             {
-                UnityEngine.Object.Destroy(waveGo);
+                UnityEngine.Object.Destroy(landingGo);
                 info = string.Format("附近 {0} 个滩头都被地形/建筑挡住或被占用，换个位置点", tried);
                 return false;
             }
 
-            // ---- 原版发射流程：预生成 → 发射协程（Launch + 靠岸到达回调 + 音乐）----
-            wave.RefreshLandings();                                   // 同 Raid.IIslandPlay
-            landing.Spawn();                                          // Longship + 舱内敌人（原版）
-            AttachPirateOrder(landing.spawnedShip);                    // 把 order 交还 Pirate（否则不下船）
+            // 预生成（原版 Spawn）→ 装配（order→Pirate + 舰上威胁）→ 由编队统一发射
+            landing.Spawn();
+            AttachAgentBehaviours(landing);
+            wave.approachAudioId = t.vikingRef.approachAudioId;        // 同 Raid.cs 给波次赋音频的做法
+            wave.arriveAudioId = t.vikingRef.arriveAudioId;
 
             string crewIssue = CrewCheck(landing.spawnedShip, t.vikingRef.name);
             if (crewIssue != null && Plugin.Log != null)
                 Plugin.Log.LogWarning("[NewMode] 船员异常：" + crewIssue + "（疑似船体叠加，请反馈此日志）");
-            wave.approachAudioId = t.vikingRef.approachAudioId;        // 同 Raid.cs 给波次赋音频的做法
-            wave.arriveAudioId = t.vikingRef.arriveAudioId;
-            raid.StartCoroutine(wave.BeginWave());                     // 原版协程：Launch() → 船开 → 下船
-            DisembarkWatchdog.Get().Watch(landing);                    // 到岸后若卡住不下船 → 诊断 + 兜底（见 DisembarkWatchdog.cs）
+
+            InvalidateOccupancy();
+            DisembarkWatchdog.Get().Watch(landing);                    // 到岸后若卡住不下船 → 诊断 + 兜底
+            if (ModConfig.FlotillaDelay.Value <= 0f) FlotillaLauncher.FlushNow();
 
             if (ModConfig.VerboseLog.Value && Plugin.Log != null)
                 Plugin.Log.LogInfo(string.Format("[NewMode] 采用第 {0} 个候选滩头 {1}（距点击处 {2:F2}m）",
@@ -265,12 +267,14 @@ namespace BadNorthNewMode
         }
 
         /// <summary>
-        /// 让敌人由 Pirate 接管 order。战局中途投放时我方已在场，KillAllEnemies 会抢先拿到 order，
-        /// 使 orderDist 变成哨兵值、Pirate.MaybeAct 永不成立（不下船）；交还 Pirate 即恢复原版下船节奏。见 PROJECT_SPEC §4。
+        /// 投放后装配：① 把 order 交还 Pirate（战局中途投放会被 KillAllEnemies 抢走 → 不下船，见 PROJECT_SPEC §4）；
+        /// ② 挂 ShipboardThreat（船上的敌人也算威胁，被我方索敌）。
         /// </summary>
-        internal static int AttachPirateOrder(Longship ship)
+        internal static int AttachAgentBehaviours(Landing landing)
         {
+            Longship ship = (landing != null) ? landing.spawnedShip : null;
             if (ship == null || ship.agents == null) return 0;
+
             int n = 0;
             for (int i = 0; i < ship.agents.Count; i++)
             {
@@ -278,17 +282,22 @@ namespace BadNorthNewMode
                 if (a == null || a.brain == null) continue;
 
                 Pirate p = a.GetComponent<Pirate>();
-                if (p == null) continue;
-                if (!a.brain.actions.Contains(p)) a.brain.actions.Add(p);
-                if (!object.ReferenceEquals(a.brain.order, p))
+                if (p != null)
                 {
-                    a.brain.order = p;
-                    a.brain.orderMono = p;
-                    n++;
+                    if (!a.brain.actions.Contains(p)) a.brain.actions.Add(p);
+                    if (!object.ReferenceEquals(a.brain.order, p))
+                    {
+                        a.brain.order = p;
+                        a.brain.orderMono = p;
+                        n++;
+                    }
                 }
+
+                if (a.GetComponent<ShipboardThreat>() == null)
+                    a.gameObject.AddComponent<ShipboardThreat>().Init(landing, a);
             }
             if (ModConfig.VerboseLog.Value && Plugin.Log != null)
-                Plugin.Log.LogInfo("[NewMode] 已把 " + n + " 个敌人的 order 交还 Pirate（恢复原版下船节奏）");
+                Plugin.Log.LogInfo("[NewMode] 已装配 " + n + " 个敌人（order→Pirate + 舰上威胁）");
             return n;
         }
 
@@ -420,24 +429,48 @@ namespace BadNorthNewMode
             return ClampSquadSize(ships, vr, want);
         }
 
-        /// <summary>该位置是否已被某艘船占用（XZ 距离 &lt; spacing）；返回最近的船名与距离，供提示/预览用。</summary>
-        static bool IsOccupied(List<Landing> placed, Vector3 pos, float spacing, out float dist, out string who)
+        /// <summary>已放置船只的位置缓存（悬停预览每帧都会判定占用，避免每帧遍历全岛 Landing）；投放成功/清场/换岛时失效。</summary>
+        static Island _occIsland;
+        static bool _occDirty = true;
+        static readonly List<Vector3> _occPos = new List<Vector3>();
+        static readonly List<string> _occName = new List<string>();
+
+        internal static void InvalidateOccupancy()
         {
-            dist = float.MaxValue;
-            who = null;
+            _occDirty = true;
+        }
+
+        static void RebuildOccupancy(Island island, Raid raid)
+        {
+            _occPos.Clear();
+            _occName.Clear();
+
+            List<Landing> placed = CollectPlaced(raid);
             for (int i = 0; i < placed.Count; i++)
             {
                 Landing l = placed[i];
                 if (l == null) continue;
+                _occPos.Add(l.navPos.pos);
+                _occName.Add((l.spawnedShip != null) ? l.spawnedShip.name : "已放置的船");
+            }
+            _occIsland = island;
+            _occDirty = false;
+        }
 
-                Vector3 a = l.navPos.pos;
+        /// <summary>该位置是否已被某艘船占用（XZ 距离 &lt; spacing）；返回最近的船名与距离，供提示/预览用。</summary>
+        static bool IsOccupied(Island island, Raid raid, Vector3 pos, float spacing, out float dist, out string who)
+        {
+            dist = float.MaxValue;
+            who = null;
+
+            if (_occDirty || !object.ReferenceEquals(_occIsland, island)) RebuildOccupancy(island, raid);
+
+            for (int i = 0; i < _occPos.Count; i++)
+            {
+                Vector3 a = _occPos[i];
                 a.y = pos.y;
                 float d = Vector3.Distance(a, pos);
-                if (d < dist)
-                {
-                    dist = d;
-                    who = (l.spawnedShip != null) ? l.spawnedShip.name : "已放置的船";
-                }
+                if (d < dist) { dist = d; who = _occName[i]; }
             }
             return dist < spacing;
         }
@@ -478,8 +511,9 @@ namespace BadNorthNewMode
 
             if (found == null)
             {
-                UnityEngine.Object obj;
-                if (LevelStateObjectReferences.dict.TryGetValue(name, out obj))
+                bool allowCross = (ModConfig.AllowCrossIslandUnits == null) || ModConfig.AllowCrossIslandUnits.Value;
+                UnityEngine.Object obj = null;
+                if (allowCross && LevelStateObjectReferences.dict.TryGetValue(name, out obj))
                 {
                     VikingReference v = obj as VikingReference;
                     if (v != null && v.agent != null)

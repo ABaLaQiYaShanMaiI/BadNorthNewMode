@@ -55,6 +55,20 @@ EventSystem → PointerRationalizer（全屏手势接收器）→ 发布 onClick
 **结算判定**：`IslandWinConditions.AllEnemiesDefeated() = raid.AllWavesSpawned() && island.vikings.agents.Count == 0`。
 我们投放的是真维京人（`faction = island.vikings`）→ **只要还有未击杀的投放单位，关卡就不会结算**（`F2` 清场可收尾）。
 
+**控制"原版上岛的敌方单位"（v1.3.0 只记录，未实现）**
+```
+LevelNode.Setup(levelState) → levelState.GetReferencedObjects(this.enemies)     // 关卡敌人池，每关生成期填一次
+Raid.IIslandFirstEnter:
+    this.possibleAgents = island.levelNode.enemies;                              // 仅取"同一个 List 对象"的引用
+    for k in 0..wavesCount-1:
+        if (k < possibleAgents.Count)  shipLoad.vikingRef = possibleAgents[k];   // ★ 第 k 波固定用 enemies[k]
+        else                           shipLoad.vikingRef = possibleAgents[Random];
+```
+- **三种手段**：① 改池内容 → 限定原版波次能用哪些兵种；② **改池顺序** → 直接决定"第几波出什么"（原版自带的难度前置编排）；③ 改 `VikingReference` 数值 → ⚠️ 会污染全局共享资产，必须克隆后注入。
+- **时机与实现成本**：`LevelNode.Setup` 只在岛屿生成期填一次；我们在"已生成但未 `Playing`"阶段**幂等覆写**该 List 即可，Raid 拿的是同一引用（即使落在 first-enter 的 yield 之间也生效）→ **零补丁**可达。
+- **存档无影响**：敌人池是运行时从 `LevelState` 派生的，存档不含该 List；只在内存改，重启即恢复。
+- 若将来实现，计划形态：cfg `NativeEnemies`（逗号分隔，留空 = 不干预）+ 菜单一排"原版波次"按钮，只改 List 内容/顺序、绝不改共享资产。
+
 **必须绕开的坑（全部实测过）**
 
 | 坑 | 现象 | 正确做法 |
@@ -80,6 +94,12 @@ EventSystem → PointerRationalizer（全屏手势接收器）→ 发布 onClick
 - **跨岛借用兵种**（船型不借用）：兵种取自本关 `enemies` ∪ 全局字典（`PickEnemy` 回退），只写进**我们自己**的 `ShipLoad.vikingRef`；**不参与关卡生成与存档**（原版 RaidDef 在我们投放前已生成完，我们的 Wave 也不在 `raid.waves`）。
 - **落点 UI**：`PlacementMarker` 运行时生成环形 / 内芯贴图（优先加法混合），悬停实时预览（亮青 = 可投放，暗红 = 不可投放）。
 - **清理**：`SpawnLedger` 自动（战局结束 / 离开战局 / 换岛）+ `F2` 手动。
+- **编队发射**（v1.3.0）：`FlotillaLauncher` 把 `FlotillaDelay`（默认 1s）窗口内的投放合并进**同一个 Wave** → 只播一条接近音乐、一次 `BeginWave`；`FlotillaSpread`（默认 2s）覆盖 Wave 出厂的时间散布；`FlotillaMaxShips`（默认 6）超出即开新编队；`FlotillaDelay = 0` 退回"各自立即出发"。
+- **船上敌人算威胁**（v1.3.0）：`ShipboardThreat`（原理见 §4 坑表）。
+- **暂停与时间基准**（v1.3.0）：`InBattle` 增加 `levelPauser.isPaused` 判定（暂停中不投放）；投放相关计时统一 `Time.time`（暂停冻结，与玩法一致）。
+- **船速跟随难度**（v1.3.0）：`FollowDifficultyShipSpeed`（默认开）→ `speedMult = ShipSpeedMultiplier × levelNode.diffiucltySettings.shipSpeedMultiplier`（原版语义；VeryHard 更快）。
+- **跨岛兵种开关**（v1.3.0）：`AllowCrossIslandUnits`（默认开）；关掉后只从本关 `enemies` 取。
+- **占用表缓存**（v1.3.0）：已放置船位缓存，投放成功 / 清场 / 换岛时失效 → 悬停预览不再每帧遍历全岛 Landing。
 
 ## 6. 已知限制 / 待实测
 
@@ -87,6 +107,9 @@ EventSystem → PointerRationalizer（全屏手势接收器）→ 发布 onClick
 - **T2**：菜单是 IMGUI 覆盖层，点菜单时**游戏自己的世界点击仍会收到**（可能顺带选中压在菜单下的小队）；彻底屏蔽需补游戏侧点击入口，暂未做。
 - **T3**：`MaxLandHeight`（0.5m）/ `MaxShoreDistance`（3m）的通用性——按 HUD 显示的实测落差微调。
 - **T4**：`DisembarkWatchdog` 兜底路径正常不触发；若某兵种仍卡住，日志会给完整诊断。
+- **T5（已结论，v1.3.0）**：船体 Collider **不会堵路**——本作单位通行用自研三角形导航网格 + presence 流场，物理 Collider 不参与寻路；船的 Collider 只出现在射线层（`longshipModulesMask` / `SquadSelection`）里，而 `moduleMask` 只含 `"Modules"`。故不做改动。
+- **T6（原版口径，不打算改）**：投放单位的击杀会计入英雄 `bountiesCollected` 与图鉴（`OnShipArrival → VikingReference.Saw()`）——属原版统计口径；要屏蔽需补丁。
+- **T7（待实测，v1.3.0 新增）**：`ShipboardThreat` 让船上敌人可被索敌后，我方弓手是否真会射击（含"航行中 / 靠岸未下船"两段），以及是否会因此暴露我方意图（朝着空滩射箭）。
 
 ## 7. 命名与提交约定
 
@@ -110,6 +133,9 @@ EventSystem → PointerRationalizer（全屏手势接收器）→ 发布 onClick
 | v1.2.1 | 1.2.1 | 日志去噪（解析缓存 + `LogOnce`）；数量阶梯化 + 手动数量；删"赏金"显示；按难度排序 + 简中名 |
 | v1.2.2 | 1.2.2 | 默认数量按兵种梯度（巨人 1 只）；注释精简（154 → 75 行） |
 | v1.2.3 | 1.2.3 | 本文件精简（249 行/19.8KB → 109 行/6.0KB）+ 注释规范写入 §2 |
-| **v1.2.4** | **1.2.4** | **滩头占用规则（有船即拒投，间距随船长放大以预留原版坑位）+ 船随人数自动匹配 + 修"叠船" + 船员混编自检** |
+| v1.2.4 | 1.2.4 | 滩头占用规则（有船即拒投，间距随船长放大以预留原版坑位）+ 船随人数自动匹配 + 修"叠船" + 船员混编自检 |
+| **v1.3.0** | **1.3.0** | **船上敌人算威胁；编队发射（一条音乐）；暂停不投放 + 时间基准统一；船速跟随难度；跨岛兵种开关；占用表缓存；文档记录"控制原版上岛单位"方案** |
 
 | 弓手乘船射击 | 与 Pirate / order 无关（`Archery : Brain` 自驱） | 无需处理；下船时只摘掉 Pirate action，Archery 不受影响 |
+| 船上敌人"打不到" | 原版 `Longship` 每帧以 `Data(…, dangerous:false, **hittable:false**)` 上报流场 → 我方只能"感到要来"，不会交战（原版设计：打船要用火箭技能） | `ShipboardThreat` 在靠岸前 4m 起（同原版 amount 门控）追加一条 `hittable=true` 的存在；下船后自动停用、交回 Brain 上报 |
+| 连投多艘 = 多段接近音乐同时响 | 每次投放各自一个 Wave，各跑一次 `Wave.BeginWave()`（内含 `PostEvent(approachAudioId)`） | `FlotillaLauncher`：窗口（`FlotillaDelay` 默认 1s）内合并进**同一个 Wave**（原版一波本就多船）→ 一条音乐、一次 `BeginWave`；`timeSpreadGroup/Ship` 覆写为 `FlotillaSpread`（默认 2s）避免拖到十几秒 |

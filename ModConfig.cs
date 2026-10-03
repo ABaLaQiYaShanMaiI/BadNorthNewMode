@@ -12,6 +12,7 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> ShowHud;
         public static ConfigEntry<string> EnemyName;
         public static ConfigEntry<int> SquadSize;
+        public static ConfigEntry<bool> AllowCrossIslandUnits;
 
         // ============ Landing ============
         public static ConfigEntry<float> ShipSpeedMultiplier;
@@ -21,6 +22,10 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> ShowHoverPreview;
         public static ConfigEntry<float> MarkerSeconds;
         public static ConfigEntry<float> MinLandingSpacing;
+        public static ConfigEntry<float> FlotillaDelay;
+        public static ConfigEntry<float> FlotillaSpread;
+        public static ConfigEntry<int> FlotillaMaxShips;
+        public static ConfigEntry<bool> FollowDifficultyShipSpeed;
         public static ConfigEntry<float> DisembarkGrace;
         public static ConfigEntry<bool> DisembarkFix;
 
@@ -58,6 +63,10 @@ namespace BadNorthNewMode
                 "    梯度表在 UnitNames.cs，未收录的兵种自动回退原版公式（最小船容量 ÷ 单体面积）。\n" +
                 ">0 = 固定该数量（仍会被最大长船容量上限裁剪）。\n" +
                 "游戏内 F1 菜单里的\"数量\"一排按钮就是改这个值（默认/1/2/3/4/6/8/10/12）。");
+            AllowCrossIslandUnits = cfg.Bind("General", "AllowCrossIslandUnits", true,
+                "是否允许跨岛借用兵种：\n" +
+                "true = 本关生成池里没有的兵种，从全局引用字典借（菜单里列出的就是两处合集）；\n" +
+                "false = 只允许本关生成池里的兵种（更贴近关卡自身的难度曲线）。");
         }
 
         static void BindLanding(ConfigFile cfg)
@@ -81,6 +90,16 @@ namespace BadNorthNewMode
                 "滩头占用判定的**基础间距**（米）。实际要求 = 本值 + 本船船长：\n" +
                 "离点击处最近的滩头若已有船（原版或本 mod）且距离小于该值，就拒绝投放——\n" +
                 "这样大船会留出更大空档，不会挤占原版停靠点；也不会自动挪到旁边（只有地形/廊道被挡才换候选滩头）。");
+            FlotillaDelay = cfg.Bind("Landing", "FlotillaDelay", 1f,
+                "编队窗口（秒）：窗口内连续投放的船会合并成**同一支编队**（原版一波本就多船），\n" +
+                "于是只播一条接近音乐、避免一次投好几艘时多段音乐同时响。0 = 每艘各自立即出发（原行为）。");
+            FlotillaSpread = cfg.Bind("Landing", "FlotillaSpread", 2f,
+                "编队内各船出发时间的散布上限（秒）：覆盖 Wave 出厂时的随机值，避免编队被拖到十几秒。0 = 同时出发。");
+            FlotillaMaxShips = cfg.Bind("Landing", "FlotillaMaxShips", 6,
+                "单支编队最多合并几艘船（超过就开新编队）。");
+            FollowDifficultyShipSpeed = cfg.Bind("Landing", "FollowDifficultyShipSpeed", true,
+                "船速是否跟随关卡难度倍率（原版用 difficulty.shipSpeedMultiplier，VeryHard 更快）。\n" +
+                "true = 与原版手感一致；false = 只用 ShipSpeedMultiplier。");
             DisembarkGrace = cfg.Bind("Landing", "DisembarkGrace", 3f,
                 "下船看门狗宽限期（秒）：船到岸后超过这么久还没人下船，就判定为卡住。\n" +
                 "卡住时会打一条 [NewMode][下船] 完整诊断，并按 DisembarkFix 决定是否兜底。");

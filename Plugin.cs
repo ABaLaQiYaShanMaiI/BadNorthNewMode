@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.2.4";
+        public const string VERSION = "1.3.0";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -212,6 +212,7 @@ namespace BadNorthNewMode
         {
             why = null;
             if (gm == null) { why = "不在战局中"; return false; }
+            if (gm.levelPauser != null && gm.levelPauser.isPaused) { why = "已暂停"; return false; }
             Island island = gm.island;
             if (island == null || !island.generated) { why = "岛屿未就绪"; return false; }
             if (island.state != Island.State.Playing) { why = "岛屿未进入 Playing 状态"; return false; }
@@ -290,7 +291,7 @@ namespace BadNorthNewMode
         void DrawHud()
         {
             if (!ModConfig.ShowHud.Value) return;
-            if (!_menuOpen && Time.unscaledTime > _hudUntil) return;
+            if (!_menuOpen && Time.time > _hudUntil) return;
 
             string text = _menuOpen
                 ? "BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）"
@@ -460,7 +461,7 @@ namespace BadNorthNewMode
         void Say(string msg)
         {
             _hud = msg;
-            _hudUntil = Time.unscaledTime + 5f;
+            _hudUntil = Time.time + 5f;      // 用 Time.time：暂停时不推进（与玩法计时一致）
         }
 
         static string Fmt(Vector3 v)

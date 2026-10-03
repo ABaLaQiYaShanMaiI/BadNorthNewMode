@@ -63,7 +63,7 @@ namespace BadNorthNewMode
             _ringBase = c;
             _discBase = new Color(c.r, c.g, c.b, c.a * 0.35f);
             _phase = 0f;
-            _until = Time.unscaledTime + seconds;
+            _until = Time.time + seconds;
             transform.position = pos + Vector3.up * 0.03f;                 // 抬高一点，避免与地形 Z-fighting
             transform.localScale = Vector3.one;
             gameObject.SetActive(true);
@@ -77,9 +77,9 @@ namespace BadNorthNewMode
 
         void Update()
         {
-            if (Time.unscaledTime >= _until) { Hide(); return; }
+            if (Time.time >= _until) { Hide(); return; }
 
-            _phase += Time.unscaledDeltaTime;
+            _phase += Time.deltaTime;
             float t = Mathf.PingPong(_phase * 2.2f, 1f);                   // 呼吸
             float s = Mathf.Lerp(0.92f, 1.14f, t);
             transform.localScale = new Vector3(s, s, s);
