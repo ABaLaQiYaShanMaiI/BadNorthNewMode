@@ -293,6 +293,57 @@ namespace BadNorthNewMode
             return n;
         }
 
+        /// <summary>
+        /// 菜单用：当前可投放的兵种列表 = `island.levelNode.enemies`（本关允许的）∪
+        /// `LevelStateObjectReferences.dict` 里所有 `Viking_*`（跨关可用，靠 PickEnemy 的字典回退保证能生成）。
+        /// 按名字去重后按名称排序，保证菜单顺序稳定。
+        /// </summary>
+        internal static List<VikingReference> AvailableUnits(Island island)
+        {
+            List<VikingReference> result = new List<VikingReference>();
+            List<string> names = new List<string>();
+
+            List<VikingReference> pool = (island != null && island.levelNode != null) ? island.levelNode.enemies : null;
+            if (pool != null)
+            {
+                for (int i = 0; i < pool.Count; i++) AddUnit(result, names, pool[i]);
+            }
+
+            Dictionary<string, UnityEngine.Object> dict = LevelStateObjectReferences.dict;
+            if (dict != null)
+            {
+                foreach (KeyValuePair<string, UnityEngine.Object> kv in dict)
+                {
+                    if (string.IsNullOrEmpty(kv.Key)) continue;
+                    if (kv.Key.IndexOf("Viking_", System.StringComparison.Ordinal) != 0) continue;
+                    AddUnit(result, names, kv.Value as VikingReference);
+                }
+            }
+
+            SortByName(result);
+            return result;
+        }
+
+        static void AddUnit(List<VikingReference> list, List<string> names, VikingReference vr)
+        {
+            if (vr == null || vr.agent == null) return;
+            string n = vr.name;
+            if (string.IsNullOrEmpty(n) || names.Contains(n)) return;
+            names.Add(n);
+            list.Add(vr);
+        }
+
+        static void SortByName(List<VikingReference> list)
+        {
+            for (int i = 1; i < list.Count; i++)
+            {
+                VikingReference v = list[i];
+                int j = i - 1;
+                while (j >= 0 && string.CompareOrdinal(list[j].name, v.name) > 0) { list[j + 1] = list[j]; j--; }
+                list[j + 1] = v;
+            }
+        }
+
         /// <summary>收集全岛已放置的 Landing —— 原版 TryPlace 靠它做占位互斥，运行时需自建。</summary>
         static List<Landing> CollectPlaced(Raid raid)
         {

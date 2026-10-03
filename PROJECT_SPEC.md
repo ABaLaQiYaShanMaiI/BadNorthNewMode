@@ -154,7 +154,29 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 
 **阶段范围（按作者要求收敛）**：热键 **F1**；敌人**只做一种**——最基础的普通小兵（剑兵 `Viking_Sword`，`EnemyName` 默认值）。想试别的兵种改 cfg 即可，代码不分兵种特化。
 
+### 版本对照（仓库提交 ↔ DLL/插件版本）
+
+**从 v1.2.0 起两者统一**（`Plugin.VERSION` = `csproj Version` = 仓库提交版本）。历史对应关系如下，便于回溯：
+
+| 仓库提交 | DLL 版本 | 内容 |
+|---|---|---|
+| v1.0.0 | —（无 DLL） | 项目立项 + 约束文件 |
+| v1.0.1 | 0.1.0 | 主体落实：F1 生成单兵种（net472，首次可运行） |
+| v1.0.2 | 0.1.0 | 改用 net472 + 禁用"params 空数组"写法（修 `Array.Empty` 崩溃） |
+| v1.0.3 | 0.2.0 | 投放改点滩头陆地 + 海平面落差校验 + 光亮落点预览 UI |
+| v1.0.4 | 0.2.1 | 输入改订阅原版 `pointerRationalizer.onClick` + 删 `IsPointerOverGameObject` 闸门 + 点击日志 |
+| v1.0.5 | 0.2.2 → 0.2.3 | 下船诊断+兜底；幽灵船修复 + 战局结束/退出自动清场 + F2 手动清场 |
+| v1.1.0 | 0.2.4 | 下船恢复原版节奏（order 交还 Pirate）+ 候选滩头修复投放失败（实机验证通过） |
+| **v1.2.0** | **1.2.0** | **版本编号统一；F1 兵种选择菜单（左键点选）+ F2 清场说明** |
+
+**v1.2.0 变更（兵种选择菜单 + 版本统一）**：
+1. **版本统一**：`Plugin.VERSION`/`csproj Version` 改为与仓库提交同一套 `vX.Y.Z`（本版 1.2.0），日志与提交可一一对应。
+2. **F1 唤起兵种选择菜单**（沿用原有 IMGUI HUD，零资源）：面板列出可选兵种（`island.levelNode.enemies` ∪ 全局 `LevelStateObjectReferences.dict` 里的 `Viking_*`，按名字去重排序），**鼠标左键点击条目即选中**（写回 `cfg EnemyName` 并立即生效，当前选中项高亮 `▶`）；条目显示 `名字 (类型 T，赏金 N)`。
+3. **菜单与投放互不干扰**：`PointerInMenu()` 用菜单矩形（注意 IMGUI 的 y 轴向下，需 `Screen.height - mouse.y` 翻转）屏蔽"点菜单被当成投放"；`OnWorldClick` 与悬停预览都会跳过菜单区域。其余释放逻辑（点滩头陆地 → 候选滩头 → TryPlace → 原版 Spawn/BeginWave）**完全不变**。
+4. **F2 强制清场**在菜单底部与 HUD 中都写明。
+
 **v0.2.4 变更（下船恢复原速 + 投放失败率）**：
+
 1. **下船延迟根因修复**：见 §4 下船机制——order 被 `KillAllEnemies` 抢走使 `orderDist=1000000`，原版下船链根本没启动，之前是靠看门狗 3 秒兜底才下船（所以觉得"慢"）。现在 `landing.Spawn()` 后立刻 `AttachPirateOrder()` 把 order 交还 `Pirate` → **完全按原版节奏走到船头再跳下**，`DisembarkWatchdog` 退化为纯安全网（正常情况下不再触发）。
 2. **投放失败率修复**：实测失败样例命中的是 `MeshColliders@Modules`（建筑/岩石模块），而原版 `Landing.TryPlace` 最后一步 `Physics.SphereCast(..., LayerMaster.moduleMask)` 会因**进近廊道被 Modules 挡住**返回 false；原版在 `Raid.IIslandFirstEnter` 里是**遍历候选滩头反复 TryPlace**。现在 `TryResolve` 收集"岸线余量足够 + 与海面齐平 + 距点击处 ≤ MaxShoreDistance"的候选并按距离排序，`CorridorClear()` 预检廊道（复刻 TryPlace 那一步，供悬停预览准确显示可/不可投放），`TrySpawn` 再逐个 `TryPlace` 直到成功；全失败才报"附近 N 个滩头都被地形/建筑挡住或被占用"。
 3. 新增诊断：`VerboseLog=true` 时打印候选滩头数量、首选廊道是否通畅、最终采用第几个候选。

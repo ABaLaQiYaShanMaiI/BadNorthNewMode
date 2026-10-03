@@ -1,6 +1,7 @@
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using Voxels.TowerDefense;
@@ -18,7 +19,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "0.2.4";
+        public const string VERSION = "1.2.0";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -29,6 +30,12 @@ namespace BadNorthNewMode
         string _hud = "";
         string _hover = "";
         float _hudUntil;
+
+        // ---- 投放菜单（F1 唤起；左键点菜单选兵种）----
+        bool _menuOpen;
+        List<VikingReference> _menuUnits;
+        Island _menuIsland;
+        Rect _menuRect;
 
         void Awake()
         {
@@ -54,18 +61,19 @@ namespace BadNorthNewMode
 
             if (ModConfig.Hotkey.Value.IsDown())
             {
-                _armed = !_armed;
+                _menuOpen = !_menuOpen;
+                _armed = _menuOpen;                       // 菜单即投放模式
                 _hover = "";
                 PlacementMarker.Get().Hide();
-                Say(_armed ? "投放模式：点击滩头陆地投放敌舰；右键 / Esc 取消" : "已退出投放模式");
+                Say(_menuOpen ? "投放菜单：左键点兵种选择，再点滩头陆地投放（F1 关闭 / F2 强制清场）" : "已关闭投放菜单");
                 Log.LogInfo("[NewMode] " + _hud);
-                return;
+                if (!_menuOpen) return;
             }
             if (!_armed) return;
 
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
             {
-                _armed = false; _hover = "";
+                _armed = false; _menuOpen = false; _hover = "";
                 PlacementMarker.Get().Hide();
                 Say("已取消投放");
                 return;
@@ -75,8 +83,11 @@ namespace BadNorthNewMode
             string why;
             if (!InBattle(gm, out why)) { PlacementMarker.Get().Hide(); _hover = why; return; }
 
+            EnsureMenuUnits(gm.island);
+
             // ---- 悬停预览：实时把鼠标下的地形算一遍（点击本身由游戏事件负责）----
             Vector2 screenPos = Input.mousePosition;
+            if (PointerInMenu(screenPos)) { PlacementMarker.Get().Hide(); _hover = "（指针在菜单上）"; return; }
             Vector3 land;
             string diag;
             bool hasLand = TryGetLandPoint(gm.island, screenPos, out land, out diag);
@@ -151,6 +162,11 @@ namespace BadNorthNewMode
             {
                 if (!_armed) return;
                 if (button != PointerEventData.InputButton.Left) return;
+                if (PointerInMenu(screenPos))                                  // 菜单内的左键属于选兵种，不做投放
+                {
+                    if (ModConfig.VerboseLog.Value && Log != null) Log.LogInfo("[NewMode] 菜单内点击 → 忽略投放");
+                    return;
+                }
 
                 IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
                 string why;
@@ -280,22 +296,106 @@ namespace BadNorthNewMode
             return go.name + "@" + (string.IsNullOrEmpty(layer) ? go.layer.ToString() : layer);
         }
 
-        /// <summary>极简 HUD（无资源）：模式状态 + 悬停地形判定 + 上一次结果。</summary>
+        /// <summary>HUD + 投放菜单（纯 IMGUI，零资源；菜单矩形用于屏蔽"点菜单被当成投放"）。</summary>
         void OnGUI()
         {
-            if (!ModConfig.ShowHud.Value) return;
-            if (!_armed && Time.unscaledTime > _hudUntil) return;
+            DrawHud();
+            if (_menuOpen) DrawMenu();
+        }
 
-            string text = _armed
-                ? "BadNorthNewMode · 投放模式（左键点滩头陆地 / 右键或 Esc 取消）"
+        void DrawHud()
+        {
+            if (!ModConfig.ShowHud.Value) return;
+            if (!_menuOpen && Time.unscaledTime > _hudUntil) return;
+
+            string text = _menuOpen
+                ? "BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）"
                 : "BadNorthNewMode";
-            if (_armed && !string.IsNullOrEmpty(_hover)) text += "\n" + _hover;
+            if (_menuOpen && !string.IsNullOrEmpty(_hover)) text += "\n" + _hover;
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
             GUI.color = new Color(0f, 0f, 0f, 0.65f);
             GUI.DrawTexture(new Rect(8f, 8f, 640f, 66f), Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.Label(new Rect(16f, 12f, 640f, 62f), text);
+        }
+
+        /// <summary>兵种菜单：列出本关可投放的兵种，左键点击即选中（写回 cfg EnemyName，立即生效）。</summary>
+        void DrawMenu()
+        {
+            int n = (_menuUnits != null) ? _menuUnits.Count : 0;
+            float rowH = 26f;
+            float headH = 52f;
+            float rows = Mathf.Max(1, n);
+            _menuRect = new Rect(8f, 82f, 420f, headH + rows * rowH + 42f);
+
+            GUI.color = new Color(0f, 0f, 0f, 0.82f);
+            GUI.DrawTexture(_menuRect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + 6f, _menuRect.width - 20f, 20f), "兵种选择（左键点击）");
+            string cur = (ModConfig.EnemyName != null) ? ModConfig.EnemyName.Value : "";
+            GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + 26f, _menuRect.width - 20f, 20f),
+                "当前：" + (string.IsNullOrEmpty(cur) ? "随机" : cur));
+
+            if (n == 0)
+            {
+                GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + headH + 2f, _menuRect.width - 20f, 20f),
+                    "（进入战局后才会列出可用兵种）");
+            }
+            else
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    VikingReference u = _menuUnits[i];
+                    if (u == null) continue;
+
+                    bool sel = !string.IsNullOrEmpty(cur) &&
+                               string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
+                    Rect r = new Rect(_menuRect.x + 10f, _menuRect.y + headH + i * rowH, _menuRect.width - 20f, rowH - 3f);
+
+                    Color old = GUI.color;
+                    if (sel) GUI.color = new Color(0.45f, 1f, 1f, 1f);
+                    if (GUI.Button(r, (sel ? "▶ " : "     ") + UnitLabel(u))) SelectUnit(u);
+                    GUI.color = old;
+                }
+            }
+
+            GUI.Label(new Rect(_menuRect.x + 10f, _menuRect.y + headH + rows * rowH + 4f, _menuRect.width - 20f, 34f),
+                "F1 关闭菜单 · F2 强制清场（销毁本 mod 投放的全部船与单位）");
+        }
+
+        static string UnitLabel(VikingReference u)
+        {
+            return u.name + "   (类型 " + u.type.ToString() + "，赏金 " + u.bounty + ")";
+        }
+
+        /// <summary>选中兵种：写回 cfg（BepInEx 会自动保存），下一次投放立即生效。</summary>
+        void SelectUnit(VikingReference unit)
+        {
+            if (unit == null || ModConfig.EnemyName == null) return;
+            if (string.Equals(ModConfig.EnemyName.Value, unit.name, System.StringComparison.OrdinalIgnoreCase)) return;
+
+            ModConfig.EnemyName.Value = unit.name;
+            Say("已选择兵种：" + unit.name);
+            if (Log != null) Log.LogInfo("[NewMode] 已选择兵种：" + unit.name);
+        }
+
+        /// <summary>菜单是否遮挡该屏幕坐标（IMGUI 的 y 轴自上而下，需翻转）。</summary>
+        bool PointerInMenu(Vector2 screenPos)
+        {
+            if (!_menuOpen) return false;
+            Vector2 gui = new Vector2(screenPos.x, Screen.height - screenPos.y);
+            return _menuRect.Contains(gui);
+        }
+
+        /// <summary>兵种列表随岛屿缓存（同岛复用；换岛重建）。</summary>
+        void EnsureMenuUnits(Island island)
+        {
+            if (object.ReferenceEquals(_menuIsland, island) && _menuUnits != null) return;
+            _menuIsland = island;
+            _menuUnits = LandingInjector.AvailableUnits(island);
+            if (Log != null) Log.LogInfo("[NewMode] 兵种菜单：本关可用 " + _menuUnits.Count + " 种");
         }
 
         void Say(string msg)
