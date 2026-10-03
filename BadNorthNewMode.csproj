@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>BadNorthNewMode</RootNamespace>
+    <AssemblyName>BadNorthNewMode</AssemblyName>
+    <LangVersion>7.3</LangVersion>
+    <Version>0.1.0</Version>
+    <!-- 游戏目录优先级：命令行 -p:BadNorthDir=xxx > 环境变量 > 本默认值。所有引用一律以它为准，勿写绝对路径。 -->
+    <BadNorthDir Condition="'$(BadNorthDir)' == ''">D:\Steam\steamapps\common\BadNorth</BadNorthDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(BadNorthDir)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- 仅用于 UnityEngine.EventSystems.EventSystem（判断指针是否在 UI 上） -->
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- 仅用于 GUI.Label 的极简 HUD -->
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

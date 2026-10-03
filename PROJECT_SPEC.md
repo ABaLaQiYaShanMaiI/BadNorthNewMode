@@ -111,3 +111,29 @@ landing.Launch();   // 激活 → 原版航行/靠岸/下船/战斗
 - DLL / 程序集：`BadNorthNewMode.dll`；命名空间 `BadNorthNewMode`；插件 GUID `badnorth.newmode`。
 - 部署路径：`<BadNorthDir>\BepInEx\plugins\BadNorthNewMode.dll`。
 - 文档纪律：只本文件（+ 可选 `开发日志.md`）；不写长注释、不做文档膨胀。
+
+## 9. 实现状态（v0.1.0，已编译并部署）
+
+`BadNorthNewMode.dll` → `<BadNorthDir>\BepInEx\plugins\`（0 警告 0 错误，SHA256 校验 MATCH）。
+
+**阶段范围（按作者要求收敛）**：热键 **F1**；敌人**只做一种**——最基础的普通小兵（剑兵 `Viking_Sword`，`EnemyName` 默认值）。想试别的兵种改 cfg 即可，代码不分兵种特化。
+
+已实现：
+- **触发**：热键 `KeyboardShortcut`（默认 `F1`）开关投放模式 → 左键点水面投放；右键 / `Esc` 取消；仅 `Island.State.Playing` 且 `island.raid != null` 时生效；指针在 UI 上时不响应（`EventSystem.IsPointerOverGameObject`）。
+- **水面取点**：`Singleton<LevelCamera>.instance.cameraRef` 的鼠标射线 × `y = WaterLevelY`（默认 0）平面。
+- **滩头选择**：`island.beaches.GetBeachPositions(0.1f)` 中取满足「`distToEdge > 船半径`（同原版）+ 方向与滩头朝海法线点积 `≥ MinOutwardDot`（判掉点在岛上/海湾内侧）+ 离点击点最近」，且距离 `≤ MaxShoreDistance`。
+- **敌人选取**：先查 `island.levelNode.enemies`；不在本关池里则退回 `LevelStateObjectReferences.dict` 取**同名**单位（保证"始终同一种小兵"不被随机化）；都取不到才随机并打警告。
+- **投放**：原版对象树 `Wave → ShipGroup → Landing → ShipLoad`（**不进 `raid.waves`**，故不影响原版波次计时）→ `TryPlace(navPos, dir, speedMul, 全岛已放置 Landing 集合)` → `RefreshLandings()` → `Spawn()` → `raid.StartCoroutine(wave.BeginWave())`（原版协程：`Launch()` + 靠岸到达回调 + 取自 `VikingReference` 的 approach/arrive 音乐）。失败自动销毁已建对象并回报原因。
+- **cfg**：`General`（Hotkey/ShowHud/EnemyName/SquadSize）、`Landing`（ShipSpeedMultiplier/MaxShoreDistance/MinOutwardDot/WaterLevelY）、`Diag`（VerboseLog）。
+- **HUD**：纯 `GUI` 文本（零资源），显示模式状态与上一次结果。
+- **`.vscode/settings.json`**：把 .NET Install Tool 指向本机已装 `dotnet`（`existingDotnetPath`）+ 加大 `installTimeoutValue`，规避国内 CDN 导致的语言服务运行时下载超时。
+
+目标框架说明：模组编译为 **`.NETFramework,Version=v4.7.2`**（mscorlib 4.0.0.0），与 Unity 2018 Mono 同代，**与 .NET 10 无关**；本机的 .NET 10 SDK 只是编译器/构建工具。
+
+两处与原计划的有意偏差：
+1. **不使用 Harmony / MonoMod 补丁**：本机制只需"构造原版对象 + 触发原版协程"，零补丁即零侵入，也不与既有 mod 抢补丁点。
+2. **M2 的 Gizmo 可视化改为 HUD 文本 + 日志**：发行版没有 Unity 编辑器，Gizmo 只在编辑器可见，对实机验证无用。
+
+仍须游戏内实测（源码静态分析覆盖不到）：T1（投放波次对 `AllWavesLaunched()`/结算与 UI 进度的影响）、T3/T4（水面点精度、运行期 `Spawn()` 的副作用）、以及 §7 的五条验收。
+
+

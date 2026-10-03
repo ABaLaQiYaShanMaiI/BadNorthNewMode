@@ -1,0 +1,13 @@
+{
+  // 本机已装 .NET SDK 6/8/10（C:\Program Files\dotnet），无需让扩展再去下载运行时。
+  // 报错"An error occurred while installing .NET (10.0.12): .NET install timed out"就是这条下载被墙导致的，
+  // 下面两行让 .NET Install Tool 直接用本机已装的 dotnet，不再走 CDN。
+  "dotnetAcquisitionExtension.existingDotnetPath": [
+    { "extensionId": "ms-dotnettools.csharp", "path": "C:\\Program Files\\dotnet\\dotnet.exe" },
+    { "extensionId": "ms-dotnettools.csdevkit", "path": "C:\\Program Files\\dotnet\\dotnet.exe" },
+    { "extensionId": "ms-dotnettools.vscode-dotnet-runtime", "path": "C:\\Program Files\\dotnet\\dotnet.exe" }
+  ],
+  "dotnetAcquisitionExtension.installTimeoutValue": 900,
+  // 本项目用 net472 编译，语言服务指向任意已装 SDK 即可；构建一律走终端 dotnet build（见 build.ps1）。
+  "dotnet.dotnetPath": "C:\\Program Files\\dotnet"
+}
