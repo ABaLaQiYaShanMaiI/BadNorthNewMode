@@ -5,13 +5,7 @@ using Voxels.TowerDefense.TriFlow;
 
 namespace BadNorthNewMode
 {
-    /// <summary>
-    /// 让"还没下船的敌人"也算威胁。
-    /// 原版 Longship 每帧会以 `Data(this, landing.navPos, dangerous:false, hittable:false, …)` 上报流场——
-    /// 所以我方只能"感到有敌人要来"，却不会把他们当目标（原版设计：要打船得用火箭技能）。
-    /// 本组件在船靠岸前 4m 起（与原版 amount 门控一致）到敌人下船为止，额外追加一条 **可命中/有威胁** 的存在，
-    /// 使我方索敌把他们当正常敌人交战；敌人一旦下船（navPos.island 成立）即自动停用，交回 Brain 自己上报。
-    /// </summary>
+    /// <summary>让船上未下船的敌人也可被索敌：原版 Longship 每帧只报 `hittable:false`（见 PROJECT_SPEC §4 坑表）。</summary>
     internal sealed class ShipboardThreat : AgentComponent, ITriFlowObject
     {
         Landing _landing;

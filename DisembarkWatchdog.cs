@@ -41,10 +41,10 @@ namespace BadNorthNewMode
 
         void Update()
         {
-            if (_entries.Count == 0 || Plugin.Log == null) return;
+            if (_entries.Count == 0) return;
 
-            bool fix = (ModConfig.DisembarkFix != null) && ModConfig.DisembarkFix.Value;
-            float grace = (ModConfig.DisembarkGrace != null) ? ModConfig.DisembarkGrace.Value : 3f;
+            bool fix = Util.V(ModConfig.DisembarkFix, false);
+            float grace = Util.V(ModConfig.DisembarkGrace, 3f);
 
             for (int i = _entries.Count - 1; i >= 0; i--)
             {
@@ -71,7 +71,7 @@ namespace BadNorthNewMode
         internal static void Diagnose(Landing landing, Longship ship)
         {
             Animator anim = ship.GetComponent<Animator>();
-            Plugin.Log.LogWarning(string.Format(
+            Util.Warn(string.Format(
                 "[NewMode][下船] 到岸后仍未下船：interpolator={0:F3} landed={1} enabled={2} agents={3} haveAllSpawned={4} animator={5}",
                 ship.interpolator, ship.landed, ship.enabled, ship.agents.Count, ship.haveAllSpawned,
                 (anim == null) ? "无" : ("有/enabled=" + anim.enabled.ToString())));
@@ -79,13 +79,13 @@ namespace BadNorthNewMode
             for (int i = 0; i < ship.agents.Count; i++)
             {
                 Agent a = ship.agents[i];
-                if (a == null) { Plugin.Log.LogWarning("[NewMode][下船]   敌 " + i + "：已销毁"); continue; }
+                if (a == null) { Util.Warn("[NewMode][下船]   敌 " + i + "：已销毁"); continue; }
 
                 Pirate pirate = a.GetComponent<Pirate>();
                 Brain brain = a.brain;
                 bool inActions = (brain != null) && (pirate != null) && brain.actions.Contains(pirate);
                 bool isOrder = (brain != null) && (pirate != null) && object.ReferenceEquals(brain.order, pirate);
-                Plugin.Log.LogWarning(string.Format(
+                Util.Warn(string.Format(
                     "[NewMode][下船]   敌 {0}：navPos.island={1} orderDist={2:F3} spawned={3} pirate={4} brainActions={5}(含Pirate={6}) brainOrder={7}(是Pirate={8})",
                     i, (a.navPos.island != null), a.orderDist, (a.spawned != null && a.spawned.active),
                     (pirate != null), (brain != null) ? brain.actions.Count : -1, inActions,
@@ -93,7 +93,7 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>用原版公开成员兜底下船：补 order + 把 navPos 换成岛屿网格 + 调 PirateUpdate()（内部走原版 RemoveFromShip）。</summary>
+        /// <summary>下船看门狗：到岸宽限期后仍没人下船 → 打诊断日志 + 用原版成员兜底下船（见 §6 T4）。</summary>
         internal static int ForceDisembark(Landing landing, Longship ship)
         {
             int moved = 0;
@@ -106,7 +106,7 @@ namespace BadNorthNewMode
                 Pirate pirate = a.GetComponent<Pirate>();
                 if (pirate == null)
                 {
-                    Plugin.Log.LogWarning("[NewMode][下船]   该敌人没有 Pirate 组件，跳过（无法走原版下船逻辑）");
+                    Util.Warn("[NewMode][下船]   该敌人没有 Pirate 组件，跳过（无法走原版下船逻辑）");
                     continue;
                 }
 
@@ -118,7 +118,7 @@ namespace BadNorthNewMode
                 moved++;
             }
 
-            Plugin.Log.LogInfo(string.Format("[NewMode][下船] 兜底下船：把 {0} 个敌人移下船（走原版 RemoveFromShip）", moved));
+            Util.Log(string.Format("[NewMode][下船] 兜底下船：把 {0} 个敌人移下船（走原版 RemoveFromShip）", moved));
             return moved;
         }
     }

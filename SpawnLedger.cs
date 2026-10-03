@@ -4,7 +4,7 @@ using Voxels.TowerDefense;
 
 namespace BadNorthNewMode
 {
-    /// <summary>投放对象登记册：我们的 Wave 不进 raid.waves，原版 IIslandWipe 因此不会清它（幽灵船），这里按原版语义补刀；另附 F2 手动清场。</summary>
+    /// <summary>投放对象登记册：我们的 Wave 不在 raid.waves，原版清场不会动它（幽灵船，见 §4）；另附 F2 手动清场。</summary>
     internal sealed class SpawnLedger : MonoBehaviour
     {
         sealed class Item
@@ -44,7 +44,7 @@ namespace BadNorthNewMode
             if (ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown())
             {
                 int n = DestroyAll();
-                if (Plugin.Log != null) Plugin.Log.LogInfo("[NewMode][清理] 手动清场：销毁 " + n + " 组投放对象");
+                Util.Log("[NewMode][清理] 手动清场：销毁 " + n + " 组投放对象");
             }
 
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
@@ -55,8 +55,8 @@ namespace BadNorthNewMode
             if (leaving)
             {
                 int n = DestroyAll();
-                if (n > 0 && Plugin.Log != null)
-                    Plugin.Log.LogInfo("[NewMode][清理] 离开战局：已清除本 mod 投放的 " + n + " 组残留（对齐原版 IIslandWipe）");
+                if (n > 0)
+                    Util.Log("[NewMode][清理] 离开战局：已清除本 mod 投放的 " + n + " 组残留（对齐原版 IIslandWipe）");
                 return;
             }
 
@@ -82,11 +82,11 @@ namespace BadNorthNewMode
                 if (it.root != null) { UnityEngine.Object.Destroy(it.root); n++; }
                 _items.RemoveAt(i);
             }
-            if (n > 0) LandingInjector.InvalidateOccupancy();
+            if (n > 0) DropPlanner.InvalidateOccupancy();
             return n;
         }
 
-        /// <summary>订阅 EndOfLevel.postProcess（Action&lt;Island&gt;，作用域 mscorlib 2.0 → 可直接订阅；preProcess 是 Action`2 才需反射）。胜/败/撤离/放弃都会触发。</summary>
+        /// <summary>订阅 EndOfLevel.postProcess（Action&lt;Island&gt;，可直接订阅，见 §4 坑表）。</summary>
         void TrySubscribeLevelEnd()
         {
             if (_subscribedLevelEnd) return;
@@ -97,7 +97,7 @@ namespace BadNorthNewMode
 
             eol.postProcess += OnLevelPostProcess;
             _subscribedLevelEnd = true;
-            if (Plugin.Log != null) Plugin.Log.LogInfo("[NewMode] 已订阅原版战局结束事件 EndOfLevel.postProcess（用于自动清场）。");
+            Util.Log("[NewMode] 已订阅原版战局结束事件 EndOfLevel.postProcess（用于自动清场）。");
         }
 
         /// <summary>战局结束（结算完成）→ 立刻清掉本 mod 投放的对象。</summary>
@@ -106,12 +106,11 @@ namespace BadNorthNewMode
             try
             {
                 int n = DestroyAll();
-                if (Plugin.Log != null)
-                    Plugin.Log.LogInfo(string.Format("[NewMode][清理] 战局结束（{0}）：已清除本 mod 投放的 {1} 组对象", ReasonName(), n));
+                Util.Log(string.Format("[NewMode][清理] 战局结束（{0}）：已清除本 mod 投放的 {1} 组对象", ReasonName(), n));
             }
             catch (System.Exception e)
             {
-                if (Plugin.Log != null) Plugin.Log.LogError("[NewMode][清理] 战局结束清理异常：" + e);
+                Util.Error("[NewMode][清理] 战局结束清理异常：" + e);
             }
         }
 

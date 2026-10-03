@@ -2,11 +2,7 @@ using System.Collections.Generic;
 
 namespace BadNorthNewMode
 {
-    /// <summary>
-    /// 菜单显示名与默认数量（简中）。
-    /// 原版 I2 本地化**没有**敌方兵种显示名（只有我方兵种/升级；维京兵种唯一出现在 hint 里），
-    /// 故采取"官方用词优先 + 项目文档既有叫法"，并与 cfg 内部名一一对应（详见 PROJECT_SPEC §9）。
-    /// </summary>
+    /// <summary>菜单显示名 + 默认数量梯度；原版无敌方兵种显示名，取名依据见 PROJECT_SPEC §5。</summary>
     internal static class UnitNames
     {
         static readonly Dictionary<string, string> Map = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
@@ -21,7 +17,7 @@ namespace BadNorthNewMode
             { "Viking_TankArcher",  "重装弓箭手" },
         };
 
-        /// <summary>每兵种默认装载数（强度梯度：弱的成群、精锐少见、巨人 1 个）；未收录返回 0 → 调用方回退原版公式。最终仍受船容量上限裁剪。</summary>
+        /// <summary>每兵种默认装载数（梯度：弱兵成群、巨人 1 个）；未收录返回 0 → 回退原版公式。</summary>
         static readonly Dictionary<string, int> DefaultCounts = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
         {
             { "Viking_Sword",       12 },   // 最基础的剑兵 —— 成群
