@@ -5,13 +5,7 @@ using Voxels.TowerDefense.RaidGeneration;
 
 namespace BadNorthNewMode
 {
-    /// <summary>
-    /// 下船看门狗：只针对本 mod 投放的船。
-    /// 原版下船链是「船动画事件置 Longship.landed=true → Pirate.MaybeAct（要求 landed 且 orderDist&lt;0.01）
-    /// → 把 agent.navPos 换成岛屿导航网格 → RemoveFromShip()」；其中 Brain.Setup 收集 IBrainAction/IAgentOrder
-    /// 发生在 CreateAgent（同步）之时，而 Pirate 是那之后才挂上的，晚投的船可能因此卡住。
-    /// 本看门狗：船到岸后若若干秒仍有人没下船 → 打一行完整诊断，并用**原版公开成员**把这批人踢下船。
-    /// </summary>
+    /// <summary>下船看门狗（只盯本 mod 投放的船）：到岸宽限期后仍有人没下船 → 打一行诊断并用原版公开成员兜底下船（安全网）。</summary>
     internal sealed class DisembarkWatchdog : MonoBehaviour
     {
         sealed class Entry
@@ -73,7 +67,7 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>把"为什么没下船"一次性打全（interpolator / landed / 动画器 / brain 是否收下了 Pirate）。</summary>
+        /// <summary>一次性打全"为什么没下船"的关键状态。</summary>
         internal static void Diagnose(Landing landing, Longship ship)
         {
             Animator anim = ship.GetComponent<Animator>();
@@ -99,11 +93,7 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>
-        /// 用原版公开成员完成下船：照抄 Pirate.MaybeAct 的后半段
-        /// （把 navPos 换成 landing.navPos 这套岛屿网格坐标 → PirateUpdate() 内部检测 navPos.island 成立 → RemoveFromShip()）。
-        /// 同时补登记 brain.actions / brain.order，等价于"Brain.Setup 当时就已经有 Pirate"。
-        /// </summary>
+        /// <summary>用原版公开成员兜底下船：补 order + 把 navPos 换成岛屿网格 + 调 PirateUpdate()（内部走原版 RemoveFromShip）。</summary>
         internal static int ForceDisembark(Landing landing, Longship ship)
         {
             int moved = 0;

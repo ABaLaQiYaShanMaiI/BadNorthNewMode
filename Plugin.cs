@@ -8,18 +8,13 @@ using Voxels.TowerDefense;
 
 namespace BadNorthNewMode
 {
-    /// <summary>
-    /// 战局内按热键进入投放模式 → 点击【滩头陆地】→ 该处按原版流程来一艘敌舰。
-    /// 输入完全对齐原版：订阅 IslandGameplayManager.pointerRationalizer.onClick（游戏自己的世界点击事件），
-    /// 再用 NavSpot.NavSpotCast(screenPos, out hit) 换算地面点——与 Navigator / ConfirmButton 同一套。
-    /// 无 Harmony 补丁。
-    /// </summary>
+    /// <summary>战局内 F1 开菜单选兵种 → 点滩头陆地 → 按原版流程来一艘敌舰。输入/取点均走原版接口，无 Harmony 补丁。</summary>
     [BepInPlugin(GUID, NAME, VERSION)]
     public class Plugin : BaseUnityPlugin
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.2.2";
+        public const string VERSION = "1.2.3";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -85,7 +80,7 @@ namespace BadNorthNewMode
 
             EnsureMenuUnits(gm.island);
 
-            // ---- 悬停预览：实时把鼠标下的地形算一遍（点击本身由游戏事件负责）----
+            // 悬停预览（点击本身由游戏事件负责）
             Vector2 screenPos = Input.mousePosition;
             if (PointerInMenu(screenPos)) { PlacementMarker.Get().Hide(); _hover = "（指针在菜单上）"; return; }
             Vector3 land;
@@ -108,18 +103,12 @@ namespace BadNorthNewMode
                         target.beach.navPos.pos.y - ModConfig.WaterLevelY.Value, target.shoreDist)
                       : reason);
 
-            // 兜底：万一没订阅上游戏的点击事件就用轮询（订阅成功则完全交给事件，避免一次点击投两艘）
+            // 兜底：未订阅成功才轮询（避免一次点击投两艘）
             if (!_subscribed && Input.GetMouseButtonDown(0))
                 DoDrop(gm, screenPos, "轮询兜底");
         }
 
-        /// <summary>
-        /// 订阅原版世界点击事件 pointerRationalizer.onClick。
-        /// 必须用反射：该事件的类型是 <c>System.Core 3.5</c> 里的 <c>System.Action`2</c>，
-        /// 而 net472 编译时 C# 会把它绑到 mscorlib（.NET 4.x 才把 Action`2 移进 mscorlib），
-        /// 游戏运行时的 mscorlib 2.0 没有这个类型 → 直接写 += 会 MissingMethodException。
-        /// 反射用运行时自己的那个委托类型来造委托，我们的元数据里完全不引用它。
-        /// </summary>
+        /// <summary>反射订阅 pointerRationalizer.onClick：该事件类型是 System.Core 3.5 的 Action`2，直接 += 会在游戏 mscorlib 2.0 上炸（见 PROJECT_SPEC §4）。</summary>
         void TrySubscribeGameClick()
         {
             if (_subscribed || _subscribeFailed) return;
@@ -230,12 +219,7 @@ namespace BadNorthNewMode
             return true;
         }
 
-        /// <summary>
-        /// 屏幕坐标 → 地面点，并带回诊断文本。
-        /// ① 首选原版路径 NavSpotter.NavSpotCast（Navigator / ConfirmButton 同款：
-        ///    内部 ViewportPointToRay(归一化坐标) + "Voxels"/"Modules" 层，out hit 即地面命中）；
-        /// ② 兜底：同一套归一化 viewport 射线 × 原版 "Voxels" 层；再不行不限层。
-        /// </summary>
+        /// <summary>屏幕坐标 → 地面点（首选原版 NavSpotter.NavSpotCast，兜底归一化 viewport 射线 × "Voxels" 层），diag 带回命中信息。</summary>
         static bool TryGetLandPoint(Island island, Vector2 screenPos, out Vector3 point, out string diag)
         {
             point = Vector3.zero;
@@ -405,7 +389,7 @@ namespace BadNorthNewMode
                 "F1 关闭菜单 · F2 强制清场（销毁本 mod 投放的全部船与单位）");
         }
 
-        /// <summary>选中兵种：写回 cfg（BepInEx 会自动保存），下一次投放立即生效。</summary>
+        /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>
         void SelectUnit(VikingReference unit)
         {
             if (unit == null || ModConfig.EnemyName == null) return;
@@ -448,7 +432,7 @@ namespace BadNorthNewMode
             return null;
         }
 
-        /// <summary>设定装载数量：0 = 默认（按该兵种的原版算法），&gt;0 = 固定数量。</summary>
+        /// <summary>设定装载数量：0 = 默认（按兵种梯度表），&gt;0 = 固定数量。</summary>
         void SelectCount(int value)
         {
             if (ModConfig.SquadSize == null) return;
@@ -461,7 +445,7 @@ namespace BadNorthNewMode
 
         static readonly List<string> _loggedOnce = new List<string>();
 
-        /// <summary>同一 key 只打一次日志。悬停预览每帧都会走投放解析，这条是给那些"每帧都会命中"的提示用的。</summary>
+        /// <summary>同一 key 只打一次（悬停预览每帧都会走解析，防刷屏）。</summary>
         internal static void LogOnce(string key, string message)
         {
             if (Log == null || string.IsNullOrEmpty(key)) return;

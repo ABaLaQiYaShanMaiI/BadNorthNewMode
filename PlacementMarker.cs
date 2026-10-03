@@ -2,10 +2,7 @@ using UnityEngine;
 
 namespace BadNorthNewMode
 {
-    /// <summary>
-    /// 零资源的"光亮"落点标记：运行时生成贴图 + 呼吸缩放/闪烁，平铺在地面上，
-    /// 观感对齐原版技能落点的高亮环。没有外部资源文件，不依赖任何游戏预制件。
-    /// </summary>
+    /// <summary>零资源的"光亮"落点标记：运行时生成环形/内芯贴图 + 呼吸闪烁，平铺地面，观感对齐技能落点高亮。</summary>
     internal sealed class PlacementMarker : MonoBehaviour
     {
         const int TexSize = 128;

@@ -4,14 +4,7 @@ using Voxels.TowerDefense;
 
 namespace BadNorthNewMode
 {
-    /// <summary>
-    /// 投放对象登记册 + 生命周期清理。
-    /// 为什么要它：我们的 Wave 有意不进 raid.waves（避免干扰原版波次计时），代价是原版
-    /// `Raid.IIslandWipe` 不会 Reset 它 —— 于是船会残留到加载界面、甚至同一岛的下一场战局（幽灵船）。
-    /// 这里按原版语义自己补一刀：离开战局（state 离开 Playing）/ 换岛 / Raid 失效时，销毁我们创建的根节点。
-    /// 另附调试用一键清场热键（cfg CleanupHotkey，默认 F2），应对"生成太多清不完"：
-    /// 销毁是安全的——`Agent.OnDestroy` 会自己 `faction.agents.Remove`，不会留脏数据卡结算。
-    /// </summary>
+    /// <summary>投放对象登记册：我们的 Wave 不进 raid.waves，原版 IIslandWipe 因此不会清它（幽灵船），这里按原版语义补刀；另附 F2 手动清场。</summary>
     internal sealed class SpawnLedger : MonoBehaviour
     {
         sealed class Item
@@ -92,10 +85,7 @@ namespace BadNorthNewMode
             return n;
         }
 
-        /// <summary>
-        /// 订阅原版"战局结束"事件 EndOfLevel.postProcess（类型是 Action&lt;Island&gt;，作用域 mscorlib 2.0 → 可直接订阅；
-        /// 而 preProcess 是 Action`2，作用域 System.Core 3.5，才需要反射）。胜/败/撤离/放弃四条收场路径都会经 ProcessEOL 触发它。
-        /// </summary>
+        /// <summary>订阅 EndOfLevel.postProcess（Action&lt;Island&gt;，作用域 mscorlib 2.0 → 可直接订阅；preProcess 是 Action`2 才需反射）。胜/败/撤离/放弃都会触发。</summary>
         void TrySubscribeLevelEnd()
         {
             if (_subscribedLevelEnd) return;

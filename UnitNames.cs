@@ -3,12 +3,9 @@ using System.Collections.Generic;
 namespace BadNorthNewMode
 {
     /// <summary>
-    /// 菜单显示名（简中）。
-    /// 事实说明：原版 I2 本地化表里**没有**敌方兵种的显示名——
-    /// `HINTS/UNITS/*` 只覆盖我方兵种（民兵/弓箭手/长矛兵/盾牌），唯一提到维京兵种的是
-    /// `HINTS/UNITS/VIKING_TANKS` =「巨大的维京莽汉拳头凶猛有力…」；手抄本（`META_INVENTORY/TITLE`=手抄本）
-    /// 里也只有我方职业与升级。因此这里采取"**官方用词优先**（弓箭手 / 盾 / 维京莽汉），
-    /// 其余沿用本项目文档既有叫法"，并在菜单里同时显示内部名以对应 cfg。
+    /// 菜单显示名与默认数量（简中）。
+    /// 原版 I2 本地化**没有**敌方兵种显示名（只有我方兵种/升级；维京兵种唯一出现在 hint 里），
+    /// 故采取"官方用词优先 + 项目文档既有叫法"，并与 cfg 内部名一一对应（详见 PROJECT_SPEC §9）。
     /// </summary>
     internal static class UnitNames
     {
@@ -24,11 +21,7 @@ namespace BadNorthNewMode
             { "Viking_TankArcher",  "重装弓箭手" },
         };
 
-        /// <summary>
-        /// 每兵种的**默认装载数**（体现强度梯度：弱的成群、精锐少见、巨人级 1 个）。
-        /// 未收录（含未来的自定义兵种）= 0 → 回退到原版公式（最小船容量 ÷ 单体面积）。
-        /// 注意：最终仍会被"最大长船容量上限"裁剪（ClampSquadSize），所以这里给大值也安全。
-        /// </summary>
+        /// <summary>每兵种默认装载数（强度梯度：弱的成群、精锐少见、巨人 1 个）；未收录返回 0 → 调用方回退原版公式。最终仍受船容量上限裁剪。</summary>
         static readonly Dictionary<string, int> DefaultCounts = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
         {
             { "Viking_Sword",       12 },   // 最基础的剑兵 —— 成群

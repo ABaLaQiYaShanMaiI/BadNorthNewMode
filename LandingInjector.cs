@@ -5,11 +5,11 @@ using Voxels.TowerDefense.RaidGeneration;
 
 namespace BadNorthNewMode
 {
-    /// <summary>一次投放的目标要素（鼠标预览与实投共用同一套解析结果）。</summary>
+    /// <summary>一次投放的目标要素（预览与实投共用）。</summary>
     internal struct DropTarget
     {
-        internal Beaches.Beach.Pos beach;                    // 首选滩头（预览标记落点）
-        internal List<Beaches.Beach.Pos> candidates;         // 全部候选（按离点击处由近到远），TryPlace 逐个尝试
+        internal Beaches.Beach.Pos beach;             // 首选滩头（预览标记落点）
+        internal List<Beaches.Beach.Pos> candidates;  // 全部候选（由近到远），TryPlace 逐个尝试
         internal VikingReference vikingRef;
         internal Longship shipPrefab;
         internal int squadSize;
@@ -17,17 +17,13 @@ namespace BadNorthNewMode
         internal float shoreDist;
     }
 
-    /// <summary>
-    /// 只用原版对象树 + 原版协程投放敌舰：Wave → ShipGroup → Landing → ShipLoad
-    /// → TryPlace → Spawn → BeginWave，因此"驶来 → 靠岸 → 下船 → 转入战斗"全由原版承担。
-    /// 输入是"点击到的陆地地块"：只接受与海面齐平的沙滩，悬崖/高台一律拒绝。
-    /// </summary>
+    /// <summary>用原版对象树与协程投放敌舰（Wave→ShipGroup→Landing→ShipLoad→TryPlace→Spawn→BeginWave），航线/靠岸/下船全由原版承担；输入是点击到的陆地滩头。</summary>
     internal static class LandingInjector
     {
         static Island _cacheIsland;
         static List<Beaches.Beach.Pos> _cacheBeaches;
 
-        /// <summary>本关岸线采样点（生成后不变，缓存以免鼠标预览时每帧重建列表）。</summary>
+        /// <summary>本关岸线采样点（生成后不变，缓存以避免预览每帧重建）。</summary>
         internal static List<Beaches.Beach.Pos> BeachPositions(Island island)
         {
             if (!object.ReferenceEquals(_cacheIsland, island) || _cacheBeaches == null)
@@ -39,11 +35,7 @@ namespace BadNorthNewMode
             return _cacheBeaches;
         }
 
-        /// <summary>
-        /// 把"点击到的陆地地块"解析成可投放目标：
-        /// ① 点击处海拔须与海面齐平（挡掉悬崖/高台）；② 取最近的可登陆岸线点；
-        /// ③ 落点滩头自身也须与海面齐平；④ 水平距离不超过 MaxShoreDistance。
-        /// </summary>
+        /// <summary>把点击到的陆地地块解析成可投放目标：点击处与落点都要与海面齐平（挡悬崖/高台），且水平距离在 MaxShoreDistance 内。</summary>
         internal static bool TryResolve(Island island, Vector3 landPoint, out DropTarget target, out string reason)
         {
             target = default(DropTarget);
@@ -108,8 +100,7 @@ namespace BadNorthNewMode
                 return false;
             }
 
-            // 优先"进近廊道没被 Modules（建筑/岩石）挡住"的候选——这正是原版 TryPlace 返回 false 的主因；
-            // 若全被挡，就退回最近的候选让原版 TryPlace 自己裁决。
+            // 优先"进近廊道没被 Modules 挡住"的候选（原版 TryPlace 失败的主因）；全被挡则退回最近候选由 TryPlace 裁决。
             int pick = 0;
             bool pickClear = false;
             for (int i = 0; i < cand.Count; i++)
@@ -178,8 +169,7 @@ namespace BadNorthNewMode
 
             landing.shipPrefab = t.shipPrefab;
 
-            // ---- 逐个尝试候选滩头（原版 Raid 也是遍历候选，只不过用的是随机序）：TryPlace 失败原因主要是
-            //      “进近廊道被 Modules 挡住”或“与已有 Landing 占位重叠”。 ----
+            // 逐个尝试候选滩头（原版 Raid 也用随机序遍历候选）；失败主因是廊道被 Modules 挡住或与已有 Landing 重叠。
             List<Landing> placed = CollectPlaced(raid);
             Beaches.Beach.Pos used = t.beach;
             bool placedOk = false;
@@ -210,7 +200,7 @@ namespace BadNorthNewMode
             // ---- 原版发射流程：预生成 → 发射协程（Launch + 靠岸到达回调 + 音乐）----
             wave.RefreshLandings();                                   // 同 Raid.IIslandPlay
             landing.Spawn();                                          // Longship + 舱内敌人（原版）
-            AttachPirateOrder(landing.spawnedShip);                    // 关键：把 order 交还 Pirate（否则战局中途投放会被 KillAllEnemies 抢走 → 不下船）
+            AttachPirateOrder(landing.spawnedShip);                    // 把 order 交还 Pirate（否则不下船）
             wave.approachAudioId = t.vikingRef.approachAudioId;        // 同 Raid.cs 给波次赋音频的做法
             wave.arriveAudioId = t.vikingRef.arriveAudioId;
             raid.StartCoroutine(wave.BeginWave());                     // 原版协程：Launch() → 船开 → 下船
@@ -234,10 +224,7 @@ namespace BadNorthNewMode
             keys.Insert(i, key);
         }
 
-        /// <summary>
-        /// 复刻原版 Landing.TryPlace 的最后一步检查：从滩头朝海外 50 单位的进近廊道里不允许被
-        /// Modules（建筑/岩石/悬崖模块）挡住。起点算法与 Landing.ShipTravel 一致（先用 island.fog.capsuleCollider 收窄）。
-        /// </summary>
+        /// <summary>复刻原版 TryPlace 的最后一步：滩头朝海外 50 单位的进近廊道不得被 Modules 挡住（起点算法同 Landing.ShipTravel）。</summary>
         static bool CorridorClear(Island island, Beaches.Beach.Pos p, Vector3 dir, Longship ship)
         {
             float num = 50f;
@@ -261,13 +248,8 @@ namespace BadNorthNewMode
         }
 
         /// <summary>
-        /// 让每个敌人由 Pirate 接管 order（等价于原版 Brain.Setup 的 PickNewOrder 选中 Pirate 的效果）。
-        /// 为什么需要：原版船与敌人在**关卡生成期**就备好，那时我方尚未部署，
-        /// `KillAllEnemies.WantsControl() = agent.faction.enemy.agents.Count > 0` 为假，于是 PickNewOrder 选中 Pirate；
-        /// 而本 mod 是战局中途投放——我方已在场 → KillAllEnemies（在 orderList 里更靠前）抢先，orderDist 变成流场哨兵值，
-        /// `Pirate.MaybeAct` 的 `orderDist &lt; 0.01` 永不成立 → 不下船（实测 orderDist=1000000）。
-        /// 交还 Pirate 后完全走原版节奏：航行中 dist=0 但未 landed 不下船；靠岸后走到船头 orderDist→0 才跳下。
-        /// 下船时 Pirate 的 longship 置空 → WantsControl 变假 → PickNewOrder 自动切回 KillAllEnemies。
+        /// 让敌人由 Pirate 接管 order。战局中途投放时我方已在场，KillAllEnemies 会抢先拿到 order，
+        /// 使 orderDist 变成哨兵值、Pirate.MaybeAct 永不成立（不下船）；交还 Pirate 即恢复原版下船节奏。见 PROJECT_SPEC §4。
         /// </summary>
         internal static int AttachPirateOrder(Longship ship)
         {
@@ -293,11 +275,7 @@ namespace BadNorthNewMode
             return n;
         }
 
-        /// <summary>
-        /// 菜单用：当前可投放的兵种列表 = `island.levelNode.enemies`（本关允许的）∪
-        /// `LevelStateObjectReferences.dict` 里所有 `Viking_*`（跨关可用，靠 PickEnemy 的字典回退保证能生成）。
-        /// 按名字去重后按名称排序，保证菜单顺序稳定。
-        /// </summary>
+        /// <summary>菜单用兵种列表 = 本关 enemies ∪ 全局字典里的 Viking_*（去重）；跨关兵种靠 PickEnemy 的字典回退保证可生成。</summary>
         internal static List<VikingReference> AvailableUnits(Island island)
         {
             List<VikingReference> result = new List<VikingReference>();
@@ -333,11 +311,7 @@ namespace BadNorthNewMode
             list.Add(vr);
         }
 
-        /// <summary>
-        /// 按难度曲线排序（递增）。用原版自己的难度权重 `bounty` 作主键（它本就是原版生成器
-        /// 把波次填到目标难度时的"造价"），再以单体面积、内部名为次序 → 弱兵在前、精锐在后。
-        /// （`bounty` 只用于排序，不再显示在 UI 上。）
-        /// </summary>
+        /// <summary>按难度递增排序：主键用原版难度权重 bounty（只用于排序、不显示），再以单体面积、内部名兜底。</summary>
         static void SortByDifficulty(List<VikingReference> list)
         {
             for (int i = 1; i < list.Count; i++)
@@ -361,11 +335,7 @@ namespace BadNorthNewMode
             return string.CompareOrdinal(a.name, b.name);
         }
 
-        /// <summary>
-        /// 该兵种的默认装载数：**优先用 `UnitNames.DefaultCount` 的显式梯度表**（弱兵多、巨人 1 个），
-        /// 表里没有（例如未来新增的自定义兵种）才回退到原版算法
-        /// `Mathf.Max(1, RoundToInt(最小长船容量 / 该兵种单体 area))`（同 Raid.IIslandFirstEnter）。
-        /// </summary>
+        /// <summary>默认装载数：优先 UnitNames 的梯度表（弱兵多、巨人 1 个），未收录才回退原版公式（最小船容量 ÷ 单体面积）。</summary>
         internal static int DefaultSquadSize(Island island, VikingReference vr)
         {
             if (vr == null || vr.agent == null) return 1;
@@ -407,14 +377,14 @@ namespace BadNorthNewMode
             return Mathf.Max(1, Mathf.RoundToInt(maxArea / unitArea));
         }
 
-        /// <summary>实际装载数：cfg SquadSize&gt;0 用它，否则用该兵种的原版默认值；两者都受容量上限裁剪。</summary>
+        /// <summary>实际装载数：cfg &gt;0 用它，否则用兵种默认值；两者都受容量上限裁剪。</summary>
         internal static int EffectiveSquadSize(Island island, List<Longship> ships, VikingReference vr, int cfgSize)
         {
             int want = (cfgSize > 0) ? cfgSize : DefaultSquadSize(island, vr);
             return ClampSquadSize(ships, vr, want);
         }
 
-        /// <summary>收集全岛已放置的 Landing —— 原版 TryPlace 靠它做占位互斥，运行时需自建。</summary>
+        /// <summary>全岛已放置的 Landing（原版 TryPlace 靠它做占位互斥，运行时需自建）。</summary>
         static List<Landing> CollectPlaced(Raid raid)
         {
             List<Landing> list = new List<Landing>();
@@ -451,10 +421,7 @@ namespace BadNorthNewMode
             return null;
         }
 
-        /// <summary>
-        /// 按名字取敌人：先查本关生成池，再退回全局引用字典（保证"始终同一种兵种"不被随机化），都取不到才随机。
-        /// 结果按 (岛, 兵种名) 缓存——悬停预览每帧都会调用，必须避免重复查找与重复日志（v1.2.1 去噪）。
-        /// </summary>
+        /// <summary>按名字取敌人（本关池 → 全局字典 → 随机）。结果按 (岛, 兵种名) 缓存：悬停预览每帧都会调用，避免重复查找与刷屏。</summary>
         static VikingReference PickEnemy(Island island, List<VikingReference> pool, string name)
         {
             if (string.IsNullOrEmpty(name)) return pool[Random.Range(0, pool.Count)];
