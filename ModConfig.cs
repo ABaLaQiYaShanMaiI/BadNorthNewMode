@@ -20,6 +20,7 @@ namespace BadNorthNewMode
         public static ConfigEntry<float> WaterLevelY;
         public static ConfigEntry<bool> ShowHoverPreview;
         public static ConfigEntry<float> MarkerSeconds;
+        public static ConfigEntry<float> MinLandingSpacing;
         public static ConfigEntry<float> DisembarkGrace;
         public static ConfigEntry<bool> DisembarkFix;
 
@@ -76,6 +77,10 @@ namespace BadNorthNewMode
                 "用来直观确认\"哪里是能登陆的滩头\"。");
             MarkerSeconds = cfg.Bind("Landing", "MarkerSeconds", 2.5f,
                 "落点光亮标记的保持时长（秒）。");
+            MinLandingSpacing = cfg.Bind("Landing", "MinLandingSpacing", 2.5f,
+                "滩头占用判定的**基础间距**（米）。实际要求 = 本值 + 本船船长：\n" +
+                "离点击处最近的滩头若已有船（原版或本 mod）且距离小于该值，就拒绝投放——\n" +
+                "这样大船会留出更大空档，不会挤占原版停靠点；也不会自动挪到旁边（只有地形/廊道被挡才换候选滩头）。");
             DisembarkGrace = cfg.Bind("Landing", "DisembarkGrace", 3f,
                 "下船看门狗宽限期（秒）：船到岸后超过这么久还没人下船，就判定为卡住。\n" +
                 "卡住时会打一条 [NewMode][下船] 完整诊断，并按 DisembarkFix 决定是否兜底。");

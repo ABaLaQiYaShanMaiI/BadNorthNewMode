@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.2.3";
+        public const string VERSION = "1.2.4";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -334,8 +334,11 @@ namespace BadNorthNewMode
             {
                 int def = LandingInjector.DefaultSquadSize(_menuIsland, sel);
                 int cap = LandingInjector.MaxSquadSize(_menuIsland, sel);
-                sizeInfo = string.Format("数量：{0}（本兵种默认 {1}，上限 {2}）",
-                    (curSize > 0) ? curSize.ToString() : "默认 " + def, def, cap);
+                int now = (curSize > 0) ? curSize : def;
+                Longship auto = LandingInjector.PickShipForCount(_menuIsland, sel, now);
+                sizeInfo = string.Format("数量：{0}（本兵种默认 {1}，上限 {2}）　船：{3}（自动匹配）",
+                    (curSize > 0) ? curSize.ToString() : "默认 " + def, def, cap,
+                    (auto != null) ? auto.name : "无");
             }
             else
             {
@@ -408,13 +411,13 @@ namespace BadNorthNewMode
             return _menuRect.Contains(gui);
         }
 
-        /// <summary>兵种列表随岛屿缓存（同岛复用；换岛重建）。</summary>
+        /// <summary>兵种/船型列表随岛屿缓存（同岛复用；换岛重建）。</summary>
         void EnsureMenuUnits(Island island)
         {
             if (object.ReferenceEquals(_menuIsland, island) && _menuUnits != null) return;
             _menuIsland = island;
             _menuUnits = LandingInjector.AvailableUnits(island);
-            if (Log != null) Log.LogInfo("[NewMode] 兵种菜单：本关可用 " + _menuUnits.Count + " 种");
+            if (Log != null) Log.LogInfo("[NewMode] 菜单：本关可用兵种 " + _menuUnits.Count + " 种");
         }
 
         /// <summary>当前 cfg 里选中的兵种对象（用于显示该兵种的默认/上限数量）。</summary>

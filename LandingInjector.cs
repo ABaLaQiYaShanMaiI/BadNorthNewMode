@@ -65,7 +65,7 @@ namespace BadNorthNewMode
             }
 
             int squadSize = EffectiveSquadSize(island, ships, vikingRef, ModConfig.SquadSize.Value);
-            Longship ship = PickShipForLoad(ships, vikingRef, squadSize);
+            Longship ship = PickShipForCount(island, vikingRef, squadSize);   // 人数 → 自动配"装得下的最小船"
             if (ship == null) { reason = "没有可用长船"; return false; }
 
             // ---- 候选滩头：岸线余量足够（同原版）+ 与海面齐平 + 离点击处不超过上限，按距离由近到远 ----
@@ -97,6 +97,19 @@ namespace BadNorthNewMode
             {
                 reason = string.Format("附近没有与海面齐平的滩头（最近 {0:F1}m，上限 {1:F1}m；或岸线余量不足）",
                     Mathf.Sqrt(nearSq), maxShore);
+                return false;
+            }
+
+            // 占用规则：最近候选滩头若已有船（原版或本 mod）→ 拒绝。要求间距随本船长度放大，避免大船挤占原版停靠点。
+            Beaches.Beach.Pos nearest = cand[0];
+            float baseSpacing = Mathf.Max(0.5f, ModConfig.MinLandingSpacing.Value);
+            float spacing = baseSpacing + ship.length;
+            float occDist;
+            string occWho;
+            if (IsOccupied(CollectPlaced(raid), nearest.navPos.pos, spacing, out occDist, out occWho))
+            {
+                reason = string.Format("该滩头已有船只（离 {0} {1:F1}m，需要 {2:F1}m = 基础 {3:F1} + 船长 {4:F1}）——换个滩头或减少人数",
+                    occWho, occDist, spacing, baseSpacing, ship.length);
                 return false;
             }
 
@@ -201,6 +214,10 @@ namespace BadNorthNewMode
             wave.RefreshLandings();                                   // 同 Raid.IIslandPlay
             landing.Spawn();                                          // Longship + 舱内敌人（原版）
             AttachPirateOrder(landing.spawnedShip);                    // 把 order 交还 Pirate（否则不下船）
+
+            string crewIssue = CrewCheck(landing.spawnedShip, t.vikingRef.name);
+            if (crewIssue != null && Plugin.Log != null)
+                Plugin.Log.LogWarning("[NewMode] 船员异常：" + crewIssue + "（疑似船体叠加，请反馈此日志）");
             wave.approachAudioId = t.vikingRef.approachAudioId;        // 同 Raid.cs 给波次赋音频的做法
             wave.arriveAudioId = t.vikingRef.arriveAudioId;
             raid.StartCoroutine(wave.BeginWave());                     // 原版协程：Launch() → 船开 → 下船
@@ -273,6 +290,25 @@ namespace BadNorthNewMode
             if (ModConfig.VerboseLog.Value && Plugin.Log != null)
                 Plugin.Log.LogInfo("[NewMode] 已把 " + n + " 个敌人的 order 交还 Pirate（恢复原版下船节奏）");
             return n;
+        }
+
+        /// <summary>按人数选船：取"装得下该人数的最小船"；都装不下则用最大的船（人数随后会被裁到船容量）。</summary>
+        internal static Longship PickShipForCount(Island island, VikingReference vr, int count)
+        {
+            List<Longship> ships = (island != null && island.levelNode != null) ? island.levelNode.possibleShips : null;
+            if (ships == null || ships.Count == 0) return null;
+
+            float need = ((vr != null && vr.agent != null) ? vr.agent.area : 1f) * Mathf.Max(1, count);
+            Longship best = null;
+            Longship biggest = null;
+            for (int i = 0; i < ships.Count; i++)
+            {
+                Longship s = ships[i];
+                if (s == null || s.col == null) continue;
+                if (biggest == null || s.area > biggest.area) biggest = s;
+                if (s.area >= need && (best == null || s.area < best.area)) best = s;
+            }
+            return (best != null) ? best : biggest;
         }
 
         /// <summary>菜单用兵种列表 = 本关 enemies ∪ 全局字典里的 Viking_*（去重）；跨关兵种靠 PickEnemy 的字典回退保证可生成。</summary>
@@ -359,7 +395,7 @@ namespace BadNorthNewMode
             return Mathf.Max(1, Mathf.RoundToInt(minArea / unitArea));
         }
 
-        /// <summary>该兵种在最大长船上的容量上限（菜单里显示"上限 N"用）。</summary>
+        /// <summary>该兵种在最大长船上的容量上限（人数可调到这么多，船会随人数自动换大）。</summary>
         internal static int MaxSquadSize(Island island, VikingReference vr)
         {
             if (island == null || island.levelNode == null || vr == null || vr.agent == null) return 1;
@@ -384,41 +420,41 @@ namespace BadNorthNewMode
             return ClampSquadSize(ships, vr, want);
         }
 
-        /// <summary>全岛已放置的 Landing（原版 TryPlace 靠它做占位互斥，运行时需自建）。</summary>
+        /// <summary>该位置是否已被某艘船占用（XZ 距离 &lt; spacing）；返回最近的船名与距离，供提示/预览用。</summary>
+        static bool IsOccupied(List<Landing> placed, Vector3 pos, float spacing, out float dist, out string who)
+        {
+            dist = float.MaxValue;
+            who = null;
+            for (int i = 0; i < placed.Count; i++)
+            {
+                Landing l = placed[i];
+                if (l == null) continue;
+
+                Vector3 a = l.navPos.pos;
+                a.y = pos.y;
+                float d = Vector3.Distance(a, pos);
+                if (d < dist)
+                {
+                    dist = d;
+                    who = (l.spawnedShip != null) ? l.spawnedShip.name : "已放置的船";
+                }
+            }
+            return dist < spacing;
+        }
+
+        /// <summary>全岛已放置的 Landing（原版 TryPlace 靠它做占位互斥）。取 landingContainer 下所有子物体——这样**我们自己的船也会挡住自己**，避免连续投放在同一滩头叠船。</summary>
         static List<Landing> CollectPlaced(Raid raid)
         {
             List<Landing> list = new List<Landing>();
-            if (raid.waves == null) return list;
-            for (int i = 0; i < raid.waves.Count; i++)
+            if (raid == null || raid.landingContainer == null) return list;
+
+            Landing[] all = raid.landingContainer.GetComponentsInChildren<Landing>(true);
+            for (int i = 0; i < all.Length; i++)
             {
-                Wave wave = raid.waves[i];
-                if (wave == null || wave.shipGroups == null) continue;
-                for (int j = 0; j < wave.shipGroups.Count; j++)
-                {
-                    ShipGroup group = wave.shipGroups[j];
-                    if (group == null || group.landings == null) continue;
-                    for (int k = 0; k < group.landings.Count; k++)
-                    {
-                        Landing l = group.landings[k];
-                        if (l != null && l.placed) list.Add(l);
-                    }
-                }
+                Landing l = all[i];
+                if (l != null && l.placed) list.Add(l);
             }
             return list;
-        }
-
-        /// <summary>按 area 选船：照抄原版（首个 area 够用的船，否则用最后一艘）。</summary>
-        static Longship PickShipForLoad(List<Longship> ships, VikingReference vikingRef, int count)
-        {
-            float need = vikingRef.agent.area * count;
-            for (int i = 0; i < ships.Count; i++)
-            {
-                Longship s = ships[i];
-                if (s != null && s.area >= need) return s;
-            }
-            for (int i = ships.Count - 1; i >= 0; i--)
-                if (ships[i] != null) return ships[i];
-            return null;
         }
 
         /// <summary>按名字取敌人（本关池 → 全局字典 → 随机）。结果按 (岛, 兵种名) 缓存：悬停预览每帧都会调用，避免重复查找与刷屏。</summary>
@@ -482,6 +518,29 @@ namespace BadNorthNewMode
             float area = (vikingRef.agent != null) ? vikingRef.agent.area : 1f;
             int cap = (area > 0.0001f) ? Mathf.Max(1, Mathf.RoundToInt(maxArea / area)) : 1;
             return Mathf.Clamp(want, 1, cap);
+        }
+
+        /// <summary>船员自检：本船应只有一种兵种；混入其他兵种说明发生叠加/串船，打警告便于定位（正常情况返回 null，零噪音）。</summary>
+        static string CrewCheck(Longship ship, string expected)
+        {
+            if (ship == null || ship.agents == null) return null;
+
+            string other = null;
+            int bad = 0;
+            for (int i = 0; i < ship.agents.Count; i++)
+            {
+                Agent a = ship.agents[i];
+                if (a == null) continue;
+
+                VikingAgent va = a.GetComponent<VikingAgent>();
+                string n = (va != null && va.vikingReference != null) ? va.vikingReference.name : "?";
+                if (!string.Equals(n, expected, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    bad++;
+                    if (other == null) other = n;
+                }
+            }
+            return (bad == 0) ? null : string.Format("应有 {0}，实际混入 {1} 个其他单位（如 {2}）", expected, bad, other);
         }
 
         static string Fmt(Vector3 v)

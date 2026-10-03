@@ -66,13 +66,18 @@ EventSystem → PointerRationalizer（全屏手势接收器）→ 发布 onClick
 | 中途投放不下船 | `brain.order` 被 `KillAllEnemies` 抢走 → `orderDist = 1e6` → `MaybeAct` 永不成立 | 生成后 `AttachPirateOrder()` 把 order 交还 `Pirate`（原版靠"生成期我方未部署"天然正确） |
 | 幽灵船（波次残留） | 我们的 Wave 不在 `raid.waves` → `Raid.IIslandWipe` 不清它 | `SpawnLedger` 在战局结束 / 离开战局 / 换岛时销毁（订阅 `EndOfLevel.postProcess`） |
 | 滩头看似可用却投放失败 | 点击命中 `Modules`，或进近廊道被挡 | 收集候选滩头逐个 `TryPlace`；`CorridorClear()` 预检廊道（悬停预览共用同一判定） |
+| 连续投放"叠船"（看着像一船混编） | `CollectPlaced` 只查 `raid.waves`，而我们的 Wave 不在其中 → **自家的船不参与占位互斥**，可叠在同一滩头 | 改为收集 `raid.landingContainer` 下**所有** Landing（含我们自己的）；另加船员自检日志 |
 
 ## 5. 机制设计
 
 - **按键**：`F1` 开关投放菜单（菜单即投放模式）；`F2` 强制清场；右键 / `Esc` 关闭菜单。
-- **菜单**（IMGUI，零资源）：上排兵种（本关 `levelNode.enemies` ∪ 全局字典 `Viking_*`，按 **bounty 升序** = 难度递增；显示 `简中名（内部名）+ 默认数`）；下排数量预设（默认 / 1 / 2 / 3 / 4 / 6 / 8 / 10 / 12）。左键点选即写回 cfg（`EnemyName` / `SquadSize`）。菜单区域内的点击被屏蔽（`PointerInMenu`，注意 IMGUI 的 y 轴翻转）。
+- **菜单**（IMGUI，零资源）：① 兵种（本关 `levelNode.enemies` ∪ 全局字典 `Viking_*`，按 **bounty 升序** = 难度递增；显示 `简中名（内部名）+ 默认数`）；② 数量预设（默认 / 1 / 2 / 3 / 4 / 6 / 8 / 10 / 12）。左键点选即写回 cfg（`EnemyName` / `SquadSize`）；信息行显示"该人数会自动配哪艘船"。**不选船型**——人数定了船就定了。菜单区域内的点击被屏蔽（`PointerInMenu`，注意 IMGUI 的 y 轴翻转）。
 - **默认装载数**：`UnitNames.DefaultCounts` 梯度表（剑兵 12 / 盾兵 10 / 弓手 8 / 掷斧手 7 / 双手剑士 5 / 狂战士 5 / **巨人级各 1**）；未收录兵种回退原版公式（最小船容量 ÷ 单体面积），最终由最大船容量裁剪。
+- **船随人数自动匹配**（v1.2.4）：`PickShipForCount` = **装得下该人数的最小船**（都装不下则用最大的船并把人数裁到容量）——人数少就小船、人数多就大船，不提供船型选择。
 - **投放链**：`TryResolve`（点击处与落点都须与海面齐平 + 距离 ≤ `MaxShoreDistance`）→ `TrySpawn` 建原版对象树 → 逐个候选 `TryPlace` → `Spawn()` → `AttachPirateOrder()` → `raid.StartCoroutine(wave.BeginWave())`（原版 Launch / 音频 / 到达回调）。
+- **滩头占用规则**（v1.2.4）：离点击处**最近**的滩头若已有船（原版或本 mod）→ **直接拒绝**并提示距离；要求间距 = `MinLandingSpacing`（默认 2.5m，基础值）**+ 本船船长**，所以**大船会自动留出更大空档，不会挤占原版停靠点**；只有"地形/进近廊道被挡"才自动换候选滩头（候选逐个 `TryPlace`）。
+  - 为什么不会抢到原版的位置：原版所有登陆点在 `Raid.IIslandFirstEnter`（**开战前**）就一次性放置完毕，战斗中途不再新增；且它们都在 `landingContainer` 下 → 一直在我们的互斥/占用名单里。
+- **跨岛借用兵种**（船型不借用）：兵种取自本关 `enemies` ∪ 全局字典（`PickEnemy` 回退），只写进**我们自己**的 `ShipLoad.vikingRef`；**不参与关卡生成与存档**（原版 RaidDef 在我们投放前已生成完，我们的 Wave 也不在 `raid.waves`）。
 - **落点 UI**：`PlacementMarker` 运行时生成环形 / 内芯贴图（优先加法混合），悬停实时预览（亮青 = 可投放，暗红 = 不可投放）。
 - **清理**：`SpawnLedger` 自动（战局结束 / 离开战局 / 换岛）+ `F2` 手动。
 
@@ -104,6 +109,7 @@ EventSystem → PointerRationalizer（全屏手势接收器）→ 发布 onClick
 | v1.2.0 | 1.2.0 | 版本号统一；`F1` 兵种选择菜单 + `F2` 说明 |
 | v1.2.1 | 1.2.1 | 日志去噪（解析缓存 + `LogOnce`）；数量阶梯化 + 手动数量；删"赏金"显示；按难度排序 + 简中名 |
 | v1.2.2 | 1.2.2 | 默认数量按兵种梯度（巨人 1 只）；注释精简（154 → 75 行） |
-| **v1.2.3** | **1.2.3** | **本文件精简（249 行/19.8KB → 109 行/6.0KB）+ 注释规范写入 §2** |
+| v1.2.3 | 1.2.3 | 本文件精简（249 行/19.8KB → 109 行/6.0KB）+ 注释规范写入 §2 |
+| **v1.2.4** | **1.2.4** | **滩头占用规则（有船即拒投，间距随船长放大以预留原版坑位）+ 船随人数自动匹配 + 修"叠船" + 船员混编自检** |
 
 | 弓手乘船射击 | 与 Pirate / order 无关（`Archery : Brain` 自驱） | 无需处理；下船时只摘掉 Pirate action，Archery 不受影响 |
