@@ -45,6 +45,9 @@ namespace BadNorthNewMode
         // ============ Diag ============
         public static ConfigEntry<bool> VerboseLog;
 
+        /// <summary>是否生成日志文件（默认 false：加载时摘掉 BepInEx 的磁盘日志监听器）。</summary>
+        public static ConfigEntry<bool> LogToFile;
+
         public static void Bind(ConfigFile cfg)
         {
             BindGeneral(cfg);
@@ -161,6 +164,10 @@ namespace BadNorthNewMode
         {
             VerboseLog = cfg.Bind("Diag", "VerboseLog", false,
                 "详细日志：打印点击命中的地形点/海拔、滩头点、距离、最终 shipPrefab 与失败原因。排查时开。");
+            LogToFile = cfg.Bind("Diag", "LogToFile", false,
+                "是否生成日志文件 BepInEx\\LogOutput.log（默认 false = 不生成，这也是本次改动的原因）。\n" +
+                "BepInEx 启动时就建好了写文件的监听器，本插件加载时会把它摘掉并释放，并删掉本次启动刚写出的那几行；\n" +
+                "**控制台窗口的日志不受影响**。设成 true 就完全不干预 BepInEx 原行为（排查时选不中 / 下船卡住等问题时用）。");
         }
     }
 }

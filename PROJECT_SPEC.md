@@ -166,6 +166,8 @@ Raid.IIslandFirstEnter:
     | 滚轮缩放 / 触摸手势 | 原版 |
     | F1 菜单打开时 | 本 mod 的投放模式（左键投放、右键或 `Esc` 关闭）——既有功能，不属"原版一致"范围 |
 
+- **文件日志默认关闭**（v1.5.0，`[Diag] LogToFile = false`）：BepInEx 在插件加载前就建好了写文件的 `DiskLogListener`，`LogFileSwitch` 在 `Awake` 里把它 **`Logger.Listeners.Remove` + `Dispose`**（先摘再关句柄），并删掉本次启动刚写出的残留（**仅当 ≤64KB**，避免误删大日志）；**控制台日志不受影响**，设 `true` 则完全不干预 BepInEx 原行为。README/玩家装完不会再生成 `BepInEx\LogOutput.log`。
+
 ## 6. 已知限制 / 待实测
 
 - **T1**：投放波次不在 `raid.waves`，对 UI 进度 / 结算展示的影响（实测无异常，未深究）。
@@ -184,15 +186,18 @@ Raid.IIslandFirstEnter:
 - **T14（v1.4.0 观察）**：放宽后三次投放都走了"已放宽间距"（说明该滩头很密、船间距 ≈0.7m）。若观感太挤，把 `MinLandingSpacing` 调回 2.0~2.5——现在它只是"首选偏好"，**调大不会再导致投不出来**（会自动放宽 / 换滩头）。
 - **T15（v1.4.2 排错）**：点空/框空都会打诊断——HUD 常显"非原生单位 登记 N（可选 M[, 已选中 K]）"；**点空**日志含"最近单位 屏幕 Xpx（屏 x,y z=…｜鼠标 x,y｜屏幕 W×H｜相机名）+ 地面点 + 两个阈值"；**框空**日志含"登记/可用/命中 + 最近单位屏幕信息"。判读：**世界距离**才是点选依据（`RemoteClickRadius` 1.2m）——若日志里最近单位的**屏幕** Xpx 很大而它明明在你鼠标旁，就是投影问题；若它不在画面里，说明单位已经跑远（用 `R` 全选即可）。另：**原版自己的敌人没有标记、也绝不能被遥控**（设计如此）。
 - **T16（v1.4.7 待实测）**：① `Shift`+左/右键点单位是否选中**整队**、再点同一队是否取消；② 左/右键点地块是否**集结并前进**、多兵种是否**分到相邻格**、移动后选择是否自动清空；③ 不按 Shift 时左右键是否**完全归原版**（选我方 / 移动我方，不误动遥控单位）；④ `R` 全选与 `Alt` 框选仍可用。
+- **T17（v1.5.0，取舍已定）**：关掉文件日志后**没有 `LogOutput.log` 可查**——要排查就先在 `BepInEx\config\badnorth.newmode.cfg` 把 `[Diag] LogToFile` 设成 `true` 再启动（我们的开关只是"摘掉磁盘监听"，属 **BepInEx 全局行为**：同一份日志文件里其他 mod 的内容同样不再落盘；`true` 即恢复原样）。
 
 ## 7. 命名与提交约定
 
 - 产物：`BadNorthNewMode.dll`；命名空间 `BadNorthNewMode`；GUID `badnorth.newmode`；部署到 `BepInEx\plugins`。
+- 仓库根另有 **`README.md`**（面向玩家的操作说明 + 链接 + 许可，≤250 汉字，不再写其他内容）。
 - **版本号统一**：`Plugin.VERSION` = `csproj Version` = 仓库提交 `vX.Y.Z`（自 v1.2.0 起）。
 - 提交：一个里程碑一个提交，标题由作者撰写。
 - 文档纪律：只本文件（+ 可选 `开发日志.md`）；新改动只在 §5 追加一行、§8 表格追加一行，不写长叙事。
 - **代码结构**（v1.3.1 按职责拆分）：`Plugin`(入口/输入/取点) · `IngameMenu`(HUD + 兵种菜单) · `DropPlanner`(滩头解析/落差/占用/廊道，长方法拆成 `CheckClickHeight`/`CollectCandidates`/`PreferClearCorridor`) · `UnitCatalog`(兵种·船·人数) · `LandingInjector`(建树/投放/装配) · `FlotillaLauncher` · `SpawnLedger` · `DisembarkWatchdog` · `ShipboardThreat` · `PlacementMarker` · `ModConfig` · `UnitNames` · `Util`(向量格式化 / cfg 守卫 / 日志守卫)。
 - **遥控相关文件**（v1.4.0）：`ForeignUnit`(非原生标记 + 注册表) · `RemoteGroup`(控制组容器：成组/并入/释放/槽位) · `GroupOrder`(自研 `IAgentOrder`：距离场 + 槽位) · `MarqueeSelect`(右键框选 + 相机拖拽让位)。
+- **日志文件开关**（v1.5.0）：`LogFileSwitch`(摘掉 BepInEx 磁盘日志监听 + 清启动残留；`[Diag] LogToFile` 默认 false)。
 
 ## 8. 版本对照（仓库提交 ↔ DLL）
 
@@ -219,6 +224,6 @@ Raid.IIslandFirstEnter:
 | **v1.4.4** | **1.4.4** | **修"选中后点地块没反应"（早退条件少算了待成队选择 → 首个小队永远建不起来）；修相机（`LevelCamera.cameraRef` 指向 CampaignCamera → 自验证相机 + 世界四边形兜底框选）；框选/选中时减速（原版 `TimeManager`，0.1×）；右键取消选择** |
 | **v1.4.5** | **1.4.5** | **受控期间屏蔽 `Arsonist`**（它拿 `orderDist` 当"到家"判据 → 隔岛扔火炬烧房）；**表现对齐原版**：亮青十字标记（选中的更大更亮）+ 目标空心方框 + **鼠标落点光标**（地面点吸附最近 `NavSpot`）；`GameInput` 反射读原版 Rewired 动作（当时用于切队） |
 | **v1.4.6** | **1.4.6** | **按键不再与原版共键**：换队改用自建 `Z`/`X`（`RemotePrevGroupKey`/`RemoteNextGroupKey`）；新增 `RemoteAlsoUseVanillaKeys`（默认 false）；**点选改为"连点累加"**（Shift 移除、右键清空）；"已接管/前进"提示只列本次涉及的小队；细长/退化拖动按"点一下"兜底 |
-| **v1.4.7** | **1.4.7** | **交互定稿（少按键）**：选择 = `Shift` + 左/右键点单位（选中**整队**，再点取消）/ `R` 全选 / `Alt` 框选；下令 = **左键或右键点地块**集结前进（按兵种各成队，多兵种**就地分到相邻格**），**移动后自动取消选择**（同原版 `SquadMover`）；不按 Shift 时左右键完全归原版；**移除 Z/X 换队键**与 `GameInput`（不再共键原版切队动作） |
-| **v1.4.8** | **1.4.8** | **与我方选择互斥**：选中遥控单位时调用原版 `SquadSelector.SelectSquad(null,false)` 取消我方选择；我方被选中时自动清空遥控选择 → 点击永不双控（双键/单键都覆盖）；照抄原版"下单即取消选择"（`SquadMover.MoveTo`）与"点空地取消"（`Navigator`）语义 |
+| **v1.4.7** | **1.4.7** | **交互定稿（少按键）**：选择 = `Shift` + 左/右键点单位（选中**整队**，再点取消）/ `R` 全选 / `Alt` 框选；下令 = **左键或右键点地块**集结前进（按兵种各成队，多兵种**就地分到相邻格**），**移动后自动取消选择**（同原版 `SquadMover`）；不按 Shift 时左右键完全归原版；移除 Z/X 换队键与 `GameInput`；**与我方选择互斥**（选中遥控单位时调用原版 `SelectSquad(null,false)` 取消我方选择，我方被选中时自动清空遥控选择 → 永不双控） |
+| **v1.5.0** | **1.5.0** | **新增 `README.md`**（操作说明 + 项目链接 + 开源许可，≤250 汉字）；**文件日志默认关闭**（`[Diag] LogToFile = false` → `LogFileSwitch` 摘掉 BepInEx 的磁盘日志监听器并清掉启动残留，控制台不受影响，玩家装完不再生成 `LogOutput.log`）；版本号与仓库提交对齐（1.4.8 的内部跳号并入本版） |
 

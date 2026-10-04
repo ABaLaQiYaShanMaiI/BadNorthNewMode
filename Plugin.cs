@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.4.8";
+        public const string VERSION = "1.5.0";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -32,6 +32,9 @@ namespace BadNorthNewMode
                 // 配置绑定失败不再让整个插件在 Awake 抛异常（否则游戏里完全无反馈），只报错后降级。
                 Log.LogError("[NewMode] 配置绑定失败：" + e);
             }
+
+            // v1.5.0：默认不生成日志文件（尽早执行，cfg 里的启动日志也一并清掉）。
+            LogFileSwitch.Apply(Util.V(ModConfig.LogToFile, false));
 
             ConfigEntry<KeyboardShortcut> hk = ModConfig.Hotkey;
             Log.LogInfo(string.Format("[NewMode] v{0} 已加载：{1} 开关投放模式，点击滩头陆地投放敌舰。",
