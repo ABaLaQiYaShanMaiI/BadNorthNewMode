@@ -75,7 +75,7 @@ Raid.IIslandFirstEnter:
 | net472 编 params 空数组 | 运行期 `MissingMethodException: System.Array.Empty`，插件静默失效 | 写 `new KeyCode[0]`；API 闸门会拦 |
 | `EventSystem.IsPointerOverGameObject()` | 本游戏恒为真 → 点击被静默吞掉、无任何日志 | 不用它做 UI 判断，直接订阅原版 `onClick` |
 | `pointerRationalizer.onClick +=` | 事件类型是 System.Core 3.5 的 `Action`2，运行期解析不到 | 反射 `GetEvent` + `Delegate.CreateDelegate` + `AddEventHandler` |
-| `EventInfo/MethodInfo == null` | `op_Equality` 是 .NET 4.0 才加的 | 用 `object.ReferenceEquals` |
+| `EventInfo/MethodInfo == null` | `MemberInfo`/`Type` 的 `op_Equality`/`op_Inequality` 是 **.NET 4.0 才有的运算符**，游戏 mscorlib 2.0 没有（闸门实测会拦：`Type::op_Equality`、`MethodInfo::op_Equality`、`Type::op_Inequality`） | 一律 `object.ReferenceEquals(x, null)`；`Plugin`(onClick 订阅)、`GameInput`(反射读 Rewired) 都按这条写 |
 | 中途投放不下船 | `brain.order` 被 `KillAllEnemies` 抢走 → `orderDist = 1e6` → `MaybeAct` 永不成立 | 生成后 `AttachAgentBehaviours()` 把 order 交还 `Pirate`（原版靠"生成期我方未部署"天然正确） |
 | 幽灵船（波次残留） | 我们的 Wave 不在 `raid.waves` → `Raid.IIslandWipe` 不清它 | `SpawnLedger` 在战局结束 / 离开战局 / 换岛时销毁（订阅 `EndOfLevel.postProcess`） |
 | 滩头看似可用却投放失败 | 点击命中 `Modules`，或进近廊道被挡 | 收集候选滩头逐个 `TryPlace`；`CorridorClear()` 预检廊道（悬停预览共用同一判定） |
@@ -92,6 +92,7 @@ Raid.IIslandFirstEnter:
 | 左键点地块"没反应"（**首个小队永远建不起来**） | `HandleRemoteMode` 的早退条件曾写成 `if (!RemoteGroup.Any) return;` → 一个组都没建立时，连"成队并前进"那条分支都进不去（日志：点了很多次地块，却从没有"遥控小队前进"） | 改成 `if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;`——**有待成队选择就继续** |
 | `LevelCamera.cameraRef` 会指向 CampaignCamera | 战局里实测 `WorldToScreenPoint` 把单位投到 **x≈3700 / z≈101**（屏幕 1920×1080，鼠标在中心）→ 框选与标记全部落空；点选改世界距离后才正常 | 新增**自验证相机** `CamFor`：拿 NavSpotCast 的"已知地面点 ↔ 点击屏幕点"给 `LevelCamera.cameraRef` / `Camera.main` / 全场景相机打分取误差最小者；框选再加**世界四边形兜底**（四角 NavSpotCast 成世界点做包含判定），彻底不依赖投影 |
 | 时间减速（`TimeManager`） | 原版**没有"空格减速"**（全工程无 `KeyCode.Space`）；减速只来自三处：选中我方小队（`SquadSelector` → 0.1）、过场（`CinematicCameraController`）、暂停（`LevelPauser` → 0）。`TimeManager.RequestTimeScale(requester, scale)` / `RemoveTimeScale` 是 **public static**，`UpdateTimeScale` **取所有请求里的最小值**（`LateUpdate` 里写 `Time.timeScale`） | 我们以独立 requester 挂同一套：**框选中 / 已有选中时申请减速**（默认 0.1，可 cfg），菜单打开 / 离开战局 / 清场 / 插件卸载时 `RemoveTimeScale`，避免残账把全局时间卡住 |
+| 受控单位**隔岛扔火炬烧房** | `Arsonist.GetNewTarget` 用 `agent.orderDist > 0.2f → 不烧` 当"我到家了没"的判据；而我们的 order 里 `orderDist` 是"**离我指定的目标格**还有多远"——我们的人一站定（≈0），原版就以为它站在房子前 → `House.TryThrow` 放行，隔着地形与距离点房子 | **受控期间把 `Arsonist` 从 `Brain.actions` 摘掉**（`GroupOrder.SuppressHouseBurning`），释放 / 清场时 `RestoreHouseBurning` 还原；`Arsonist` 是 `IBrainAction`，摘掉后 `MaybeAct` 不再被调用 |
 
 **遥控已投放单位（v1.4.0 落地依据）**
 ```
@@ -140,8 +141,13 @@ Raid.IIslandFirstEnter:
   - **落位（T8 已落实）**：到位（`orderDist < 0.12` 且离槽位 < 0.3m）即停稳；连续 1.5s 几乎无位移判定为被堵 → 之后 0.8s 放弃槽位、走距离场并加横向绕行解卡。
   - **不提供"释放回原 AI"（T9 不落实）**：小队一旦成立就持续受遥控，只在成员阵亡 / `F2` 清场 / 换岛 / 战局结束时清理（清理时会把接管前的 order 还原回去）。
   - **减速（缓解"框不住移动中的敌人"）**：**框选中 / 已有选中**时向原版 `TimeManager` 申请减速（`RemoteSlowMo` 默认开、`RemoteSlowMoScale` 默认 0.1，与"选中我方小队"同款；`UpdateTimeScale` 取最小值合并，所以与暂停/过场互不干扰）。菜单打开 / 离开战局 / 清场 / 卸载都会立即释放，不留残账。
+  - **按键对齐原版（v1.4.5）**：原版输入走 **Rewired 动作**（源码里的动作名）：`GameplaySelect`/`GameplayDeselect`（左/右键）、**`SelectNextSquad`/`SelectPreviousSquad`（切队）**、**`ManualSlomo`（按住 = 0.1× 慢动作，`GameController.CheckManualSlomo`；玩家记忆里的"空格减速"就是它）**、`Pause`/`Unpause`、`UI*`。我们**读同一批动作**（`GameInput` 反射调 `ReInput.players.GetPlayer(0).GetButtonDown(...)`，无新增编译依赖）：
+    - `SelectNextSquad` / `SelectPreviousSquad` → **切换"当前遥控小队"**（只让该队响应下一次点地块），玩家在 Options 里的重绑定自动生效；
+    - 自建键保持独立、不抢原版动作：`F1` 投放菜单、`F2` 清场、`R` 全选、`Alt` 自由框选、`Shift` 追加（都可 cfg 改）；
+    - 减速叠加：我们的自动减速（框选/选中）与原版 `ManualSlomo` 由 `TimeManager` **取最小值**合并，互不干扰。
   - **取消选择**：**右键单击**清空"已选中"（与原版"右键取消"一致）并立即恢复时间流速；也可再点同一个单位取消、或按 F1 开菜单（`Cancel` 会清空）。
-  - **表现**：自绘框选矩形 + 受控单位与目标点标记（复用 `PlacementMarker` 的运行时贴图技术）；**不复用**原版选中环 / 小队 banner / 选中慢动作。
+
+  - **表现（对齐原版手感）**：受控/选中单位画**亮青十字**（选中的更大更亮）、目标格画**空心方框**、**鼠标落点光标**（指针处地面点吸附最近 `NavSpot` 再画框——原版选中我队时也是这个提示）；框选矩形自绘（复用 `PlacementMarker` 的运行时贴图技术）；**不复用**原版选中环 / 小队 banner / 相机聚焦。
   - **UI 内置简要说明**（免得玩家不知道）：HUD 在**有非原生单位 / 遥控小队时常显**——"非原生单位 N（可选 M[, 已选中 K]）" + 一行操作串"[遥控] 左键点单位=选中｜Shift 点同类=合并｜左键点地块=成队前进｜Alt+拖动=框选"（菜单开着时该行前缀改为"[关菜单后]"）；F1 菜单底部另有 5 行"遥控操作（关闭菜单后生效）"。
   - **相机**：只在"左键从非原生单位附近按下"的那一次拖动里临时接管相机（**按下即接管、松开即交还**，避免"先平移一点再被接管"的偏移）；其余任何拖动都完全交给原版相机。
   - **与原版输入的边界（T12）**：新增的只有两件事 —— ① 左键**从非原生单位附近**按下并拖动 = 框选；② 有待成队框选 / 已有小队时，左键点地块 = 成队并前进 / 前进。其余与原版一致：
@@ -207,5 +213,6 @@ Raid.IIslandFirstEnter:
 | **v1.4.1** | **1.4.1** | **投放放宽：滩头占用改"候选逐个试 + 两级间距 + 全岛兜底"（`MinLandingSpacing` 1.0、新增 `LandingFallbackAnywhere`）；遥控改左键点选为主 + `Shift` 点同类合并 + `Alt` 自由框选，相机按下即接管；修清场漏删登岛单位（squad 懒加载在 `runContainer` 下）；框选加登记/可用/命中诊断** |
 | **v1.4.2** | **1.4.2** | **选中链自愈：候选 = 标记注册表 ∪ 在册 squad 成员（缺标记自动补）、`RemoteGrabRadius` 48→64px、点空打"登记/可用/最近"诊断；UI 内置遥控说明（HUD 常显可选数量 + 操作串、F1 菜单 5 行说明）；版本号校正到 1.4.2** |
 | **v1.4.3** | **1.4.3** | **点选改世界距离主路径（`RemoteClickRadius` 1.2m，走 NavSpotCast，不依赖屏幕投影，屏幕半径仅兜底）；新增 `RemoteSelectAllKey`（默认 R）一键全选可选单位；诊断升级为"最近单位的屏幕原始坐标/z/相机名 + 地面点 + 世界距离"** |
-| **v1.4.4** | **1.4.4** | **修"选中后点地块没反应"（早退条件少算了待成队选择，导致首个小队永远建不起来）；修相机：`LevelCamera.cameraRef` 在战局里指向 CampaignCamera → 新增**自验证相机**（已知地面点↔点击点打分）与**世界四边形兜底框选**，框选/标记不再依赖投影；新增**框选/选中时减速**（挂原版 `TimeManager`，默认 0.1×，与原版"选中我方小队"同款）；点地块 = 有待成队就成队并前进** |
+| **v1.4.4** | **1.4.4** | **修"选中后点地块没反应"（早退条件少算了待成队选择 → 首个小队永远建不起来）；修相机（`LevelCamera.cameraRef` 指向 CampaignCamera → 自验证相机 + 世界四边形兜底框选）；框选/选中时减速（原版 `TimeManager`，0.1×）；右键取消选择** |
+| **v1.4.5** | **1.4.5** | **受控期间屏蔽 `Arsonist`**——它拿 `agent.orderDist` 当"我到家了"判据，与我们"到目标格"冲突，导致受控单位隔着地形与距离扔火炬烧房；释放/清场时还原。**表现对齐原版**：受控/选中单位画亮青十字（选中的更大更亮）、目标格画空心方框、新增**鼠标落点光标**（地面点吸附最近 `NavSpot`，原版选中我队时同款提示）。**按键对齐原版**：`GameInput` 反射读原版 Rewired 动作（无新依赖），`SelectNextSquad`/`SelectPreviousSquad` = 切换当前遥控小队、`ManualSlomo`（按住 0.1×）与原版同键共存** |
 

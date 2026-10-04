@@ -47,6 +47,18 @@ namespace BadNorthNewMode
 
             if (SelectAllKeyDown()) SelectAll();          // R = 一键全选（单位跑远了也能选）
 
+            // 原版"切换小队"键（SelectNextSquad / SelectPreviousSquad，玩家可在 Options 重绑定）→ 切换当前遥控小队
+            if (GameInput.Down("SelectNextSquad") || GameInput.Down("SelectPreviousSquad"))
+            {
+                if (HasPending) { _pending.Clear(); UpdateSlowMo(false); }   // 清掉待成队，指令才会发给"切到的那一队"
+                string cmsg;
+                if (RemoteGroup.CycleSelection(GameInput.Down("SelectNextSquad") ? 1 : -1, out cmsg))
+                {
+                    IngameMenu.Say(cmsg);
+                    Util.Log("[NewMode][遥控] " + cmsg);
+                }
+            }
+
             if (Input.GetMouseButtonDown(1) && HasPending)   // 右键 = 取消选择（与原版"右键取消"一致；顺带恢复时间流速）
             {
                 _pending.Clear();
@@ -607,16 +619,18 @@ namespace BadNorthNewMode
             Camera cam = Cam();
             if (cam == null) return;
 
-            if (_pending != null && _pending.Count > 0)                  // 待成队的框选：亮青点
+            if (_pending != null && _pending.Count > 0)                  // 待成队/已选中：亮青十字
             {
                 for (int i = 0; i < _pending.Count; i++)
                 {
                     ForeignUnit f = _pending[i];
                     Agent a = (f != null) ? f.agent : null;
                     if (!Usable(a)) continue;
-                    DrawDot(cam, a.wPos, new Color(0.4f, 1f, 1f, 0.85f), 5f);
+                    DrawCross(cam, a.wPos, new Color(0.4f, 1f, 1f, 0.9f), 9f);
                 }
             }
+
+            if (RemoteGroup.Any || HasPending) DrawHoverCursor(cam);      // 原版同款：选中后鼠标下的地块亮起
 
             if (!RemoteGroup.Any) return;
 
@@ -625,29 +639,70 @@ namespace BadNorthNewMode
                 RemoteGroup.Group g = RemoteGroup.At(gi);
                 if (g == null) continue;
 
-                if (g.selected && g.target != null)
-                    DrawDot(cam, g.target.navPos.wPos, new Color(0.4f, 1f, 1f, 0.85f), 7f);
+                if (g.target != null)
+                    DrawRing(cam, g.target.navPos.wPos,
+                        g.selected ? new Color(0.4f, 1f, 1f, 0.85f) : new Color(1f, 1f, 1f, 0.25f), 20f);
 
-                Color color = g.selected ? new Color(1f, 0.85f, 0.2f, 0.7f) : new Color(1f, 1f, 1f, 0.35f);
+                Color color = g.selected ? new Color(1f, 0.85f, 0.2f, 0.8f) : new Color(1f, 1f, 1f, 0.35f);
                 for (int i = 0; i < g.orders.Count; i++)
                 {
                     GroupOrder o = g.orders[i];
                     Agent a = (o != null) ? o.agent : null;
                     if (!Usable(a)) continue;
-                    DrawDot(cam, a.wPos, color, 4f);
+                    DrawCross(cam, a.wPos, color, g.selected ? 7f : 5f);
                 }
             }
         }
 
-        static void DrawDot(Camera cam, Vector3 world, Color c, float size)
+        /// <summary>十字标记（比小方块更容易看见：选中/受控单位用）。</summary>
+        static void DrawCross(Camera cam, Vector3 world, Color c, float size)
         {
             Vector3 sp = cam.WorldToScreenPoint(world);
             if (sp.z <= 0f) return;
 
+            float x = sp.x;
+            float y = Screen.height - sp.y;
+            float h = size * 0.5f;
+
             GUI.color = c;
-            GUI.DrawTexture(new Rect(sp.x - size * 0.5f, Screen.height - sp.y - size * 0.5f, size, size),
-                Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x - h, y - 0.5f, size, 1f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x - 0.5f, y - h, 1f, size), Texture2D.whiteTexture);
             GUI.color = Color.white;
+        }
+
+        /// <summary>空心方框（目标格用）。</summary>
+        static void DrawRing(Camera cam, Vector3 world, Color c, float size)
+        {
+            Vector3 sp = cam.WorldToScreenPoint(world);
+            if (sp.z <= 0f) return;
+
+            float x = sp.x;
+            float y = Screen.height - sp.y;
+            float h = size * 0.5f;
+
+            GUI.color = c;
+            GUI.DrawTexture(new Rect(x - h, y - h, size, 1f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x - h, y + h - 1f, size, 1f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x - h, y - h, 1f, size), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x + h - 1f, y - h, 1f, size), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+        }
+
+        /// <summary>鼠标落点光标：指针处的地面点吸附到最近的 NavSpot 再画框（原版选中我队时也用这个提示）。</summary>
+        static void DrawHoverCursor(Camera cam)
+        {
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (gm != null) ? gm.island : null;
+            if (island == null) return;
+
+            Vector3 land;
+            string diag;
+            if (!Plugin.TryGetLandPoint(island, Input.mousePosition, out land, out diag)) return;
+
+            NavSpot spot = NavSpot.GetNavSpot(land, true);
+            if (spot == null) return;
+
+            DrawRing(cam, spot.navPos.wPos, new Color(0.4f, 1f, 1f, 0.5f), 22f);
         }
     }
 }

@@ -14,6 +14,8 @@ namespace BadNorthNewMode
         Vector3 _lastWPos;             // T8：卡住检测用
         float _stuckTime;
         float _bypassUntil;
+        Arsonist _arsonist;            // 受控期间屏蔽"烧房子"（它拿 orderDist 当"到家"判据，会隔岛扔火炬）
+        bool _arsonistWasInActions;
 
         /// <summary>后加的组件不会经过 Agent.Setup 的收集，这里手动绑定（同 ShipboardThreat）。</summary>
         internal void Init(IAgentOrder prevOrder, MonoBehaviour prevMono)
@@ -25,6 +27,27 @@ namespace BadNorthNewMode
 
         internal IAgentOrder PrevOrder { get { return _prevOrder; } }
         internal MonoBehaviour PrevMono { get { return _prevMono; } }
+
+        /// <summary>受控期间摘掉 <see cref="Arsonist"/>：它用 `agent.orderDist ≤ 0.2` 判定"已到房子前"，与我们"到目标格"冲突。</summary>
+        internal void SuppressHouseBurning()
+        {
+            if (agent == null || agent.brain == null) return;
+
+            _arsonist = agent.GetComponent<Arsonist>();
+            if (_arsonist == null) return;
+
+            _arsonistWasInActions = agent.brain.actions.Contains(_arsonist);
+            if (_arsonistWasInActions) agent.brain.actions.Remove(_arsonist);
+        }
+
+        internal void RestoreHouseBurning()
+        {
+            if (_arsonist == null) return;
+
+            if (_arsonistWasInActions && agent != null && agent.brain != null && !agent.brain.actions.Contains(_arsonist))
+                agent.brain.actions.Add(_arsonist);
+            _arsonist = null;
+        }
 
         internal NavSpot Target { get { return _target; } }
         internal void SetTarget(NavSpot t) { _target = t; }

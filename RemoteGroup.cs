@@ -162,10 +162,30 @@ namespace BadNorthNewMode
 
             o.Init(a.brain.order, a.brain.orderMono);    // 记下接管前的 order（清场时还原，避免残留失效引用）
             o.SetTarget(g.target);
+            o.SuppressHouseBurning();                    // 受控期间不许烧房子（orderDist 语义冲突 → 会隔岛扔火炬）
 
             a.brain.order = o;                           // WantsControl()=true → PickNewOrder 不会再换掉它
             a.brain.orderMono = o;
             g.orders.Add(o);
+            return true;
+        }
+
+        /// <summary>切换"当前遥控小队"（对应原版 `SelectNextSquad` / `SelectPreviousSquad`）：把 selected 标记移到下/上一队。</summary>
+        internal static bool CycleSelection(int dir, out string message)
+        {
+            message = null;
+            if (_groups.Count == 0) { message = "还没有遥控小队（先框选/点选非原生单位）"; return false; }
+
+            int cur = -1;
+            for (int i = 0; i < _groups.Count; i++)
+                if (_groups[i].selected) { cur = i; break; }
+
+            int n = _groups.Count;
+            int next = (cur < 0) ? ((dir >= 0) ? 0 : n - 1) : ((((cur + dir) % n) + n) % n);
+            for (int i = 0; i < _groups.Count; i++) _groups[i].selected = (i == next);
+
+            message = string.Format("当前遥控小队：{0}×{1}（第 {2}/{3} 队；左键点地块 = 这队前进）",
+                _groups[next].display, _groups[next].orders.Count, next + 1, n);
             return true;
         }
 
@@ -261,6 +281,7 @@ namespace BadNorthNewMode
                         a.brain.order = o.PrevOrder;
                         a.brain.orderMono = o.PrevMono;
                     }
+                    o.RestoreHouseBurning();          // 交还"能烧房子"的行为
                     UnityEngine.Object.Destroy(o);
                 }
             }
