@@ -89,6 +89,7 @@ namespace BadNorthNewMode
 
             int cap = MaxPerGroup();
             int skipped = 0;
+            string joined = null;        // 本次动作**实际涉及**的小队（不能写 DescribeAll，会把别的队也列进去）
 
             for (int ti = 0; ti < types.Count; ti++)
             {
@@ -117,13 +118,16 @@ namespace BadNorthNewMode
                     if (g.orders.Count >= cap) { skipped += bucket.Count - i; break; }
                     Add(g, bucket[i].agent);
                 }
+
+                joined = (joined == null) ? "" : (joined + "、");
+                joined += g.display + "×" + g.orders.Count;
             }
 
             MarkSelection(types);
             CaptureIsland();
             for (int i = 0; i < _groups.Count; i++) Reslot(_groups[i]);
 
-            message = string.Format("已接管 {0}{1}（左键点地块前进；再框同兵种可并入）", DescribeAll(),
+            message = string.Format("已接管 {0}{1}（左键点地块前进；再点/再框同兵种可并入）", joined,
                 (skipped > 0) ? string.Format("；另有 {0} 个超过每队上限 {1}，保持原逻辑", skipped, cap) : "");
             return true;
         }

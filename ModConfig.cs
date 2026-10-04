@@ -20,6 +20,9 @@ namespace BadNorthNewMode
         public static ConfigEntry<int> RemoteGrabRadius;
         public static ConfigEntry<float> RemoteClickRadius;
         public static ConfigEntry<KeyCode> RemoteSelectAllKey;
+        public static ConfigEntry<KeyCode> RemotePrevGroupKey;
+        public static ConfigEntry<KeyCode> RemoteNextGroupKey;
+        public static ConfigEntry<bool> RemoteAlsoUseVanillaKeys;
         public static ConfigEntry<bool> RemoteSlowMo;
         public static ConfigEntry<float> RemoteSlowMoScale;
         public static ConfigEntry<KeyCode> RemoteFreeMarqueeKey;
@@ -151,6 +154,14 @@ namespace BadNorthNewMode
             RemoteSelectAllKey = cfg.Bind("Remote", "RemoteSelectAllKey", KeyCode.R,
                 "一键选中所有\"可选\"的非原生单位（等价于把它们全部加入待成队选择，之后左键点地块即可整队前进）。\n" +
                 "单位跑远、看不清时很有用。KeyCode.None = 关闭该快捷键。默认 R。");
+            RemotePrevGroupKey = cfg.Bind("Remote", "RemotePrevGroupKey", KeyCode.Z,
+                "切换到\"上一支遥控小队\"（只让那一队之后响应点地块）。默认 Z。KeyCode.None = 关闭。");
+            RemoteNextGroupKey = cfg.Bind("Remote", "RemoteNextGroupKey", KeyCode.X,
+                "切换到\"下一支遥控小队\"。默认 X。KeyCode.None = 关闭。");
+            RemoteAlsoUseVanillaKeys = cfg.Bind("Remote", "RemoteAlsoUseVanillaKeys", false,
+                "是否**同时**响应原版的动作键来做换队（原版 `SelectNextSquad` / `SelectPreviousSquad`）。\n" +
+                "默认 **false**：因为按原版切队键会**同时切换我方小队**（并触发原版\"选中我队减速\"），容易混淆；\n" +
+                "想让两边一起动就设 true（按键在 Options → Controls 里可改）。");
             RemoteSlowMo = cfg.Bind("Remote", "RemoteSlowMo", true,
                 "框选中或已有选中时**放慢时间**（与原版\"选中我方小队\"同一套 TimeManager，按 requester 取最小值合并）。\n" +
                 "敌方单位一直在动，减速后更容易框住。默认开。");

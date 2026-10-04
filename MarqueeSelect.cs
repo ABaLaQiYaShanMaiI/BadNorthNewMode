@@ -47,12 +47,18 @@ namespace BadNorthNewMode
 
             if (SelectAllKeyDown()) SelectAll();          // R = 一键全选（单位跑远了也能选）
 
-            // 原版"切换小队"键（SelectNextSquad / SelectPreviousSquad，玩家可在 Options 重绑定）→ 切换当前遥控小队
-            if (GameInput.Down("SelectNextSquad") || GameInput.Down("SelectPreviousSquad"))
+            // 换队：默认用我们自己的键（Z / X），避免与原版"切换小队"共键造成双控与混淆；
+            // 想让原版键也生效就把 RemoteAlsoUseVanillaKeys 打开（原版动作名见 §4）
+            bool vanilla = Util.V(ModConfig.RemoteAlsoUseVanillaKeys, false);
+            int dir = 0;
+            if (KeyDown(ModConfig.RemoteNextGroupKey) || (vanilla && GameInput.Down("SelectNextSquad"))) dir = 1;
+            else if (KeyDown(ModConfig.RemotePrevGroupKey) || (vanilla && GameInput.Down("SelectPreviousSquad"))) dir = -1;
+
+            if (dir != 0)
             {
                 if (HasPending) { _pending.Clear(); UpdateSlowMo(false); }   // 清掉待成队，指令才会发给"切到的那一队"
                 string cmsg;
-                if (RemoteGroup.CycleSelection(GameInput.Down("SelectNextSquad") ? 1 : -1, out cmsg))
+                if (RemoteGroup.CycleSelection(dir, out cmsg))
                 {
                     IngameMenu.Say(cmsg);
                     Util.Log("[NewMode][遥控] " + cmsg);
@@ -119,19 +125,22 @@ namespace BadNorthNewMode
 
             if (ShiftHeld())
             {
-                if (_pending.Contains(unit)) _pending.Remove(unit);
+                if (_pending.Contains(unit)) _pending.Remove(unit);       // Shift 点 = 移除
                 else _pending.Add(unit);
             }
-            else
+            else if (_pending.Count == 1 && _pending[0] == unit)
             {
-                bool sole = (_pending.Count == 1 && _pending[0] == unit);
-                _pending.Clear();
-                if (!sole) _pending.Add(unit);                 // 连点同一个 = 取消选择
+                _pending.Clear();                                        // 只有它 → 再点一次 = 取消
+            }
+            else if (!_pending.Contains(unit))
+            {
+                _pending.Add(unit);                                      // 默认**累加**：方便凑"剑兵+盾兵"这种混合集合
             }
 
             string msg = (_pending.Count == 0)
                 ? "已清空选择"
-                : string.Format("已选中 {0}（Shift 单击同类 = 追加/移除；左键点地块 = 成队并前进）", DescribePending());
+                : string.Format("已选中 {0}（继续点别的单位 = 累加；Shift 点 = 移除；右键 = 清空；左键点地块 = 成队并前进）",
+                    DescribePending());
             IngameMenu.Say(msg);
             Util.Log("[NewMode][遥控] " + msg);
         }
@@ -146,6 +155,13 @@ namespace BadNorthNewMode
             {
                 EnsureCameraForRect(_screenRect);
                 picked = PickWorld(_screenRect);
+            }
+
+            // 细长/退化的拖动（几乎一条线）→ 按"点一下"处理：取矩形中心附近最近的单位
+            if (picked.Count == 0 && (_screenRect.width < 8f || _screenRect.height < 8f))
+            {
+                ForeignUnit only = NearestForeignUnitWorld(_screenRect.center);
+                if (only != null) picked.Add(only);
             }
             if (_pending == null) _pending = new List<ForeignUnit>();
             if (!ShiftHeld()) _pending.Clear();
@@ -352,7 +368,12 @@ namespace BadNorthNewMode
 
         static bool SelectAllKeyDown()
         {
-            ConfigEntry<KeyCode> key = ModConfig.RemoteSelectAllKey;
+            return KeyDown(ModConfig.RemoteSelectAllKey);
+        }
+
+        /// <summary>我们自己的快捷键是否按下（None = 关闭；cfg 为空也不炸）。</summary>
+        static bool KeyDown(ConfigEntry<KeyCode> key)
+        {
             return key != null && key.Value != KeyCode.None && Input.GetKeyDown(key.Value);
         }
 
