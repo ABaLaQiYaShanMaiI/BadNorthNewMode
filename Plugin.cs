@@ -1,6 +1,7 @@
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using Voxels.TowerDefense;
@@ -13,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.3.1";
+        public const string VERSION = "1.4.0";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -48,8 +49,19 @@ namespace BadNorthNewMode
                 IngameMenu.Toggle();                      // 菜单即投放模式
                 if (!IngameMenu.IsOpen) return;
             }
-            if (!IngameMenu.IsOpen) return;
 
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+
+            MarqueeSelect.Tick(gm);                        // 菜单开着时内部自动取消
+            RemoteGroup.Tick();                            // 组维护与投放/遥控模式无关
+
+            if (IngameMenu.IsOpen) { HandleDropMode(gm); return; }
+            HandleRemoteMode(gm);                          // v1.4.0：菜单关闭时 = 遥控模式
+        }
+
+        /// <summary>投放模式（F1 菜单开着时）：滩头悬停预览 + 点击投放。</summary>
+        void HandleDropMode(IslandGameplayManager gm)
+        {
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
             {
                 IngameMenu.Close();
@@ -57,7 +69,6 @@ namespace BadNorthNewMode
                 return;
             }
 
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
             string why;
             if (!InBattle(gm, out why)) { PlacementMarker.Get().Hide(); IngameMenu.Hover = why; return; }
 
@@ -90,6 +101,54 @@ namespace BadNorthNewMode
             // 兜底：未订阅成功才轮询（避免一次点击投两艘）
             if (!_subscribed && Input.GetMouseButtonDown(0))
                 DoDrop(gm, screenPos, "轮询兜底");
+        }
+
+        /// <summary>遥控模式（菜单关闭时）：右键框选非原生单位 + 左键指挥移动；不改阵营（见 PROJECT_SPEC §5）。</summary>
+        void HandleRemoteMode(IslandGameplayManager gm)
+        {
+            PlacementMarker.Get().Hide();
+
+            if (!RemoteGroup.Any || MarqueeSelect.Dragging) return;
+
+            if (Input.GetMouseButtonDown(0) && !MarqueeSelect.ConsumedClick)
+            {
+                string why;
+                if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
+
+                Vector2 screenPos = Input.mousePosition;
+                if (IngameMenu.Contains(screenPos)) return;      // 菜单区域内的点击不做下令
+
+                Vector3 land;
+                string diag;
+                if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
+                {
+                    IngameMenu.Say("那里不是可站立的地面：" + diag);
+                    return;
+                }
+
+                NavSpot spot = NavSpot.GetNavSpot(land, true);
+                if (spot == null) { IngameMenu.Say("那里不是可站立的陆地地块"); return; }
+
+                // 框选过就先成队（按兵种分队），再一起前进；没框选过就直接命令已有小队
+                Vector2 center;
+                List<ForeignUnit> pending = MarqueeSelect.TakePending(out center);
+
+                string msg;
+                if (pending != null && pending.Count > 0)
+                {
+                    string capMsg;
+                    RemoteGroup.Capture(pending, center, out capMsg);
+                    RemoteGroup.MoveTo(spot, out msg);
+                    msg = capMsg + " → " + msg;
+                }
+                else
+                {
+                    RemoteGroup.MoveTo(spot, out msg);
+                }
+
+                IngameMenu.Say(msg);
+                Util.Log("[NewMode][遥控] " + msg);
+            }
         }
 
         /// <summary>反射订阅 pointerRationalizer.onClick（System.Core 3.5 的 Action`2，见 §4 坑表）。</summary>
@@ -191,8 +250,8 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>只在"正常战局、岛屿处于 Playing"时可投放。</summary>
-        static bool InBattle(IslandGameplayManager gm, out string why)
+        /// <summary>只在"正常战局、岛屿处于 Playing"时可投放 / 可下令。</summary>
+        internal static bool InBattle(IslandGameplayManager gm, out string why)
         {
             why = null;
             if (gm == null) { why = "不在战局中"; return false; }
@@ -265,10 +324,11 @@ namespace BadNorthNewMode
             return go.name + "@" + (string.IsNullOrEmpty(layer) ? go.layer.ToString() : layer);
         }
 
-        /// <summary>HUD + 投放菜单（显示逻辑在 IngameMenu）。</summary>
+        /// <summary>HUD + 投放菜单（IngameMenu）+ 遥控框选与标记（MarqueeSelect）。</summary>
         void OnGUI()
         {
             IngameMenu.Draw();
+            MarqueeSelect.DrawOverlay();
         }
 
     }

@@ -14,6 +14,13 @@ namespace BadNorthNewMode
         public static ConfigEntry<int> SquadSize;
         public static ConfigEntry<bool> AllowCrossIslandUnits;
 
+        // ============ Remote（v1.4.0 遥控非原生单位）============
+        public static ConfigEntry<bool> RemoteControl;
+        public static ConfigEntry<int> RemoteMarqueePixels;
+        public static ConfigEntry<int> RemoteGrabRadius;
+        public static ConfigEntry<int> RemoteSoftCap;
+        public static ConfigEntry<bool> RemoteHighlight;
+
         // ============ Landing ============
         public static ConfigEntry<float> ShipSpeedMultiplier;
         public static ConfigEntry<float> MaxShoreDistance;
@@ -35,6 +42,7 @@ namespace BadNorthNewMode
         public static void Bind(ConfigFile cfg)
         {
             BindGeneral(cfg);
+            BindRemote(cfg);
             BindLanding(cfg);
             BindDiag(cfg);
         }
@@ -106,6 +114,23 @@ namespace BadNorthNewMode
             DisembarkFix = cfg.Bind("Landing", "DisembarkFix", true,
                 "卡住时的兜底下船开关（用原版公开成员完成，等价于原版 Pirate.MaybeAct 的后半段）。\n" +
                 "true=自动把滞留敌人移下船；false=只打印诊断、保持原样（用于对照排查）。");
+        }
+
+        static void BindRemote(ConfigFile cfg)
+        {
+            RemoteControl = cfg.Bind("Remote", "RemoteControl", true,
+                "遥控非原生单位（v1.4.0）：\n" +
+                "**左键**从某个非原生单位附近按住拖动 = 框选（框里混了几种就按兵种各分一个小队）→ **左键点地块** = 选中的小队前进。\n" +
+                "超过每队上限的散兵不组队、保持原逻辑；组一旦成立就持续受遥控（不提供释放回 AI）。\n" +
+                "注意：遥控只接管行军，它们**仍然是我方的敌人**（会被你打、也会打你）。关闭投放菜单（F1）后本功能才生效。");
+            RemoteMarqueePixels = cfg.Bind("Remote", "RemoteMarqueePixels", 8,
+                "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 移动命令 / 点在自己单位上时忽略）。");
+            RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 48,
+                "只有从\"非原生单位多少像素以内\"起拖才算框选；从别处拖动仍然是原版的相机平移。0 = 任意位置起拖都框选。");
+            RemoteSoftCap = cfg.Bind("Remote", "RemoteSoftCap", 40,
+                "每个兵种小队的上限：0 = 不限；>0 = 框选时按离框中心由近到远取满该数，**多出来的不组队、保持原逻辑**。");
+            RemoteHighlight = cfg.Bind("Remote", "RemoteHighlight", true,
+                "绘制框选矩形、受控单位与目标点标记（纯 GUI / 运行时贴图，不需要任何资源）。");
         }
 
         static void BindDiag(ConfigFile cfg)

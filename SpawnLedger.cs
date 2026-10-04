@@ -82,7 +82,7 @@ namespace BadNorthNewMode
                 if (it.root != null) { UnityEngine.Object.Destroy(it.root); n++; }
                 _items.RemoveAt(i);
             }
-            if (n > 0) DropPlanner.InvalidateOccupancy();
+            if (n > 0) { DropPlanner.InvalidateOccupancy(); RemoteGroup.Clear(); }
             return n;
         }
 

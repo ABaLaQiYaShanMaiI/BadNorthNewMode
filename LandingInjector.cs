@@ -126,6 +126,10 @@ namespace BadNorthNewMode
 
                 if (a.GetComponent<ShipboardThreat>() == null)
                     a.gameObject.AddComponent<ShipboardThreat>().Init(landing, a);
+
+                // v1.4.0：非原生身份标记（遥控框选的唯一数据源）
+                VikingAgent va = a.GetComponent<VikingAgent>();
+                ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
             if (Util.V(ModConfig.VerboseLog, false))
                 Util.Log("[NewMode] 已装配 " + n + " 个敌人（order→Pirate + 舰上威胁）");

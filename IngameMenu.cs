@@ -54,18 +54,23 @@ namespace BadNorthNewMode
         static void DrawHud()
         {
             if (!Util.V(ModConfig.ShowHud, true)) return;
-            if (!IsOpen && Time.time > _hudUntil) return;
+            if (!IsOpen && !RemoteGroup.Any && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
 
             string text = IsOpen
                 ? "BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）"
                 : "BadNorthNewMode";
             if (IsOpen && !string.IsNullOrEmpty(Hover)) text += "\n" + Hover;
+            if (RemoteGroup.Any)
+                text += "\n遥控小队：" + RemoteGroup.DescribeAll() + "（共 " + RemoteGroup.TotalCount +
+                        "；左键点地块 = 前进，左键从单位上拖 = 再框选）";
+            else if (MarqueeSelect.Dragging)
+                text += "\n框选中…（只框同一种类的非原生单位）";
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
             GUI.color = new Color(0f, 0f, 0f, 0.65f);
-            GUI.DrawTexture(new Rect(8f, 8f, 640f, 66f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(8f, 8f, 660f, 84f), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            GUI.Label(new Rect(16f, 12f, 640f, 62f), text);
+            GUI.Label(new Rect(16f, 12f, 660f, 80f), text);
         }
 
         /// <summary>兵种菜单：上排选兵种、下排选数量，均为左键点击（写回 cfg，立即生效）。</summary>
@@ -153,7 +158,7 @@ namespace BadNorthNewMode
             }
 
             GUI.Label(new Rect(x, cy + countH, w, 34f),
-                "F1 关闭菜单 · F2 强制清场（销毁本 mod 投放的全部船与单位）");
+                "F1 关闭菜单 · F2 强制清场　｜　关菜单后：左键从单位上拖动 = 框选（按兵种分队），左键点地块 = 前进");
         }
 
         /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>
