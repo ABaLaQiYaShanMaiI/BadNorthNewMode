@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.4.6";
+        public const string VERSION = "1.4.8";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -108,10 +108,12 @@ namespace BadNorthNewMode
         {
             PlacementMarker.Get().Hide();
 
-            if (MarqueeSelect.Dragging) return;                              // 正在框选：不下令
-            if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;        // 既没有小队、也没有待成队的选择 → 没事可做
+            if (MarqueeSelect.Dragging) return;                                      // 正在框选：不下令
+            if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;                // 既没有小队、也没有待成队 → 左右键完全归原版
+            if (MarqueeSelect.VanillaSelected) return;                                // 你正选着我方小队 → 这次点击归原版（绝不双控）
 
-            if (Input.GetMouseButtonDown(0) && !MarqueeSelect.ConsumedClick)
+            // 左键或右键点地块 = 集结 / 前进（覆盖游戏的两种光标模式；没有选中时上面已早退，不干扰原版）
+            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
             {
                 string why;
                 if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
@@ -130,7 +132,7 @@ namespace BadNorthNewMode
                 NavSpot spot = NavSpot.GetNavSpot(land, true);
                 if (spot == null) { IngameMenu.Say("那里不是可站立的陆地地块"); return; }
 
-                // 框选过就先成队（按兵种分队），再一起前进；没框选过就直接命令已有小队
+                // 有待成队 → 先按兵种分队（多兵种就地分到相邻格），再一起前进；没有待成队 → 直接命令已有小队
                 Vector2 center;
                 List<ForeignUnit> pending = MarqueeSelect.TakePending(out center);
 
@@ -149,6 +151,7 @@ namespace BadNorthNewMode
 
                 IngameMenu.Say(msg);
                 Util.Log("[NewMode][遥控] " + msg);
+                MarqueeSelect.ClearPending();                    // 移动后取消选择（与原版 SquadMover 一致，也恢复时间流速）
             }
         }
 

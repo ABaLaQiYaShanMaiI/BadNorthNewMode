@@ -20,9 +20,6 @@ namespace BadNorthNewMode
         public static ConfigEntry<int> RemoteGrabRadius;
         public static ConfigEntry<float> RemoteClickRadius;
         public static ConfigEntry<KeyCode> RemoteSelectAllKey;
-        public static ConfigEntry<KeyCode> RemotePrevGroupKey;
-        public static ConfigEntry<KeyCode> RemoteNextGroupKey;
-        public static ConfigEntry<bool> RemoteAlsoUseVanillaKeys;
         public static ConfigEntry<bool> RemoteSlowMo;
         public static ConfigEntry<float> RemoteSlowMoScale;
         public static ConfigEntry<KeyCode> RemoteFreeMarqueeKey;
@@ -132,10 +129,10 @@ namespace BadNorthNewMode
         static void BindRemote(ConfigFile cfg)
         {
             RemoteControl = cfg.Bind("Remote", "RemoteControl", true,
-                "遥控非原生单位（v1.4.0）：\n" +
-                "**左键**从某个非原生单位附近按住拖动 = 框选（框里混了几种就按兵种各分一个小队）→ **左键点地块** = 选中的小队前进。\n" +
-                "超过每队上限的散兵不组队、保持原逻辑；组一旦成立就持续受遥控（不提供释放回 AI）。\n" +
-                "注意：遥控只接管行军，它们**仍然是我方的敌人**（会被你打、也会打你）。关闭投放菜单（F1）后本功能才生效。");
+                "遥控非原生单位（v1.4.7）：\n" +
+                "**Shift + 左键/右键点**一个非原生单位 = 选中它所在的**整队**（再点同一队 = 取消）；按 **R** = 全选所有可选单位。\n" +
+                "然后**左键或右键点一个地块** = 选中的单位集结到那里：按兵种各成一个小队，多兵种/人多时就地分到**相邻格**（占完为止）。\n" +
+                "没有选中时，左右键完全交还原版（选我方 / 移动我方）。注意：遥控只接管行军，它们**仍是我方的敌人**。");
             RemoteMarqueePixels = cfg.Bind("Remote", "RemoteMarqueePixels", 8,
                 "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 移动命令 / 点在自己单位上时忽略）。");
             RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 64,
@@ -152,16 +149,7 @@ namespace BadNorthNewMode
                 "**左键点选**的世界距离半径（米）：点击处的地面点与单位脚点相距 ≤ 本值即算点中。\n" +
                 "用世界距离判定（与投放同一套 NavSpotCast），不依赖屏幕投影；点不中就调大（比如 2）。");
             RemoteSelectAllKey = cfg.Bind("Remote", "RemoteSelectAllKey", KeyCode.R,
-                "一键选中所有\"可选\"的非原生单位（等价于把它们全部加入待成队选择，之后左键点地块即可整队前进）。\n" +
-                "单位跑远、看不清时很有用。KeyCode.None = 关闭该快捷键。默认 R。");
-            RemotePrevGroupKey = cfg.Bind("Remote", "RemotePrevGroupKey", KeyCode.Z,
-                "切换到\"上一支遥控小队\"（只让那一队之后响应点地块）。默认 Z。KeyCode.None = 关闭。");
-            RemoteNextGroupKey = cfg.Bind("Remote", "RemoteNextGroupKey", KeyCode.X,
-                "切换到\"下一支遥控小队\"。默认 X。KeyCode.None = 关闭。");
-            RemoteAlsoUseVanillaKeys = cfg.Bind("Remote", "RemoteAlsoUseVanillaKeys", false,
-                "是否**同时**响应原版的动作键来做换队（原版 `SelectNextSquad` / `SelectPreviousSquad`）。\n" +
-                "默认 **false**：因为按原版切队键会**同时切换我方小队**（并触发原版\"选中我队减速\"），容易混淆；\n" +
-                "想让两边一起动就设 true（按键在 Options → Controls 里可改）。");
+                "一键选中所有\"可选\"的非原生单位（之后左/右键点地块即可集结前进）。默认 R；KeyCode.None = 关闭。");
             RemoteSlowMo = cfg.Bind("Remote", "RemoteSlowMo", true,
                 "框选中或已有选中时**放慢时间**（与原版\"选中我方小队\"同一套 TimeManager，按 requester 取最小值合并）。\n" +
                 "敌方单位一直在动，减速后更容易框住。默认开。");

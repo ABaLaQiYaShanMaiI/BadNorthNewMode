@@ -175,24 +175,6 @@ namespace BadNorthNewMode
         }
 
         /// <summary>切换"当前遥控小队"（对应原版 `SelectNextSquad` / `SelectPreviousSquad`）：把 selected 标记移到下/上一队。</summary>
-        internal static bool CycleSelection(int dir, out string message)
-        {
-            message = null;
-            if (_groups.Count == 0) { message = "还没有遥控小队（先框选/点选非原生单位）"; return false; }
-
-            int cur = -1;
-            for (int i = 0; i < _groups.Count; i++)
-                if (_groups[i].selected) { cur = i; break; }
-
-            int n = _groups.Count;
-            int next = (cur < 0) ? ((dir >= 0) ? 0 : n - 1) : ((((cur + dir) % n) + n) % n);
-            for (int i = 0; i < _groups.Count; i++) _groups[i].selected = (i == next);
-
-            message = string.Format("当前遥控小队：{0}×{1}（第 {2}/{3} 队；左键点地块 = 这队前进）",
-                _groups[next].display, _groups[next].orders.Count, next + 1, n);
-            return true;
-        }
-
         /// <summary>左键点地块：命令"本次选中的小队"前进（最近一次没框到任何队时，命令全部队）。</summary>
         internal static bool MoveTo(NavSpot target, out string message)
         {
@@ -208,9 +190,14 @@ namespace BadNorthNewMode
             for (int i = 0; i < targets.Count; i++)
             {
                 Group g = targets[i];
-                g.target = target;
+
+                // 第一队去点击格，其余队就地分到**相邻格**（多兵种/人多时不挤同一格；相邻格不够就都挤点击格）
+                NavSpot spot = (i == 0) ? target : NeighbourSpot(target, i);
+                if (spot == null) spot = target;
+
+                g.target = spot;
                 for (int k = 0; k < g.orders.Count; k++)
-                    if (g.orders[k] != null) g.orders[k].SetTarget(target);
+                    if (g.orders[k] != null) g.orders[k].SetTarget(spot);
                 Reslot(g);
                 who = (who == null) ? "" : (who + "、");
                 who += g.display + "×" + g.orders.Count;
@@ -219,6 +206,22 @@ namespace BadNorthNewMode
             FabricWrapper.PostEvent("UI/InGame/UnitMove");     // 借用原版的移动反馈音
             message = "遥控小队前进：" + who;
             return true;
+        }
+
+        /// <summary>取点击格的"第 index 个非空相邻格"（`NavSpot.neighbours[8]`），用于把多支小队就地铺开。</summary>
+        static NavSpot NeighbourSpot(NavSpot center, int index)
+        {
+            if (center == null || center.neighbours == null) return null;
+
+            int found = 0;
+            for (int i = 0; i < center.neighbours.Length; i++)
+            {
+                NavSpot s = center.neighbours[i];
+                if (s == null) continue;
+                found++;
+                if (found == index) return s;
+            }
+            return null;
         }
 
         /// <summary>每帧维护：剔除阵亡成员、被抢 order 时重新接管、换岛 / 结算时清场。</summary>

@@ -78,7 +78,7 @@ namespace BadNorthNewMode
 
             if (help)
                 text += (IsOpen ? "\n[关菜单后·仅调控非原生单位] " : "\n[遥控·仅调控非原生单位] ") +
-                        "左键点单位 = 选中(可连点累加)｜Shift 点 = 移除｜R = 全选｜Z/X = 换队｜点地块 = 前进｜Alt+拖动 = 框选｜减速";
+                        "Shift+左/右键点单位 = 选中整队｜R = 全选｜左/右键点地块 = 集结前进｜Alt+拖动 = 框选｜选中时减速";
 
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
@@ -179,9 +179,9 @@ namespace BadNorthNewMode
             // ---- 遥控操作说明（关菜单后生效；玩家不点 F1 也知道怎么用）----
             float hy = cy + countH;
             GUI.Label(new Rect(x, hy, w, 18f), "遥控操作（关闭菜单后生效）：");
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), "· 左键点\"非原生单位\" = 选中（连续点不同单位 = 累加，可凑混合兵种；Shift 点 = 移除；右键 = 清空）");
-            GUI.Label(new Rect(x, hy + 36f, w, 18f), "· R = 一键全选；Z / X = 上一支 / 下一支遥控小队；左键点地块 = 选中的单位 / 当前小队一起前进");
-            GUI.Label(new Rect(x, hy + 54f, w, 18f), "· Alt + 左键拖动 = 从任意位置框选（相机暂停）；不按 Alt 时只有从单位上起拖才框选");
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), "· Shift + 左键/右键点\"非原生单位\" = 选中它所在的整队（再点同一队 = 取消）；R = 全选所有可选单位");
+            GUI.Label(new Rect(x, hy + 36f, w, 18f), "· 左键或右键点地块 = 选中的单位集结前进（按兵种各成队，多兵种就地分到相邻格）；移动后自动取消选择");
+            GUI.Label(new Rect(x, hy + 54f, w, 18f), "· 不按 Shift 时，左右键完全交还原版（选我方 / 移动我方）；Alt + 拖动 = 框选（相机暂停）");
             GUI.Label(new Rect(x, hy + 72f, w, 18f), "· 单位须已下船（HUD 的\"可选\"就是当前能选的数量）｜选中/框选时放慢时间；原版\"手动慢动作\"键按住也减速");
             GUI.Label(new Rect(x, hy + 90f, w, 18f), "· 本功能只调控\"非原生单位\"，不会切换或影响我方小队｜F1 关闭菜单 · F2 强制清场");
         }

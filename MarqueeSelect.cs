@@ -23,9 +23,24 @@ namespace BadNorthNewMode
         static readonly object SlowMoOwner = new object();   // TimeManager 按 requester 记账（取最小值合并）
 
         internal static bool Dragging { get { return _dragging; } }
-        internal static bool ConsumedClick;      // 起点在单位上的单击 → 不作移动命令
         internal static List<ForeignUnit> Pending { get { return _pending; } }
         internal static bool HasPending { get { return _pending != null && _pending.Count > 0; } }
+
+        /// <summary>原版此刻是否正选中着"我方小队"（是 → 点击归原版，我们不接管）。</summary>
+        internal static bool VanillaSelected { get { return !object.ReferenceEquals(VanillaSelection(), null); } }
+
+        static EnglishSquad VanillaSelection()
+        {
+            SquadSelector ss = Singleton<SquadSelector>.instance;
+            return (ss != null) ? ss.selectedSquad : null;
+        }
+
+        /// <summary>取消原版"我方小队"的选择（与原版 `SquadMover.MoveTo` 末尾同一句，见 §4）。</summary>
+        static void ClearVanillaSelection()
+        {
+            SquadSelector ss = Singleton<SquadSelector>.instance;
+            if (ss != null && !object.ReferenceEquals(ss.selectedSquad, null)) ss.SelectSquad(null, false);
+        }
 
         /// <summary>取走待成队的框选结果（点地块时调用；取走即清空）。</summary>
         internal static List<ForeignUnit> TakePending(out Vector2 center)
@@ -38,38 +53,19 @@ namespace BadNorthNewMode
 
         internal static void Tick(IslandGameplayManager gm)
         {
-            ConsumedClick = false;
             if (!Util.V(ModConfig.RemoteControl, true)) { Cancel(gm); return; }
             if (IngameMenu.IsOpen) { Cancel(gm); return; }
 
             string why;
             if (!Plugin.InBattle(gm, out why)) { Cancel(gm); return; }
 
-            if (SelectAllKeyDown()) SelectAll();          // R = 一键全选（单位跑远了也能选）
+            if (SelectAllKeyDown()) SelectAll();          // R = 全选所有可选的非原生单位
 
-            // 换队：默认用我们自己的键（Z / X），避免与原版"切换小队"共键造成双控与混淆；
-            // 想让原版键也生效就把 RemoteAlsoUseVanillaKeys 打开（原版动作名见 §4）
-            bool vanilla = Util.V(ModConfig.RemoteAlsoUseVanillaKeys, false);
-            int dir = 0;
-            if (KeyDown(ModConfig.RemoteNextGroupKey) || (vanilla && GameInput.Down("SelectNextSquad"))) dir = 1;
-            else if (KeyDown(ModConfig.RemotePrevGroupKey) || (vanilla && GameInput.Down("SelectPreviousSquad"))) dir = -1;
-
-            if (dir != 0)
+            // 互斥：你选了我方小队 → 我们的选择让位（这次点击完全归原版，绝不双控）
+            if (VanillaSelected && HasPending)
             {
-                if (HasPending) { _pending.Clear(); UpdateSlowMo(false); }   // 清掉待成队，指令才会发给"切到的那一队"
-                string cmsg;
-                if (RemoteGroup.CycleSelection(dir, out cmsg))
-                {
-                    IngameMenu.Say(cmsg);
-                    Util.Log("[NewMode][遥控] " + cmsg);
-                }
-            }
-
-            if (Input.GetMouseButtonDown(1) && HasPending)   // 右键 = 取消选择（与原版"右键取消"一致；顺带恢复时间流速）
-            {
-                _pending.Clear();
-                UpdateSlowMo(false);
-                IngameMenu.Say("已清空选择");
+                ClearPending();
+                if (Util.V(ModConfig.VerboseLog, false)) Util.Log("[NewMode][遥控] 你选中了我方小队 → 已清空遥控选择");
             }
 
             if (Input.GetMouseButtonDown(0))
@@ -81,7 +77,6 @@ namespace BadNorthNewMode
                 if (_pressUnit == null) _pressUnit = NearestForeignUnit(_start);   // 兜底：屏幕半径
                 _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
-                else LogClickMiss(_start);       // 点空了：把"登记/可用/最近屏幕+世界距离/地面点"打出来
             }
 
             if (_held && Input.GetMouseButton(0))
@@ -98,7 +93,6 @@ namespace BadNorthNewMode
             if (_held && (Input.GetMouseButtonUp(0) || !Input.GetMouseButton(0)))   // 也兜底"按住时切窗口丢 Up 事件"
             {
                 bool wasDrag = _dragging;
-                bool wasGrab = _grab;
                 ForeignUnit pressUnit = _pressUnit;
                 _held = false;
                 _dragging = false;
@@ -106,43 +100,75 @@ namespace BadNorthNewMode
                 _pressUnit = null;
                 AttachCamera(gm);
 
-                if (wasDrag) ApplySelection();                 // 拖动 = 框选
-                else
-                {
-                    ConsumedClick = wasGrab;                   // 点在单位上的单击：不当"移动命令"
-                    if (pressUnit != null && pressUnit.agent != null) ClickSelect(pressUnit);
-                }
+                if (wasDrag) ApplySelection();                              // 拖动 = 框选（可选）
+                else if (pressUnit != null && pressUnit.agent != null && ShiftHeld())
+                    ClickSelectSquad(pressUnit);                            // Shift + 点单位 = 选中它所在的整队（v1.4.7）
             }
 
             UpdateSlowMo(_dragging || HasPending);             // 框选中 / 已有选中 → 减速（更易框住移动中的敌人）
         }
 
-        /// <summary>单击单位：选中它（再点一次取消）；按住 Shift 追加 / 移除（即"同类合并"）。</summary>
-        static void ClickSelect(ForeignUnit unit)
+        /// <summary>Shift + 点击：选中该单位所在的**整队**（同一次投送的 squad，通常一船 4 个）；再点同一队 = 取消。</summary>
+        static void ClickSelectSquad(ForeignUnit unit)
         {
+            List<ForeignUnit> squad = SquadOf(unit);
+            if (squad.Count == 0) return;
+
+            ClearVanillaSelection();                     // 选中遥控单位前，取消我方小队的选择（保持"当前只选中一方"）
+
             if (_pending == null) _pending = new List<ForeignUnit>();
             _pendingCenter = Input.mousePosition;
 
-            if (ShiftHeld())
+            bool all = true;
+            for (int i = 0; i < squad.Count; i++)
+                if (!_pending.Contains(squad[i])) { all = false; break; }
+
+            if (all)
             {
-                if (_pending.Contains(unit)) _pending.Remove(unit);       // Shift 点 = 移除
-                else _pending.Add(unit);
+                for (int i = 0; i < squad.Count; i++) _pending.Remove(squad[i]);
             }
-            else if (_pending.Count == 1 && _pending[0] == unit)
+            else
             {
-                _pending.Clear();                                        // 只有它 → 再点一次 = 取消
-            }
-            else if (!_pending.Contains(unit))
-            {
-                _pending.Add(unit);                                      // 默认**累加**：方便凑"剑兵+盾兵"这种混合集合
+                for (int i = 0; i < squad.Count; i++)
+                    if (!_pending.Contains(squad[i])) _pending.Add(squad[i]);
             }
 
             string msg = (_pending.Count == 0)
                 ? "已清空选择"
-                : string.Format("已选中 {0}（继续点别的单位 = 累加；Shift 点 = 移除；右键 = 清空；左键点地块 = 成队并前进）",
-                    DescribePending());
+                : string.Format("已选中 {0}（再 Shift 点同一队 = 取消；左/右键点地块 = 集结前进）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log("[NewMode][遥控] " + msg);
+        }
+
+        /// <summary>取该单位所在**引擎小队**（同一次投送的 squad）里所有"可选"的非原生单位。</summary>
+        static List<ForeignUnit> SquadOf(ForeignUnit unit)
+        {
+            List<ForeignUnit> res = new List<ForeignUnit>();
+            EnsureCandidates();
+
+            Agent a = (unit != null) ? unit.agent : null;
+            Squad squad = (a != null) ? a.squad : null;
+            if (squad != null && squad.agents != null)
+            {
+                for (int i = 0; i < squad.agents.Count; i++)
+                {
+                    Agent m = squad.agents[i];
+                    if (!Usable(m)) continue;
+
+                    ForeignUnit f = m.GetComponent<ForeignUnit>();
+                    if (f != null && !res.Contains(f)) res.Add(f);
+                }
+            }
+
+            if (res.Count == 0 && unit != null) res.Add(unit);
+            return res;
+        }
+
+        /// <summary>下达移动后清空"已选中"（原版 `SquadMover.MoveTo` 也是移动后取消选择），并恢复时间流速。</summary>
+        internal static void ClearPending()
+        {
+            if (_pending != null) _pending.Clear();
+            UpdateSlowMo(false);
         }
 
         /// <summary>框选：默认替换选择，按住 Shift 则并入现有选择。</summary>
@@ -167,6 +193,7 @@ namespace BadNorthNewMode
             if (!ShiftHeld()) _pending.Clear();
             for (int i = 0; i < picked.Count; i++)
                 if (!_pending.Contains(picked[i])) _pending.Add(picked[i]);
+            if (_pending.Count > 0) ClearVanillaSelection();   // 框选也算"选中了遥控单位" → 取消我方选择
 
             _pendingCenter = _screenRect.center;
             string msg = (_pending.Count == 0)
@@ -381,6 +408,7 @@ namespace BadNorthNewMode
         internal static void SelectAll()
         {
             EnsureCandidates();
+            ClearVanillaSelection();                     // 与 Shift 点选一致：选中遥控单位前先取消我方选择
             if (_pending == null) _pending = new List<ForeignUnit>();
             _pending.Clear();
 
@@ -396,26 +424,6 @@ namespace BadNorthNewMode
                 : string.Format("已全选 {0}（左键点地块 = 成队前进）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log("[NewMode][遥控] " + msg);
-        }
-
-        /// <summary>点空时的诊断：登记/可用 + 最近单位的屏幕信息 + 地面点 + 两个阈值。</summary>
-        static void LogClickMiss(Vector2 screenPos)
-        {
-            EnsureCandidates();
-            if (ForeignUnit.All.Count == 0) return;            // 没有非原生单位就不刷屏
-
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            Island island = (gm != null) ? gm.island : null;
-
-            Vector3 land;
-            string diag;
-            bool hasLand = Plugin.TryGetLandPoint(island, screenPos, out land, out diag);
-            if (hasLand) CamFor(land, screenPos);
-
-            Util.Log(string.Format("[NewMode][遥控] 点击处没命中：登记 {0}，可用 {1}；最近 {2}；地面点 {3}；阈值 点选 {4:F1}m / 框选起点 {5}px",
-                ForeignUnit.All.Count, ForeignUnit.UsableCount(), NearestScreenInfo(screenPos),
-                hasLand ? Util.Fmt(land) : ("未命中(" + diag + ")"),
-                Util.V(ModConfig.RemoteClickRadius, 1.2f), Util.V(ModConfig.RemoteGrabRadius, 64)));
         }
 
         /// <summary>最近可用单位的屏幕信息（距离/原始坐标/z/鼠标/屏幕尺寸）——用来判定投影是否可信。</summary>
@@ -482,7 +490,6 @@ namespace BadNorthNewMode
 
         static void Cancel(IslandGameplayManager gm)
         {
-            ConsumedClick = false;
             _pressUnit = null;
             if (_pending != null && _pending.Count > 0) { _pending.Clear(); }   // 离开战局/开菜单时清掉待成队
             ClearSlowMo();
