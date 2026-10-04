@@ -19,10 +19,13 @@ namespace BadNorthNewMode
         static List<ForeignUnit> _pending;      // 已选中/框选、等待"点地块"成队的目标
         static Vector2 _pendingCenter;
         static ForeignUnit _pressUnit;          // 按下时指针下的非原生单位（单击选择用）
+        static bool _slowMo;                    // 是否已向 TimeManager 申请减速
+        static readonly object SlowMoOwner = new object();   // TimeManager 按 requester 记账（取最小值合并）
 
         internal static bool Dragging { get { return _dragging; } }
         internal static bool ConsumedClick;      // 起点在单位上的单击 → 不作移动命令
         internal static List<ForeignUnit> Pending { get { return _pending; } }
+        internal static bool HasPending { get { return _pending != null && _pending.Count > 0; } }
 
         /// <summary>取走待成队的框选结果（点地块时调用；取走即清空）。</summary>
         internal static List<ForeignUnit> TakePending(out Vector2 center)
@@ -43,6 +46,13 @@ namespace BadNorthNewMode
             if (!Plugin.InBattle(gm, out why)) { Cancel(gm); return; }
 
             if (SelectAllKeyDown()) SelectAll();          // R = 一键全选（单位跑远了也能选）
+
+            if (Input.GetMouseButtonDown(1) && HasPending)   // 右键 = 取消选择（与原版"右键取消"一致；顺带恢复时间流速）
+            {
+                _pending.Clear();
+                UpdateSlowMo(false);
+                IngameMenu.Say("已清空选择");
+            }
 
             if (Input.GetMouseButtonDown(0))
             {
@@ -85,6 +95,8 @@ namespace BadNorthNewMode
                     if (pressUnit != null && pressUnit.agent != null) ClickSelect(pressUnit);
                 }
             }
+
+            UpdateSlowMo(_dragging || HasPending);             // 框选中 / 已有选中 → 减速（更易框住移动中的敌人）
         }
 
         /// <summary>单击单位：选中它（再点一次取消）；按住 Shift 追加 / 移除（即"同类合并"）。</summary>
@@ -116,6 +128,13 @@ namespace BadNorthNewMode
         static void ApplySelection()
         {
             List<ForeignUnit> picked = Pick(_screenRect);
+
+            // 屏幕投影不可信时（相机异常等）用"世界四边形"兜底：矩形四角 NavSpotCast 成世界点，再判单位是否落在里面
+            if (picked.Count == 0)
+            {
+                EnsureCameraForRect(_screenRect);
+                picked = PickWorld(_screenRect);
+            }
             if (_pending == null) _pending = new List<ForeignUnit>();
             if (!ShiftHeld()) _pending.Clear();
             for (int i = 0; i < picked.Count; i++)
@@ -155,6 +174,64 @@ namespace BadNorthNewMode
                 s += UnitNames.Of(types[i]) + "×" + counts[i];
             }
             return (s == null) ? "无" : s;
+        }
+
+        /// <summary>用矩形中心的地面点校正相机（拿不到地面点就保持原样）。</summary>
+        static void EnsureCameraForRect(Rect r)
+        {
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (gm != null) ? gm.island : null;
+            if (island == null) return;
+
+            Vector3 land;
+            string diag;
+            if (Plugin.TryGetLandPoint(island, r.center, out land, out diag)) CamFor(land, r.center);
+        }
+
+        /// <summary>世界四边形兜底框选：用 NavSpotCast 把矩形四角变成世界点，判单位脚点是否在四边形内（完全不依赖屏幕投影）。</summary>
+        static List<ForeignUnit> PickWorld(Rect r)
+        {
+            List<ForeignUnit> res = new List<ForeignUnit>();
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (gm != null) ? gm.island : null;
+            if (island == null) return res;
+
+            Vector3 c0, c1, c2, c3;
+            string diag;
+            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMin, r.yMin), out c0, out diag)) return res;
+            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMax, r.yMin), out c1, out diag)) return res;
+            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMax, r.yMax), out c2, out diag)) return res;
+            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMin, r.yMax), out c3, out diag)) return res;
+
+            EnsureCandidates();
+            for (int i = 0; i < ForeignUnit.All.Count; i++)
+            {
+                ForeignUnit f = ForeignUnit.All[i];
+                Agent a = (f != null) ? f.agent : null;
+                if (!Usable(a)) continue;
+
+                Vector3 p = a.wPos;
+                if (InQuadXZ(p, c0, c1, c2, c3)) res.Add(f);
+            }
+            return res;
+        }
+
+        /// <summary>XZ 平面上的凸四边形包含判定（四角按矩形顺/逆时针皆可，取叉积同号）。</summary>
+        static bool InQuadXZ(Vector3 p, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            float s0 = Cross(a, b, p);
+            float s1 = Cross(b, c, p);
+            float s2 = Cross(c, d, p);
+            float s3 = Cross(d, a, p);
+
+            bool allNeg = (s0 <= 0f && s1 <= 0f && s2 <= 0f && s3 <= 0f);
+            bool allPos = (s0 >= 0f && s1 >= 0f && s2 >= 0f && s3 >= 0f);
+            return allNeg || allPos;
+        }
+
+        static float Cross(Vector3 a, Vector3 b, Vector3 p)
+        {
+            return (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
         }
 
         static List<ForeignUnit> Pick(Rect screenRect)
@@ -240,6 +317,8 @@ namespace BadNorthNewMode
             string diag;
             if (!Plugin.TryGetLandPoint(island, screenPos, out land, out diag)) return null;
 
+            CamFor(land, screenPos);                     // 用"地面点 ↔ 点击处"校正相机（框选/标记也受益）
+
             EnsureCandidates();
             float radius = Util.V(ModConfig.RemoteClickRadius, 1.2f);
             float best = radius;
@@ -298,6 +377,7 @@ namespace BadNorthNewMode
             Vector3 land;
             string diag;
             bool hasLand = Plugin.TryGetLandPoint(island, screenPos, out land, out diag);
+            if (hasLand) CamFor(land, screenPos);
 
             Util.Log(string.Format("[NewMode][遥控] 点击处没命中：登记 {0}，可用 {1}；最近 {2}；地面点 {3}；阈值 点选 {4:F1}m / 框选起点 {5}px",
                 ForeignUnit.All.Count, ForeignUnit.UsableCount(), NearestScreenInfo(screenPos),
@@ -371,11 +451,42 @@ namespace BadNorthNewMode
         {
             ConsumedClick = false;
             _pressUnit = null;
+            if (_pending != null && _pending.Count > 0) { _pending.Clear(); }   // 离开战局/开菜单时清掉待成队
+            ClearSlowMo();
             if (!_held && !_dragging) return;
             _held = false;
             _grab = false;
             _dragging = false;
             AttachCamera(gm);
+        }
+
+        /// <summary>
+        /// 框选中或已有选中 → 向 TimeManager 申请减速（原版"选中我方小队"用的是 0.1，同一套 API、按 requester 取最小值合并）。
+        /// 敌方单位一直在动，减速后更容易框住（见 PROJECT_SPEC §5）。
+        /// </summary>
+        static void UpdateSlowMo(bool want)
+        {
+            bool on = want && Util.V(ModConfig.RemoteSlowMo, true);
+            if (on == _slowMo) return;
+
+            _slowMo = on;
+            if (on)
+            {
+                TimeManager.RequestTimeScale(SlowMoOwner, Util.V(ModConfig.RemoteSlowMoScale, 0.1f));
+                if (Util.V(ModConfig.VerboseLog, false)) Util.Log("[NewMode][遥控] 减速中（框选/已选中）");
+            }
+            else
+            {
+                TimeManager.RemoveTimeScale(SlowMoOwner);
+            }
+        }
+
+        /// <summary>释放减速（菜单打开 / 离开战局 / 清场 / 插件卸载时调用，避免残留把全局时间卡住）。</summary>
+        internal static void ClearSlowMo()
+        {
+            if (!_slowMo) return;
+            _slowMo = false;
+            TimeManager.RemoveTimeScale(SlowMoOwner);
         }
 
         /// <summary>框选期间把自己压到拖拽栈顶，等价于"让相机这一会儿不听拖拽"（见 §4 坑表）。</summary>
@@ -413,10 +524,54 @@ namespace BadNorthNewMode
 
         static Camera Cam()
         {
-            if (_cam != null) return _cam;
+            if (_cam != null) return _cam;                 // 优先用"自验证"过的相机（见 CamFor）
             LevelCamera lc = Singleton<LevelCamera>.instance;
-            _cam = (lc != null) ? lc.cameraRef : Camera.main;
+            _cam = (lc != null && lc.cameraRef != null) ? lc.cameraRef : Camera.main;
             return _cam;
+        }
+
+        /// <summary>
+        /// 用"已知世界点 ↔ 已知屏幕点"验证并挑相机：`LevelCamera.cameraRef` 在战局里可能指向 CampaignCamera（实测会把单位投到屏幕外），
+        /// 所以拿 NavSpotCast 给出的地面点来测误差，谁准用谁（见 PROJECT_SPEC §4 坑表）。
+        /// </summary>
+        static Camera CamFor(Vector3 world, Vector2 screen)
+        {
+            Camera best = null;
+            float bestErr = float.MaxValue;
+
+            LevelCamera lc = Singleton<LevelCamera>.instance;
+            if (lc != null) ScoreCamera(lc.cameraRef, world, screen, ref best, ref bestErr);
+            ScoreCamera(Camera.main, world, screen, ref best, ref bestErr);
+
+            if (bestErr > 32f)                              // 前两个都不准 → 遍历场景里的相机
+            {
+                Camera[] all = Camera.allCameras;
+                for (int i = 0; i < all.Length; i++) ScoreCamera(all[i], world, screen, ref best, ref bestErr);
+            }
+
+            if (best != null)
+            {
+                if (!object.ReferenceEquals(best, _cam) && Util.V(ModConfig.VerboseLog, false))
+                {
+                    Util.Log(string.Format("[NewMode][遥控] 改用相机 {0}（与已知点误差 {1:F0}px；原 {2}）",
+                        best.name, bestErr, (_cam != null) ? _cam.name : "无"));
+                }
+                _cam = best;
+            }
+            return best;
+        }
+
+        static void ScoreCamera(Camera c, Vector3 world, Vector2 screen, ref Camera best, ref float bestErr)
+        {
+            if (c == null) return;
+
+            Vector3 sp = c.WorldToScreenPoint(world);
+            if (sp.z <= 0f) return;
+
+            float dx = sp.x - screen.x;
+            float dy = sp.y - screen.y;
+            float err = Mathf.Sqrt(dx * dx + dy * dy);
+            if (err < bestErr) { bestErr = err; best = c; }
         }
 
         static Rect RectFrom(Vector2 a, Vector2 b)

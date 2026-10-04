@@ -20,6 +20,8 @@ namespace BadNorthNewMode
         public static ConfigEntry<int> RemoteGrabRadius;
         public static ConfigEntry<float> RemoteClickRadius;
         public static ConfigEntry<KeyCode> RemoteSelectAllKey;
+        public static ConfigEntry<bool> RemoteSlowMo;
+        public static ConfigEntry<float> RemoteSlowMoScale;
         public static ConfigEntry<KeyCode> RemoteFreeMarqueeKey;
         public static ConfigEntry<int> RemoteSoftCap;
         public static ConfigEntry<bool> RemoteHighlight;
@@ -149,6 +151,11 @@ namespace BadNorthNewMode
             RemoteSelectAllKey = cfg.Bind("Remote", "RemoteSelectAllKey", KeyCode.R,
                 "一键选中所有\"可选\"的非原生单位（等价于把它们全部加入待成队选择，之后左键点地块即可整队前进）。\n" +
                 "单位跑远、看不清时很有用。KeyCode.None = 关闭该快捷键。默认 R。");
+            RemoteSlowMo = cfg.Bind("Remote", "RemoteSlowMo", true,
+                "框选中或已有选中时**放慢时间**（与原版\"选中我方小队\"同一套 TimeManager，按 requester 取最小值合并）。\n" +
+                "敌方单位一直在动，减速后更容易框住。默认开。");
+            RemoteSlowMoScale = cfg.Bind("Remote", "RemoteSlowMoScale", 0.1f,
+                "减速倍率（原版选中我方小队用的是 0.1）。0.1~0.35 之间比较舒服。");
         }
 
         static void BindDiag(ConfigFile cfg)

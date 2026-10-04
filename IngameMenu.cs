@@ -78,7 +78,7 @@ namespace BadNorthNewMode
 
             if (help)
                 text += (IsOpen ? "\n[关菜单后] " : "\n[遥控] ") +
-                        "左键点单位 = 选中｜Shift 点同类 = 合并｜R = 全选｜左键点地块 = 成队前进｜Alt+拖动 = 框选";
+                        "左键点单位 = 选中｜Shift = 合并｜R = 全选｜左键点地块 = 成队前进｜Alt+拖动 = 框选｜选中/框选时减速";
 
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
@@ -100,7 +100,7 @@ namespace BadNorthNewMode
             float headH = 74f;                                   // 标题 + 当前 + 数量信息
             float rows = Mathf.Max(1, n);
             float countH = 50f;                                  // "数量（…）" + 按钮行
-            _rect = new Rect(8f, 82f, 560f, headH + rows * rowH + countH + 104f);
+            _rect = new Rect(8f, 82f, 560f, headH + rows * rowH + countH + 122f);
 
             GUI.color = new Color(0f, 0f, 0f, 0.82f);
             GUI.DrawTexture(_rect, Texture2D.whiteTexture);
@@ -182,7 +182,8 @@ namespace BadNorthNewMode
             GUI.Label(new Rect(x, hy + 18f, w, 18f), "· 左键点\"非原生单位\" = 选中（再点同一个取消）；Shift + 左键点同类 = 合并成队");
             GUI.Label(new Rect(x, hy + 36f, w, 18f), "· R = 一键全选（单位跑远看不清时最省事）；左键点地块 = 选中的单位 / 已有小队一起前进");
             GUI.Label(new Rect(x, hy + 54f, w, 18f), "· Alt + 左键拖动 = 从任意位置框选（相机暂停）；不按 Alt 时只有从单位上起拖才框选");
-            GUI.Label(new Rect(x, hy + 72f, w, 18f), "· 单位须已下船（HUD 的\"可选\"就是当前能选的数量）｜F1 关闭菜单 · F2 强制清场");
+            GUI.Label(new Rect(x, hy + 72f, w, 18f), "· 单位须已下船（HUD 的\"可选\"就是当前能选的数量）｜选中或框选中时时间会放慢（原版选中我方小队同款）");
+            GUI.Label(new Rect(x, hy + 90f, w, 18f), "· F1 关闭菜单 · F2 强制清场");
         }
 
         /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>

@@ -89,6 +89,9 @@ Raid.IIslandFirstEnter:
 | 清场只删了船，**登岛单位还在** | `ShipGroup.squad` 是**懒加载**：`SpawnGetFromPrefab(..., island.runContainer)` → 单位是 `squad.CreateAgent(...)` 的子物体，挂在 `runContainer` 下、**不在我们登记的 Wave 树里**（所以只销毁 Wave 会漏掉它们） | `SpawnLedger` 现在同时登记 **squad**（`TrackSquad` → 销毁 squad 对象）并在 `DestroyAll` 里兜底 `ForeignUnit.DestroyAll()`（直接销毁已登记单位） |
 | 小岛后期"投不出来" | ① 原版占位其实是**朝向盒不相交**（`Landing.TryPlace` 的 `ColCube.CheckBox`，等效间距 ≈0.7~1.4m），而我们曾经"最近候选被占就拒投"、门槛还是 2.5m + 船长；② 敌舰卸完人**长驻滩头**（不会开走：`Longship.Launch()`/`outgoing` 只属于**玩家撤离登船**，`SquadEvacuationLocation.Launch()` → `EvacuateAbility`；`Landing.Launch()` 才是敌舰进近，`Wave.cs:172`） | 候选**逐个试**（占用 + 廊道一起判）→ **两级间距**（首选"基础+船长"，自动放宽到"只要不重叠"）→ **全岛兜底**改用最近空滩头（`LandingFallbackAnywhere`），HUD 写明实际距离 |
 | 后加的 order 组件不入 `orderList` | `Brain.orderList` 只在 `Setup()` 收集一次 → 后加组件不会被 `PickNewOrder` 选中 | 不必进列表：直接 `brain.order = 组件`（`WantsControl()=true` 即不会被换掉）；释放时置 `null`，由原列表（`KillAllEnemies`）接管 |
+| 左键点地块"没反应"（**首个小队永远建不起来**） | `HandleRemoteMode` 的早退条件曾写成 `if (!RemoteGroup.Any) return;` → 一个组都没建立时，连"成队并前进"那条分支都进不去（日志：点了很多次地块，却从没有"遥控小队前进"） | 改成 `if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;`——**有待成队选择就继续** |
+| `LevelCamera.cameraRef` 会指向 CampaignCamera | 战局里实测 `WorldToScreenPoint` 把单位投到 **x≈3700 / z≈101**（屏幕 1920×1080，鼠标在中心）→ 框选与标记全部落空；点选改世界距离后才正常 | 新增**自验证相机** `CamFor`：拿 NavSpotCast 的"已知地面点 ↔ 点击屏幕点"给 `LevelCamera.cameraRef` / `Camera.main` / 全场景相机打分取误差最小者；框选再加**世界四边形兜底**（四角 NavSpotCast 成世界点做包含判定），彻底不依赖投影 |
+| 时间减速（`TimeManager`） | 原版**没有"空格减速"**（全工程无 `KeyCode.Space`）；减速只来自三处：选中我方小队（`SquadSelector` → 0.1）、过场（`CinematicCameraController`）、暂停（`LevelPauser` → 0）。`TimeManager.RequestTimeScale(requester, scale)` / `RemoveTimeScale` 是 **public static**，`UpdateTimeScale` **取所有请求里的最小值**（`LateUpdate` 里写 `Time.timeScale`） | 我们以独立 requester 挂同一套：**框选中 / 已有选中时申请减速**（默认 0.1，可 cfg），菜单打开 / 离开战局 / 清场 / 插件卸载时 `RemoveTimeScale`，避免残账把全局时间卡住 |
 
 **遥控已投放单位（v1.4.0 落地依据）**
 ```
@@ -136,6 +139,8 @@ Raid.IIslandFirstEnter:
   - **下令**：**左键点地块** → 先把"已选中"按兵种分队，再让**最近一次命中的小队**一起前往该 `NavSpot`（没有待成队时直接命令已有小队）；各队独立排布（`SquadFormation` 槽位，槽距 = `radius*2.01`）。
   - **落位（T8 已落实）**：到位（`orderDist < 0.12` 且离槽位 < 0.3m）即停稳；连续 1.5s 几乎无位移判定为被堵 → 之后 0.8s 放弃槽位、走距离场并加横向绕行解卡。
   - **不提供"释放回原 AI"（T9 不落实）**：小队一旦成立就持续受遥控，只在成员阵亡 / `F2` 清场 / 换岛 / 战局结束时清理（清理时会把接管前的 order 还原回去）。
+  - **减速（缓解"框不住移动中的敌人"）**：**框选中 / 已有选中**时向原版 `TimeManager` 申请减速（`RemoteSlowMo` 默认开、`RemoteSlowMoScale` 默认 0.1，与"选中我方小队"同款；`UpdateTimeScale` 取最小值合并，所以与暂停/过场互不干扰）。菜单打开 / 离开战局 / 清场 / 卸载都会立即释放，不留残账。
+  - **取消选择**：**右键单击**清空"已选中"（与原版"右键取消"一致）并立即恢复时间流速；也可再点同一个单位取消、或按 F1 开菜单（`Cancel` 会清空）。
   - **表现**：自绘框选矩形 + 受控单位与目标点标记（复用 `PlacementMarker` 的运行时贴图技术）；**不复用**原版选中环 / 小队 banner / 选中慢动作。
   - **UI 内置简要说明**（免得玩家不知道）：HUD 在**有非原生单位 / 遥控小队时常显**——"非原生单位 N（可选 M[, 已选中 K]）" + 一行操作串"[遥控] 左键点单位=选中｜Shift 点同类=合并｜左键点地块=成队前进｜Alt+拖动=框选"（菜单开着时该行前缀改为"[关菜单后]"）；F1 菜单底部另有 5 行"遥控操作（关闭菜单后生效）"。
   - **相机**：只在"左键从非原生单位附近按下"的那一次拖动里临时接管相机（**按下即接管、松开即交还**，避免"先平移一点再被接管"的偏移）；其余任何拖动都完全交给原版相机。
@@ -202,4 +207,5 @@ Raid.IIslandFirstEnter:
 | **v1.4.1** | **1.4.1** | **投放放宽：滩头占用改"候选逐个试 + 两级间距 + 全岛兜底"（`MinLandingSpacing` 1.0、新增 `LandingFallbackAnywhere`）；遥控改左键点选为主 + `Shift` 点同类合并 + `Alt` 自由框选，相机按下即接管；修清场漏删登岛单位（squad 懒加载在 `runContainer` 下）；框选加登记/可用/命中诊断** |
 | **v1.4.2** | **1.4.2** | **选中链自愈：候选 = 标记注册表 ∪ 在册 squad 成员（缺标记自动补）、`RemoteGrabRadius` 48→64px、点空打"登记/可用/最近"诊断；UI 内置遥控说明（HUD 常显可选数量 + 操作串、F1 菜单 5 行说明）；版本号校正到 1.4.2** |
 | **v1.4.3** | **1.4.3** | **点选改世界距离主路径（`RemoteClickRadius` 1.2m，走 NavSpotCast，不依赖屏幕投影，屏幕半径仅兜底）；新增 `RemoteSelectAllKey`（默认 R）一键全选可选单位；诊断升级为"最近单位的屏幕原始坐标/z/相机名 + 地面点 + 世界距离"** |
+| **v1.4.4** | **1.4.4** | **修"选中后点地块没反应"（早退条件少算了待成队选择，导致首个小队永远建不起来）；修相机：`LevelCamera.cameraRef` 在战局里指向 CampaignCamera → 新增**自验证相机**（已知地面点↔点击点打分）与**世界四边形兜底框选**，框选/标记不再依赖投影；新增**框选/选中时减速**（挂原版 `TimeManager`，默认 0.1×，与原版"选中我方小队"同款）；点地块 = 有待成队就成队并前进** |
 

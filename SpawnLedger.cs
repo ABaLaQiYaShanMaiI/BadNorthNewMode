@@ -120,6 +120,7 @@ namespace BadNorthNewMode
                 _items.RemoveAt(i);
             }
             n += ForeignUnit.DestroyAll();        // 兜底：已登记的非原生单位（含不在 Wave 树里的）
+            MarqueeSelect.ClearSlowMo();          // 清场/结算时务必释放减速
             if (n > 0) { DropPlanner.InvalidateOccupancy(); RemoteGroup.Clear(); }
             return n;
         }

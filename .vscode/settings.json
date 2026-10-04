@@ -7,7 +7,5 @@
     { "extensionId": "ms-dotnettools.csdevkit", "path": "C:\\Program Files\\dotnet\\dotnet.exe" },
     { "extensionId": "ms-dotnettools.vscode-dotnet-runtime", "path": "C:\\Program Files\\dotnet\\dotnet.exe" }
   ],
-  "dotnetAcquisitionExtension.installTimeoutValue": 900,
-  // 本项目用 net472 编译，语言服务指向任意已装 SDK 即可；构建一律走终端 dotnet build（见 build.ps1）。
-  "dotnet.dotnetPath": "C:\\Program Files\\dotnet"
+  "dotnetAcquisitionExtension.installTimeoutValue": 900
 }

@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.4.3";
+        public const string VERSION = "1.4.4";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -108,7 +108,8 @@ namespace BadNorthNewMode
         {
             PlacementMarker.Get().Hide();
 
-            if (!RemoteGroup.Any || MarqueeSelect.Dragging) return;
+            if (MarqueeSelect.Dragging) return;                              // 正在框选：不下令
+            if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;        // 既没有小队、也没有待成队的选择 → 没事可做
 
             if (Input.GetMouseButtonDown(0) && !MarqueeSelect.ConsumedClick)
             {
@@ -329,6 +330,11 @@ namespace BadNorthNewMode
         {
             IngameMenu.Draw();
             MarqueeSelect.DrawOverlay();
+        }
+
+        void OnDestroy()
+        {
+            MarqueeSelect.ClearSlowMo();          // 卸载时释放减速，避免 TimeManager 里留残账
         }
 
     }
