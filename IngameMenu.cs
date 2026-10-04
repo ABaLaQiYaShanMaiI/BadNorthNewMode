@@ -62,9 +62,11 @@ namespace BadNorthNewMode
             if (IsOpen && !string.IsNullOrEmpty(Hover)) text += "\n" + Hover;
             if (RemoteGroup.Any)
                 text += "\n遥控小队：" + RemoteGroup.DescribeAll() + "（共 " + RemoteGroup.TotalCount +
-                        "；左键点地块 = 前进，左键从单位上拖 = 再框选）";
+                        "；左键点地块 = 前进）";
+            if (MarqueeSelect.Pending != null && MarqueeSelect.Pending.Count > 0)
+                text += "\n已选中 " + MarqueeSelect.Pending.Count + " 个非原生单位（Shift 单击同类追加；左键点地块 = 成队并前进）";
             else if (MarqueeSelect.Dragging)
-                text += "\n框选中…（只框同一种类的非原生单位）";
+                text += "\n框选中…（按兵种自动分队，每队上限 " + Util.V(ModConfig.RemoteSoftCap, 40) + "）";
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
             GUI.color = new Color(0f, 0f, 0f, 0.65f);
@@ -158,7 +160,7 @@ namespace BadNorthNewMode
             }
 
             GUI.Label(new Rect(x, cy + countH, w, 34f),
-                "F1 关闭菜单 · F2 强制清场　｜　关菜单后：左键从单位上拖动 = 框选（按兵种分队），左键点地块 = 前进");
+                "F1 关闭菜单 · F2 强制清场　｜　关菜单后：左键点单位 = 选中（Shift 点同类 = 合并）、左键点地块 = 成队前进");
         }
 
         /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>

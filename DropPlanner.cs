@@ -15,6 +15,8 @@ namespace BadNorthNewMode
         internal int squadSize;
         internal Vector3 dir;
         internal float shoreDist;
+        internal bool relaxed;        // 用了"最低不重叠间距"（附近找不到更宽的位置）
+        internal bool fallback;       // 改用了全岛最近的可投放滩头
     }
 
     /// <summary>投到哪里：滩头筛选、落差校验、占用判定、进近廊道预检（纯查询，不建对象）。</summary>
@@ -61,33 +63,75 @@ namespace BadNorthNewMode
             Longship ship = UnitCatalog.PickShipForCount(island, vikingRef, squadSize);   // 人数 → 自动配"装得下的最小船"
             if (ship == null) { reason = "没有可用长船"; return false; }
 
+            float maxShore = Mathf.Max(0.5f, Util.V(ModConfig.MaxShoreDistance, 3f));
             List<Beaches.Beach.Pos> cand;
             List<float> candSq;
-            if (!CollectCandidates(island, landPoint, ship, seaY, maxH, out cand, out candSq, out reason)) return false;
+            if (!CollectCandidates(island, landPoint, ship, seaY, maxH, maxShore, out cand, out candSq, out reason)) return false;
 
-            // 占用规则：最近候选滩头若已有船（原版或本 mod）→ 拒绝。间距随本船长度放大，避免大船挤占原版停靠点。
-            float baseSpacing = Mathf.Max(0.5f, Util.V(ModConfig.MinLandingSpacing, 2.5f));
-            float spacing = baseSpacing + ship.length;
-            float occDist;
+            // 两级间距：首选"基础 + 船长"；附近找不到就放宽到"只要不重叠"（原版本就是朝向盒不相交，见 §4 坑表）
+            float baseSpacing = Mathf.Max(0f, Util.V(ModConfig.MinLandingSpacing, 1f));
+            float prefer = baseSpacing + ship.length;
+            float minimal = Mathf.Max(0.35f, ship.radius * 2f);
+
+            Beaches.Beach.Pos pick;
+            int pickIdx;
+            float pickSq;
             string occWho;
-            if (IsOccupied(island, raid, cand[0].navPos.pos, spacing, out occDist, out occWho))
+            float occDist;
+            int tier;
+            bool ok = TryPick(island, raid, cand, candSq, ship, prefer, minimal,
+                out pick, out pickIdx, out pickSq, out occWho, out occDist, out tier);
+
+            // 兜底：附近实在没有 → 全岛找最近的可投放滩头（会在提示里写明实际距离）
+            bool fallback = false;
+            if (!ok && Util.V(ModConfig.LandingFallbackAnywhere, true))
             {
-                reason = string.Format("该滩头已有船只（离 {0} {1:F1}m，需要 {2:F1}m = 基础 {3:F1} + 船长 {4:F1}）——换个滩头或减少人数",
-                    occWho, occDist, spacing, baseSpacing, ship.length);
+                List<Beaches.Beach.Pos> far;
+                List<float> farSq;
+                string farReason;
+                if (CollectCandidates(island, landPoint, ship, seaY, maxH, float.MaxValue, out far, out farSq, out farReason))
+                {
+                    ok = TryPick(island, raid, far, farSq, ship, prefer, minimal,
+                        out pick, out pickIdx, out pickSq, out occWho, out occDist, out tier);
+                    if (ok) { cand = far; candSq = farSq; fallback = true; }
+                }
+            }
+
+            if (!ok)
+            {
+                reason = (occWho == null)
+                    ? "附近与全岛的滩头进近廊道都被地形/建筑挡住了——换个位置点"
+                    : string.Format("附近的滩头都被船占着（最近一艘 {0} 离 {1:F1}m，本船需要 ≥{2:F1}m），全岛也没有空位",
+                        occWho, Mathf.Sqrt(occDist), minimal);
                 return false;
             }
 
-            bool clear = PreferClearCorridor(island, cand, candSq, ship);
-            if (Util.V(ModConfig.VerboseLog, false))
-                Util.Log(string.Format("[NewMode] 候选滩头 {0} 个，首选廊道通畅={1}", cand.Count, clear));
+            // 选中的滩头排到首位（预览与试投放都先试它）
+            List<Beaches.Beach.Pos> ordered = new List<Beaches.Beach.Pos>();
+            List<float> orderedSq = new List<float>();
+            ordered.Add(pick);
+            orderedSq.Add(pickSq);
+            for (int i = 0; i < cand.Count; i++)
+            {
+                if (i == pickIdx) continue;
+                ordered.Add(cand[i]);
+                orderedSq.Add(candSq[i]);
+            }
 
-            target.beach = cand[0];
-            target.candidates = cand;
+            if (Util.V(ModConfig.VerboseLog, false))
+                Util.Log(string.Format("[NewMode] 候选 {0} 个，选中第 {1} 个（阈值 {2:F1}m{3}{4}）",
+                    cand.Count, pickIdx + 1, (tier == 0) ? prefer : minimal,
+                    (tier == 1) ? "，已放宽间距" : "", fallback ? "，已改用全岛最近空滩头" : ""));
+
+            target.beach = pick;
+            target.candidates = ordered;
             target.vikingRef = vikingRef;
             target.shipPrefab = ship;
             target.squadSize = squadSize;
-            target.dir = target.beach.dir + target.beach.navPos.pos.normalized * 0.3f;   // 照抄原版 Raid 的朝向公式
-            target.shoreDist = Mathf.Sqrt(candSq[0]);
+            target.relaxed = (tier == 1);
+            target.fallback = fallback;
+            target.dir = pick.dir + pick.navPos.pos.normalized * 0.3f;   // 照抄原版 Raid 的朝向公式
+            target.shoreDist = Mathf.Sqrt(pickSq);
             return true;
         }
 
@@ -100,8 +144,8 @@ namespace BadNorthNewMode
             return false;
         }
 
-        /// <summary>候选滩头：岸线余量足够（同原版）+ 与海面齐平 + 离点击处不超过上限，按距离由近到远。</summary>
-        static bool CollectCandidates(Island island, Vector3 landPoint, Longship ship, float seaY, float maxH,
+        /// <summary>候选滩头：岸线余量足够（同原版）+ 与海面齐平 + 离点击处不超过 maxShore，按距离由近到远（maxShore = float.MaxValue 表示全岛）。</summary>
+        static bool CollectCandidates(Island island, Vector3 landPoint, Longship ship, float seaY, float maxH, float maxShore,
             out List<Beaches.Beach.Pos> cand, out List<float> candSq, out string reason)
         {
             reason = null;
@@ -112,8 +156,7 @@ namespace BadNorthNewMode
             if (positions.Count == 0) { reason = "本关没有可用滩头"; return false; }
 
             float radius = ship.radius;
-            float maxShore = Util.V(ModConfig.MaxShoreDistance, 3f);
-            float maxSq = maxShore * maxShore;
+            float maxSq = (maxShore >= 1e6f) ? float.MaxValue : maxShore * maxShore;
             float nearSq = float.MaxValue;
 
             for (int i = 0; i < positions.Count; i++)
@@ -136,18 +179,42 @@ namespace BadNorthNewMode
             return false;
         }
 
-        /// <summary>把"进近廊道畅通"的候选换到 0 号位（原版 TryPlace 失败主因是廊道被 Modules 挡住）。</summary>
-        static bool PreferClearCorridor(Island island, List<Beaches.Beach.Pos> cand, List<float> candSq, Longship ship)
+        /// <summary>候选里挑第一个"廊道通 + 没被占"的滩头：先按首选间距（基础+船长），再放宽到最低不重叠间距。</summary>
+        static bool TryPick(Island island, Raid raid, List<Beaches.Beach.Pos> cand, List<float> candSq, Longship ship,
+            float prefer, float minimal, out Beaches.Beach.Pos pick, out int pickIdx, out float pickSq,
+            out string occWho, out float occDist, out int tier)
         {
-            for (int i = 0; i < cand.Count; i++)
-            {
-                if (!CorridorClear(island, cand[i], cand[i].dir + cand[i].navPos.pos.normalized * 0.3f, ship)) continue;
-                if (i == 0) return true;
+            pick = default(Beaches.Beach.Pos);
+            pickIdx = -1;
+            pickSq = 0f;
+            occWho = null;
+            occDist = float.MaxValue;
+            tier = -1;
 
-                Beaches.Beach.Pos tmp = cand[0]; float tmpSq = candSq[0];
-                cand[0] = cand[i]; candSq[0] = candSq[i];
-                cand[i] = tmp; candSq[i] = tmpSq;
-                return true;
+            for (int t = 0; t < 2; t++)
+            {
+                float spacing = (t == 0) ? prefer : minimal;
+
+                for (int i = 0; i < cand.Count; i++)
+                {
+                    Beaches.Beach.Pos c = cand[i];
+                    Vector3 d = c.dir + c.navPos.pos.normalized * 0.3f;
+                    if (!CorridorClear(island, c, d, ship)) continue;         // 进近廊道被 Modules 挡住 → 换下一个
+
+                    float dist;
+                    string who;
+                    if (IsOccupied(island, raid, c.navPos.pos, spacing, out dist, out who))
+                    {
+                        if (dist < occDist) { occDist = dist; occWho = who; } // 记下最近的占用，供失败提示用
+                        continue;
+                    }
+
+                    pick = c;
+                    pickIdx = i;
+                    pickSq = candSq[i];
+                    tier = t;
+                    return true;
+                }
             }
             return false;
         }

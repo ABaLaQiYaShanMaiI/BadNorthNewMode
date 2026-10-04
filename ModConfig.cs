@@ -18,6 +18,7 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> RemoteControl;
         public static ConfigEntry<int> RemoteMarqueePixels;
         public static ConfigEntry<int> RemoteGrabRadius;
+        public static ConfigEntry<KeyCode> RemoteFreeMarqueeKey;
         public static ConfigEntry<int> RemoteSoftCap;
         public static ConfigEntry<bool> RemoteHighlight;
 
@@ -29,6 +30,7 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> ShowHoverPreview;
         public static ConfigEntry<float> MarkerSeconds;
         public static ConfigEntry<float> MinLandingSpacing;
+        public static ConfigEntry<bool> LandingFallbackAnywhere;
         public static ConfigEntry<float> FlotillaDelay;
         public static ConfigEntry<float> FlotillaSpread;
         public static ConfigEntry<int> FlotillaMaxShips;
@@ -94,10 +96,14 @@ namespace BadNorthNewMode
                 "用来直观确认\"哪里是能登陆的滩头\"。");
             MarkerSeconds = cfg.Bind("Landing", "MarkerSeconds", 2.5f,
                 "落点光亮标记的保持时长（秒）。");
-            MinLandingSpacing = cfg.Bind("Landing", "MinLandingSpacing", 2.5f,
-                "滩头占用判定的**基础间距**（米）。实际要求 = 本值 + 本船船长：\n" +
-                "离点击处最近的滩头若已有船（原版或本 mod）且距离小于该值，就拒绝投放——\n" +
-                "这样大船会留出更大空档，不会挤占原版停靠点；也不会自动挪到旁边（只有地形/廊道被挡才换候选滩头）。");
+            MinLandingSpacing = cfg.Bind("Landing", "MinLandingSpacing", 1f,
+                "滩头占用判定的**首选基础间距**（米）。实际首选要求 = 本值 + 本船船长（小船约 +0.7m）：\n" +
+                "离点击处最近的候选滩头若已有船且更近，就换下一个候选（逐个试），不是直接拒绝。\n" +
+                "附近都找不到时自动放宽到\"只要不重叠\"（≈ 2×船半径），所以调大它只会让你更倾向留出空档，不会导致投不出来。\n" +
+                "原版自己的规则是**朝向盒不相交**（Landing.TryPlace 的 ColCube.CheckBox），等效间距 ≈ 0.7~1.4m。");
+            LandingFallbackAnywhere = cfg.Bind("Landing", "LandingFallbackAnywhere", true,
+                "附近（MaxShoreDistance 内）实在没有空位时，是否自动改用**全岛最近的可投放滩头**。\n" +
+                "true = 小岛后期也能投放（HUD 会写明实际距离与\"已改用最近空滩头\"）；false = 直接拒绝并提示原因。");
             FlotillaDelay = cfg.Bind("Landing", "FlotillaDelay", 1f,
                 "编队窗口（秒）：窗口内连续投放的船会合并成**同一支编队**（原版一波本就多船），\n" +
                 "于是只播一条接近音乐、避免一次投好几艘时多段音乐同时响。0 = 每艘各自立即出发（原行为）。");
@@ -127,6 +133,9 @@ namespace BadNorthNewMode
                 "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 移动命令 / 点在自己单位上时忽略）。");
             RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 48,
                 "只有从\"非原生单位多少像素以内\"起拖才算框选；从别处拖动仍然是原版的相机平移。0 = 任意位置起拖都框选。");
+            RemoteFreeMarqueeKey = cfg.Bind("Remote", "RemoteFreeMarqueeKey", KeyCode.LeftAlt,
+                "按住这个键再用左键拖动 = 从**任意位置**起拖都算框选（等价于临时把相机交给框选）。\n" +
+                "KeyCode.None = 关闭该快捷键（则只有从单位附近起拖能框选）。默认 左Alt。");
             RemoteSoftCap = cfg.Bind("Remote", "RemoteSoftCap", 40,
                 "每个兵种小队的上限：0 = 不限；>0 = 框选时按离框中心由近到远取满该数，**多出来的不组队、保持原逻辑**。");
             RemoteHighlight = cfg.Bind("Remote", "RemoteHighlight", true,

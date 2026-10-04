@@ -37,6 +37,35 @@ namespace BadNorthNewMode
             }
         }
 
+        internal static int UsableCount()
+        {
+            int n = 0;
+            for (int i = 0; i < _all.Count; i++)
+            {
+                ForeignUnit f = _all[i];
+                Agent a = (f != null) ? f.agent : null;
+                if (a != null && a.spawned.active && a.aliveState.active && a.navPos.island) n++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// 清场用：销毁所有已登记的非原生单位。
+        /// 必须单独做——单位挂在 `island.runContainer` 下懒加载出的维京 squad 里（见 §4 坑表），**不在我们登记的 Wave 树**下。
+        /// </summary>
+        internal static int DestroyAll()
+        {
+            int n = 0;
+            for (int i = _all.Count - 1; i >= 0; i--)
+            {
+                ForeignUnit f = _all[i];
+                Agent a = (f != null) ? f.agent : null;
+                if (a != null) { UnityEngine.Object.Destroy(a.gameObject); n++; }
+                _all.RemoveAt(i);
+            }
+            return n;
+        }
+
         void OnDestroy()
         {
             _all.Remove(this);

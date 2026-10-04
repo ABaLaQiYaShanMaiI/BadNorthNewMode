@@ -85,7 +85,9 @@ Raid.IIslandFirstEnter:
 | 船上敌人"打不到" | 原版 `Longship` 每帧以 `Data(…, dangerous:false, **hittable:false**)` 上报流场 → 我方只能"感到要来"，不会交战（原版设计：打船要用火箭技能） | `ShipboardThreat` 在靠岸前 4m 起（同原版 amount 门控）追加一条 `hittable=true` 的存在；下船后自动停用、交回 Brain 上报 |
 | 连投多艘 = 多段接近音乐同时响 | 每次投放各自一个 Wave，各跑一次 `Wave.BeginWave()`（内含 `PostEvent(approachAudioId)`） | `FlotillaLauncher`：窗口（`FlotillaDelay` 默认 1s）内合并进**同一个 Wave**（原版一波本就多船）→ 一条音乐、一次 `BeginWave`；`timeSpreadGroup/Ship` 覆写为 `FlotillaSpread`（默认 2s）避免拖到十几秒 |
 | 遥控单位仍是敌人 | `agent.faction` 未变（viking）→ 双方 presence 依旧互为敌方（`Agent` 每帧 `faction.enemy.presence`） | 遥控版**故意如此**：只换 `brain.order`；招安要动两层 faction + 三份列表 + `AllHeroesDead` 对 `english.allSquads` 的硬转，风险高，**不做** |
-| 框选拖动与相机平移冲突 | `CameraController.OnDrag` 不看按钮、任何键拖拽都平移；`CursorManager` 只把拖拽发给栈顶 `Last()` | 框选用**左键**且**起点必须在非原生单位附近**（`RemoteGrabRadius`，默认 48px）→ 别处拖动仍是原版相机平移；框选期间 `cursorManager.Remove((IDragListener)cam)`、结束 `Add` 回去（`Add/Remove/Contains` 均 public） |
+| 框选拖动与相机平移冲突 | `CameraController.OnDrag` 不看按钮、任何键拖拽都平移；`CursorManager` 只把拖拽发给栈顶 `Last()` | 框选用**左键**且**起点必须在非原生单位附近**（`RemoteGrabRadius`，默认 48px）→ 别处拖动仍是原版相机平移；框选期间 `cursorManager.Remove((IDragListener)cam)`、结束 `Add` 回去（`Add/Remove/Contains` 均 public），且**按下即接管**避免"先平移一点再被接管" |
+| 清场只删了船，**登岛单位还在** | `ShipGroup.squad` 是**懒加载**：`SpawnGetFromPrefab(..., island.runContainer)` → 单位是 `squad.CreateAgent(...)` 的子物体，挂在 `runContainer` 下、**不在我们登记的 Wave 树里**（所以只销毁 Wave 会漏掉它们） | `SpawnLedger` 现在同时登记 **squad**（`TrackSquad` → 销毁 squad 对象）并在 `DestroyAll` 里兜底 `ForeignUnit.DestroyAll()`（直接销毁已登记单位） |
+| 小岛后期"投不出来" | ① 原版占位其实是**朝向盒不相交**（`Landing.TryPlace` 的 `ColCube.CheckBox`，等效间距 ≈0.7~1.4m），而我们曾经"最近候选被占就拒投"、门槛还是 2.5m + 船长；② 敌舰卸完人**长驻滩头**（不会开走：`Longship.Launch()`/`outgoing` 只属于**玩家撤离登船**，`SquadEvacuationLocation.Launch()` → `EvacuateAbility`；`Landing.Launch()` 才是敌舰进近，`Wave.cs:172`） | 候选**逐个试**（占用 + 廊道一起判）→ **两级间距**（首选"基础+船长"，自动放宽到"只要不重叠"）→ **全岛兜底**改用最近空滩头（`LandingFallbackAnywhere`），HUD 写明实际距离 |
 | 后加的 order 组件不入 `orderList` | `Brain.orderList` 只在 `Setup()` 收集一次 → 后加组件不会被 `PickNewOrder` 选中 | 不必进列表：直接 `brain.order = 组件`（`WantsControl()=true` 即不会被换掉）；释放时置 `null`，由原列表（`KillAllEnemies`）接管 |
 
 **遥控已投放单位（v1.4.0 落地依据）**
@@ -111,12 +113,15 @@ Raid.IIslandFirstEnter:
 - **兵种显示名**（`UnitNames`）：原版 I2 本地化**没有**敌方兵种显示名（维京兵种只出现在 hint 里）→ 采取"官方用词优先 + 项目既有叫法"，与 cfg 内部名一一对应。
 - **默认装载数**：`UnitNames.DefaultCounts` 梯度表（剑兵 12 / 盾兵 10 / 弓手 8 / 掷斧手 7 / 双手剑士 5 / 狂战士 5 / **巨人级各 1**）；未收录兵种回退原版公式（最小船容量 ÷ 单体面积），最终由最大船容量裁剪。
 - **船随人数自动匹配**（v1.2.4）：`PickShipForCount` = **装得下该人数的最小船**（都装不下则用最大的船并把人数裁到容量）——人数少就小船、人数多就大船，不提供船型选择。
-- **投放链**：`TryResolve`（点击处与落点都须与海面齐平 + 距离 ≤ `MaxShoreDistance`）→ `TrySpawn` 建原版对象树 → 逐个候选 `TryPlace` → `Spawn()` → `AttachAgentBehaviours()` → `raid.StartCoroutine(wave.BeginWave())`（原版 Launch / 音频 / 到达回调）。
-- **滩头占用规则**（v1.2.4）：离点击处**最近**的滩头若已有船（原版或本 mod）→ **直接拒绝**并提示距离；要求间距 = `MinLandingSpacing`（默认 2.5m，基础值）**+ 本船船长**，所以**大船会自动留出更大空档，不会挤占原版停靠点**；只有"地形/进近廊道被挡"才自动换候选滩头（候选逐个 `TryPlace`）。
-  - 为什么不会抢到原版的位置：原版所有登陆点在 `Raid.IIslandFirstEnter`（**开战前**）就一次性放置完毕，战斗中途不再新增；且它们都在 `landingContainer` 下 → 一直在我们的互斥/占用名单里。
+- **投放链**：`TryResolve`（点击处与落点都须与海面齐平 + 距离 ≤ `MaxShoreDistance` → **候选滩头逐个试**：占用 + 进近廊道两项都过才选它）→ `TrySpawn` 建原版对象树 → 逐个候选 `TryPlace` → `Spawn()` → `AttachAgentBehaviours()` → `raid.StartCoroutine(wave.BeginWave())`（原版 Launch / 音频 / 到达回调）。
+- **滩头占用规则**（v1.4.0 放宽，原 v1.2.4 过于苛刻）：
+  - 候选逐个试，**不是**"最近那个被占就拒绝"；间距**两级**：首选 = `MinLandingSpacing`（默认 **1.0m**，基础值）**+ 本船船长**；附近找不到就自动放宽到**只要不重叠**（`max(0.35, 2×船半径)` ≈ 0.7m）。
+  - 附近（`MaxShoreDistance`）全都满/被挡时，`LandingFallbackAnywhere`（默认开）→ **全岛最近的可投放滩头**兜底，HUD 写明实际距离与"已改用最近空滩头"。
+  - 依据：原版自己的占位是 `Landing.TryPlace` 里**朝向盒不相交**（`ColCube.CheckBox` 比 moveCube/standCube），等效中心间距只有 ≈ 0.7~1.4m；且敌舰卸完人**长驻滩头**（不会开走），所以小岛后期必须靠"放宽间距 + 换候选 + 全岛兜底"才投得出去。
+  - 为什么不会抢原版的位置：原版所有登陆点在 `Raid.IIslandFirstEnter`（**开战前**）就一次性放置完毕，战斗中途不再新增；且它们都在 `landingContainer` 下 → 一直在我们的占用名单里。
 - **跨岛借用兵种**（船型不借用）：兵种取自本关 `enemies` ∪ 全局字典（`PickEnemy` 回退），只写进**我们自己**的 `ShipLoad.vikingRef`；**不参与关卡生成与存档**（原版 RaidDef 在我们投放前已生成完，我们的 Wave 也不在 `raid.waves`）。
 - **落点 UI**：`PlacementMarker` 运行时生成环形 / 内芯贴图（优先加法混合），悬停实时预览（亮青 = 可投放，暗红 = 不可投放）。
-- **清理**：`SpawnLedger` 自动（战局结束 / 离开战局 / 换岛）+ `F2` 手动。
+- **清理**：`SpawnLedger` 自动（战局结束 / 离开战局 / 换岛）+ `F2` 手动；销毁范围 = **我们的 Wave（船/Landing）+ 懒加载 squad + 已登记的非原生单位**（后两者在 `runContainer` 下，不在 Wave 树里，见 §4 坑表）。
 - **编队发射**（v1.3.0）：`FlotillaLauncher` 把 `FlotillaDelay`（默认 1s）窗口内的投放合并进**同一个 Wave** → 只播一条接近音乐、一次 `BeginWave`；`FlotillaSpread`（默认 2s）覆盖 Wave 出厂的时间散布；`FlotillaMaxShips`（默认 6）超出即开新编队；`FlotillaDelay = 0` 退回"各自立即出发"。
 - **船上敌人算威胁**（v1.3.0）：`ShipboardThreat`（原理见 §4 坑表）。
 - **暂停与时间基准**（v1.3.0）：`InBattle` 增加 `levelPauser.isPaused` 判定（暂停中不投放）；投放相关计时统一 `Time.time`（暂停冻结，与玩法一致）。
@@ -125,9 +130,10 @@ Raid.IIslandFirstEnter:
 - **占用表缓存**（v1.3.0）：已放置船位缓存，投放成功 / 清场 / 换岛时失效 → 悬停预览不再每帧遍历全岛 Landing。
 - **遥控非原生单位**（v1.4.0；**不改阵营**，只接管行军 —— 见 §4 相关事实与坑）：
   - **身份**：投放时给每个敌人挂 `ForeignUnit`（队键 = `VikingReference.name`）。默认**不接管**，走原 AI（下船后 `PickNewOrder` → `KillAllEnemies` 追敌）。
-  - **框选（只是选定）**：**左键从非原生单位附近按住拖动**（移动 > `RemoteMarqueePixels`（默认 8px）才算框选；"附近" = `RemoteGrabRadius`（默认 48px）内；别处左键拖动仍由游戏平移相机）。**所有输入模式统一**（双键 / 单键 / 触摸）。框选后只是"待成队"（亮青点），**不点地块就不会接管**。
-  - **成队（左键点地块时发生）**：框里混了几种兵种就**按兵种各成一个小队**（同类并入已有队）；每队上限 `RemoteSoftCap`（默认 **40**，0 = 不限），超出的单位**不组队、保持原逻辑**；同队内按离框中心由近到远入选。
-  - **下令**：**左键点地块** → 先把待成队的框选按兵种分队，再让**最近一次框选命中的小队**一起前往该 `NavSpot`（没有待成队时直接命令已有小队）；各队独立排布（`SquadFormation` 槽位，槽距 = `radius*2.01`）。
+  - **点选（主路径，完全绕开相机）**：**左键单击一个非原生单位** = 选中它（再单击同一个 = 取消）；**按住 `Shift` 单击另一个同类单位 = 追加/合并**（同类即"合并成一个 squad"的候选集）。选中的单位用亮青点标记，HUD 显示"已选中 剑兵×3、弓手×1"。
+  - **框选（次路径）**：**左键从非原生单位附近按住拖动**（移动 > `RemoteMarqueePixels`（默认 8px）才算框选；"附近" = `RemoteGrabRadius`（默认 48px）内）；或**按住 `RemoteFreeMarqueeKey`（默认左 Alt）从任意位置拖动**。默认替换"已选中"，按住 `Shift` 则并入。**所有输入模式统一**（双键 / 单键 / 触摸）。
+  - **成队（左键点地块时发生）**：框里/已选中混了几种兵种就**按兵种各成一个小队**（同类并入已有队）；每队上限 `RemoteSoftCap`（默认 **40**，0 = 不限），超出的单位**不组队、保持原逻辑**；同队内按离框中心 / 点击处由近到远入选。
+  - **下令**：**左键点地块** → 先把"已选中"按兵种分队，再让**最近一次命中的小队**一起前往该 `NavSpot`（没有待成队时直接命令已有小队）；各队独立排布（`SquadFormation` 槽位，槽距 = `radius*2.01`）。
   - **落位（T8 已落实）**：到位（`orderDist < 0.12` 且离槽位 < 0.3m）即停稳；连续 1.5s 几乎无位移判定为被堵 → 之后 0.8s 放弃槽位、走距离场并加横向绕行解卡。
   - **不提供"释放回原 AI"（T9 不落实）**：小队一旦成立就持续受遥控，只在成员阵亡 / `F2` 清场 / 换岛 / 战局结束时清理（清理时会把接管前的 order 还原回去）。
   - **表现**：自绘框选矩形 + 受控单位与目标点标记（复用 `PlacementMarker` 的运行时贴图技术）；**不复用**原版选中环 / 小队 banner / 选中慢动作。
@@ -136,12 +142,14 @@ Raid.IIslandFirstEnter:
 
     | 操作 | 本 mod 下的行为 |
     |---|---|
+    | 左键单击**非原生单位** | 本 mod：选中它（`Shift` 追加 / 移除 → 合并同类）；原版那边视作"点了空地"（它们不在我方可选列表 `english.livingSquads` 里），不会误选英雄小队 |
     | 左键单击我方小队 / 空地 | 原版：选中 / 取消（单键模式下还会移动已选的小队） |
+    | 左键单击地块 | 原版照旧；本 mod 额外：有"已选中"或已有小队时 → 成队并前进 |
     | 左键拖动（起点不在非原生单位附近） | 原版：平移相机 |
     | 左键拖动（起点在非原生单位附近） | 框选；这一次拖动不平移相机（按下接管、松开交还） |
+    | 按住 `RemoteFreeMarqueeKey`（默认左 Alt）+ 左键拖动 | 从任意位置起拖都算框选；这一次拖动不平移相机 |
     | 右键单击 / 右键拖动 | 完全交还原版（移动已选小队 / 取消 / 拖动相机） |
     | 滚轮缩放 / 触摸手势 | 原版 |
-    | 点"自己单位"上的单击 | 原版照常处理；本 mod **不**借此下发遥控移动命令（避免误动） |
     | F1 菜单打开时 | 本 mod 的投放模式（左键投放、右键或 `Esc` 关闭）——既有功能，不属"原版一致"范围 |
 
 ## 6. 已知限制 / 待实测
@@ -157,7 +165,10 @@ Raid.IIslandFirstEnter:
 - **T9（不落实，v1.4.0）**：**不做"战斗中释放回原 AI"**——小队一旦成立就持续受遥控；仅在成员阵亡 / `F2` 清场 / 换岛 / 结算时清理。
 - **T10（已定，v1.4.0）**：每队上限 `RemoteSoftCap` 默认 **40**（0 = 不限）；超出的同类单位**不进队、保持原逻辑**。
 - **T11（已澄清，v1.4.0）**：这里的"相机抖动"**不是**受击/攻击震动，而是**拖动框选时把相机一起拖走**（画面滑动 → 框选范围与世界错位）。已用两条规则解决：① 只有"从非原生单位附近起拖"才接管拖动；② 框选期间把相机拖拽监听临时摘掉。
-- **T12（v1.4.0 待实测）**：左键拖动框选与"点自己单位选中英雄小队"的共存手感；`RemoteGrabRadius` 默认 48px 是否顺手。
+- **T12（v1.4.0 待实测）**：**点选**手感——左键单击非原生单位 / `Shift` 追加合并 / 重复单击取消；以及"拖动框选"与"点自己单位选中英雄小队"的共存；`RemoteGrabRadius`（48px）与 `RemoteFreeMarqueeKey`（左 Alt）是否顺手。
+- **T13（v1.4.0 观察）**：日志里 `Cannot set the parent of the GameObject 'Torch(Clone)' while activating or deactivating the parent GameObject 'Weapon'` 出现在"离开战局 → 我方清场"同一时段，属 Unity 侧**销毁期重挂父级**告警。需确认：普通（没有本 mod 投放对象）的撤离 / 换岛是否也会出现——若只在有我们的对象时出现，再查销毁顺序（`SpawnLedger` 销毁的是 Wave 根节点）。
+- **T14（v1.4.0 观察）**：放宽后三次投放都走了"已放宽间距"（说明该滩头很密、船间距 ≈0.7m）。若观感太挤，把 `MinLandingSpacing` 调回 2.0~2.5——现在它只是"首选偏好"，**调大不会再导致投不出来**（会自动放宽 / 换滩头）。
+- **T15（v1.4.0 排错）**：框选日志新增"登记 N，可用 M，命中 K"——若 `登记 0` 说明 `ForeignUnit` 标记没挂上（投放时 `AttachAgentBehaviours` 未跑到）；`可用 0` 说明单位还没下船（`navPos.island` 为假）或已阵亡；两者都正常却 `命中 0`，则是屏幕投影/相机问题（把日志发我）。另：**原版自己的敌人没有标记、也绝不能被遥控**（设计如此），所以"按 Alt 框不动原版单位"是预期行为。
 
 ## 7. 命名与提交约定
 
@@ -186,5 +197,6 @@ Raid.IIslandFirstEnter:
 | v1.2.4 | 1.2.4 | 滩头占用规则（有船即拒投，间距随船长放大以预留原版坑位）+ 船随人数自动匹配 + 修"叠船" + 船员混编自检 |
 | **v1.3.0** | **1.3.0** | **船上敌人算威胁；编队发射（一条音乐）；暂停不投放 + 时间基准统一；船速跟随难度；跨岛兵种开关；占用表缓存；文档记录"控制原版上岛单位"方案** |
 | **v1.3.1** | **1.3.1** | **纯重构（行为不变）：`Plugin` 拆出 `IngameMenu`、`LandingInjector` 拆出 `DropPlanner`+`UnitCatalog`+`Util`；日志/cfg 守卫收拢（逐个 `Plugin.Log != null` → `Util.Log/Warn/Error`、`ModConfig.X.Value` → `Util.V`）；`TryResolve`(108 行) 按步骤拆三个子方法** |
-| **v1.4.0** | **1.4.0** | **遥控非原生单位：左键从单位上拖 = 框选（按兵种各成一个小队，每队上限 40，超出的保持原逻辑）、左键点地块 = 前进；不改阵营（**不做招安**）；**不提供释放回原 AI**；落位/解卡已落实（T8）；输入统一为左键拖动框选（T11 澄清：抖动指相机被拖走）** |
+| **v1.4.0** | **1.4.0** | **遥控非原生单位首版：左键从单位上拖 = 框选（只是"选定"）、左键点地块 = **按兵种各成一个小队**并前进（每队上限 40，超出的保持原逻辑）；持续时间受遥控、**不提供释放回 AI**；不改阵营；落位/解卡（T8）** |
+| **v1.4.1** | **1.4.1** | **投放放宽：滩头占用改"候选逐个试 + 两级间距 + 全岛兜底"（`MinLandingSpacing` 默认 2.5→1.0，新增 `LandingFallbackAnywhere`）；遥控改**左键点选为主**（`Shift` 单击同类合并）+ `RemoteFreeMarqueeKey`（左右 Alt）自由框选，相机**按下即接管**；修**清场漏删登岛单位**（`ShipGroup.squad` 懒加载在 `runContainer` 下 → 单独登记 squad + 单位兜底销毁）；框选日志加"登记/可用/命中"诊断** |
 

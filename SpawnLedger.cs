@@ -10,6 +10,7 @@ namespace BadNorthNewMode
         sealed class Item
         {
             internal GameObject root;    // 我们创建的 Wave 根节点（船是其子孙）
+            internal Squad squad;        // ShipGroup 懒加载出的维京 squad（**单位挂在它下面**，不在 root 下）
             internal Island island;
         }
 
@@ -34,6 +35,24 @@ namespace BadNorthNewMode
             it.root = root;
             it.island = island;
             Get()._items.Add(it);
+        }
+
+        /// <summary>
+        /// 登记单位所在的维京 squad：`ShipGroup.squad` 懒加载 → `SpawnGetFromPrefab(..., island.runContainer)`，
+        /// 所以**登岛单位不在本 Wave 树里**，只销毁 Wave 会留下它们（见 §4 坑表）。同 squad 只登记一次。
+        /// </summary>
+        internal static void TrackSquad(Squad squad, Island island)
+        {
+            if (squad == null) return;
+
+            List<Item> items = Get()._items;
+            for (int i = 0; i < items.Count; i++)
+                if (object.ReferenceEquals(items[i].squad, squad)) return;
+
+            Item it = new Item();
+            it.squad = squad;
+            it.island = island;
+            items.Add(it);
         }
 
         void Update()
@@ -80,8 +99,10 @@ namespace BadNorthNewMode
             {
                 Item it = _items[i];
                 if (it.root != null) { UnityEngine.Object.Destroy(it.root); n++; }
+                if (it.squad != null) { UnityEngine.Object.Destroy(it.squad.gameObject); n++; }   // 单位挂这里
                 _items.RemoveAt(i);
             }
+            n += ForeignUnit.DestroyAll();        // 兜底：已登记的非原生单位（含不在 Wave 树里的）
             if (n > 0) { DropPlanner.InvalidateOccupancy(); RemoteGroup.Clear(); }
             return n;
         }

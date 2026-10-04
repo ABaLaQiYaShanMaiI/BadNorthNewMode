@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BepInEx.Configuration;
 using UnityEngine;
 using Voxels.TowerDefense;
 
@@ -15,8 +16,9 @@ namespace BadNorthNewMode
         static CursorManager.IDragListener _detached;
         static CameraController _camera;
         static Camera _cam;
-        static List<ForeignUnit> _pending;      // 已框选、等待"点地块"成队的目标
+        static List<ForeignUnit> _pending;      // 已选中/框选、等待"点地块"成队的目标
         static Vector2 _pendingCenter;
+        static ForeignUnit _pressUnit;          // 按下时指针下的非原生单位（单击选择用）
 
         internal static bool Dragging { get { return _dragging; } }
         internal static bool ConsumedClick;      // 起点在单位上的单击 → 不作移动命令
@@ -45,7 +47,8 @@ namespace BadNorthNewMode
                 _held = true;
                 _dragging = false;
                 _start = Input.mousePosition;
-                _grab = NearForeignUnit(_start);
+                _pressUnit = NearestForeignUnit(_start);
+                _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
             }
 
@@ -64,27 +67,89 @@ namespace BadNorthNewMode
             {
                 bool wasDrag = _dragging;
                 bool wasGrab = _grab;
+                ForeignUnit pressUnit = _pressUnit;
                 _held = false;
                 _dragging = false;
                 _grab = false;
+                _pressUnit = null;
                 AttachCamera(gm);
 
-                if (wasDrag) ApplySelection();
-                else ConsumedClick = wasGrab;         // 点在单位上的单击：这一下不当"移动命令"
+                if (wasDrag) ApplySelection();                 // 拖动 = 框选
+                else
+                {
+                    ConsumedClick = wasGrab;                   // 点在单位上的单击：不当"移动命令"
+                    if (pressUnit != null && pressUnit.agent != null) ClickSelect(pressUnit);
+                }
             }
         }
 
-        /// <summary>框选结果先记为"待成队"；点地块时才由 RemoteGroup 按兵种分队并前进。</summary>
-        static void ApplySelection()
+        /// <summary>单击单位：选中它（再点一次取消）；按住 Shift 追加 / 移除（即"同类合并"）。</summary>
+        static void ClickSelect(ForeignUnit unit)
         {
-            _pending = Pick(_screenRect);
-            _pendingCenter = _screenRect.center;
+            if (_pending == null) _pending = new List<ForeignUnit>();
+            _pendingCenter = Input.mousePosition;
+
+            if (ShiftHeld())
+            {
+                if (_pending.Contains(unit)) _pending.Remove(unit);
+                else _pending.Add(unit);
+            }
+            else
+            {
+                bool sole = (_pending.Count == 1 && _pending[0] == unit);
+                _pending.Clear();
+                if (!sole) _pending.Add(unit);                 // 连点同一个 = 取消选择
+            }
 
             string msg = (_pending.Count == 0)
-                ? "框里没有非原生单位"
-                : string.Format("已框选 {0} 个非原生单位（左键点地块 = 成队并前进）", _pending.Count);
+                ? "已清空选择"
+                : string.Format("已选中 {0}（Shift 单击同类 = 追加/移除；左键点地块 = 成队并前进）", DescribePending());
             IngameMenu.Say(msg);
-            Util.Log("[NewMode][遥控] " + msg + string.Format("（矩形 {0:F0}×{1:F0}）", _screenRect.width, _screenRect.height));
+            Util.Log("[NewMode][遥控] " + msg);
+        }
+
+        /// <summary>框选：默认替换选择，按住 Shift 则并入现有选择。</summary>
+        static void ApplySelection()
+        {
+            List<ForeignUnit> picked = Pick(_screenRect);
+            if (_pending == null) _pending = new List<ForeignUnit>();
+            if (!ShiftHeld()) _pending.Clear();
+            for (int i = 0; i < picked.Count; i++)
+                if (!_pending.Contains(picked[i])) _pending.Add(picked[i]);
+
+            _pendingCenter = _screenRect.center;
+            string msg = (_pending.Count == 0)
+                ? "框里没有非原生单位"
+                : string.Format("已选中 {0} 个非原生单位（左键点地块 = 成队并前进）", _pending.Count);
+            IngameMenu.Say(msg);
+            Util.Log(string.Format("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}）",
+                msg, _screenRect.width, _screenRect.height, ForeignUnit.All.Count, ForeignUnit.UsableCount(), picked.Count));
+        }
+
+        /// <summary>把待成队列表按兵种写成一串（HUD 提示用）。</summary>
+        static string DescribePending()
+        {
+            if (_pending == null || _pending.Count == 0) return "无";
+
+            List<string> types = new List<string>();
+            List<int> counts = new List<int>();
+            for (int i = 0; i < _pending.Count; i++)
+            {
+                ForeignUnit f = _pending[i];
+                if (f == null || f.agent == null) continue;
+
+                int idx = types.IndexOf(f.unitType);
+                if (idx < 0) { types.Add(f.unitType); counts.Add(1); }
+                else counts[idx] = counts[idx] + 1;
+            }
+
+            string s = null;
+            for (int i = 0; i < types.Count; i++)
+            {
+                s = (s == null) ? "" : (s + "、");
+                s += UnitNames.Of(types[i]) + "×" + counts[i];
+            }
+            return (s == null) ? "无" : s;
         }
 
         static List<ForeignUnit> Pick(Rect screenRect)
@@ -108,17 +173,18 @@ namespace BadNorthNewMode
             return res;
         }
 
-        /// <summary>按下点是否离某个非原生单位足够近（决定"拖动=框选"还是"拖动=平移相机"）。</summary>
-        static bool NearForeignUnit(Vector2 screenPos)
+        /// <summary>按下点附近最近的非原生单位（决定"单击选择"的目标；也决定拖动是否算框选）。</summary>
+        static ForeignUnit NearestForeignUnit(Vector2 screenPos)
         {
-            int radius = Util.V(ModConfig.RemoteGrabRadius, 48);
-            if (radius <= 0) return true;                                    // 0 = 任意位置起拖都框选
-
             ForeignUnit.Prune();
             Camera cam = Cam();
-            if (cam == null) return false;
+            if (cam == null) return null;
 
-            float r2 = (float)radius * radius;
+            int radius = Util.V(ModConfig.RemoteGrabRadius, 48);
+            float r2 = (radius <= 0) ? float.MaxValue : (float)radius * radius;
+
+            ForeignUnit best = null;
+            float bestD = float.MaxValue;
             for (int i = 0; i < ForeignUnit.All.Count; i++)
             {
                 ForeignUnit f = ForeignUnit.All[i];
@@ -130,9 +196,29 @@ namespace BadNorthNewMode
 
                 float dx = sp.x - screenPos.x;
                 float dy = sp.y - screenPos.y;
-                if (dx * dx + dy * dy <= r2) return true;
+                float d = dx * dx + dy * dy;
+                if (d > r2 || d >= bestD) continue;
+
+                bestD = d;
+                best = f;
             }
-            return false;
+            return best;
+        }
+
+        /// <summary>按住"自由框选键"→ 从任意位置起拖都算框选（相机交给框选）。左右 Alt 都认。</summary>
+        static bool FreeMarqueeKeyHeld()
+        {
+            ConfigEntry<KeyCode> key = ModConfig.RemoteFreeMarqueeKey;
+            if (key == null || key.Value == KeyCode.None) return false;
+            if (Input.GetKey(key.Value)) return true;
+
+            return (key.Value == KeyCode.LeftAlt || key.Value == KeyCode.RightAlt) &&
+                   (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt));
+        }
+
+        static bool ShiftHeld()
+        {
+            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         }
 
         internal static float ScreenDist2(Agent a, Vector2 center)
@@ -157,6 +243,7 @@ namespace BadNorthNewMode
         static void Cancel(IslandGameplayManager gm)
         {
             ConsumedClick = false;
+            _pressUnit = null;
             if (!_held && !_dragging) return;
             _held = false;
             _grab = false;

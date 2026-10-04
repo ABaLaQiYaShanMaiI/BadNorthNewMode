@@ -36,6 +36,7 @@ namespace BadNorthNewMode
             ShipGroup group = FlotillaLauncher.Reserve(island, raid, Util.V(ModConfig.FlotillaDelay, 1f),
                 Util.V(ModConfig.FlotillaSpread, 2f), out wave, out createdNew);
             if (createdNew) SpawnLedger.Track(wave.gameObject, island);   // 不进 raid.waves → 需自己登记清场
+            SpawnLedger.TrackSquad(group.squad, island);                   // 单位挂在 lazy squad 下（runContainer），单独登记
 
             GameObject landingGo = new GameObject("Landing");
             Landing landing = landingGo.AddComponent<Landing>();
@@ -95,8 +96,10 @@ namespace BadNorthNewMode
                 Util.Log(string.Format("[NewMode] 采用第 {0} 个候选滩头 {1}（距点击处 {2:F2}m）",
                     tried, Util.Fmt(used.navPos.pos), Vector3.Distance(used.navPos.pos, t.beach.navPos.pos)));
 
-            info = string.Format("已投放 {0} ×{1}（船 {2}，滩头离点击处 {3:F1}m）",
-                t.vikingRef.name, load.count, landing.shipPrefab.name, t.shoreDist);
+            info = string.Format("已投放 {0} ×{1}（船 {2}，滩头离点击处 {3:F1}m{4}{5}）",
+                t.vikingRef.name, load.count, landing.shipPrefab.name, t.shoreDist,
+                t.relaxed ? "，已放宽间距" : "",
+                t.fallback ? "，附近满员 → 改用最近空滩头" : "");
             return true;
         }
 
