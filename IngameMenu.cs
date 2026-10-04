@@ -54,25 +54,42 @@ namespace BadNorthNewMode
         static void DrawHud()
         {
             if (!Util.V(ModConfig.ShowHud, true)) return;
-            if (!IsOpen && !RemoteGroup.Any && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
+
+            int foreign = ForeignUnit.All.Count;
+            int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
+            bool help = (foreign > 0) || RemoteGroup.Any;                  // 有非原生单位/遥控小队 → 常显操作提示
+            if (!IsOpen && !help && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
 
             string text = IsOpen
                 ? "BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）"
                 : "BadNorthNewMode";
             if (IsOpen && !string.IsNullOrEmpty(Hover)) text += "\n" + Hover;
+
             if (RemoteGroup.Any)
-                text += "\n遥控小队：" + RemoteGroup.DescribeAll() + "（共 " + RemoteGroup.TotalCount +
-                        "；左键点地块 = 前进）";
-            if (MarqueeSelect.Pending != null && MarqueeSelect.Pending.Count > 0)
-                text += "\n已选中 " + MarqueeSelect.Pending.Count + " 个非原生单位（Shift 单击同类追加；左键点地块 = 成队并前进）";
-            else if (MarqueeSelect.Dragging)
+                text += string.Format("\n遥控小队：{0}（共 {1}）｜左键点地块 = 全队前进",
+                    RemoteGroup.DescribeAll(), RemoteGroup.TotalCount);
+
+            if (foreign > 0)
+                text += string.Format("\n非原生单位 {0}（可选 {1}{2}）", foreign, ForeignUnit.UsableCount(),
+                    (selected > 0) ? (", 已选中 " + selected) : "");
+
+            if (MarqueeSelect.Dragging)
                 text += "\n框选中…（按兵种自动分队，每队上限 " + Util.V(ModConfig.RemoteSoftCap, 40) + "）";
+
+            if (help)
+                text += (IsOpen ? "\n[关菜单后] " : "\n[遥控] ") +
+                        "左键点单位 = 选中｜Shift 点同类 = 合并｜左键点地块 = 成队前进｜Alt+拖动 = 框选";
+
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
+            int lines = 1;
+            for (int i = 0; i < text.Length; i++) if (text[i] == '\n') lines++;
+            float h = 12f + lines * 18f;
+
             GUI.color = new Color(0f, 0f, 0f, 0.65f);
-            GUI.DrawTexture(new Rect(8f, 8f, 660f, 84f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(8f, 8f, 820f, h), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            GUI.Label(new Rect(16f, 12f, 660f, 80f), text);
+            GUI.Label(new Rect(16f, 10f, 820f, h - 4f), text);
         }
 
         /// <summary>兵种菜单：上排选兵种、下排选数量，均为左键点击（写回 cfg，立即生效）。</summary>
@@ -83,7 +100,7 @@ namespace BadNorthNewMode
             float headH = 74f;                                   // 标题 + 当前 + 数量信息
             float rows = Mathf.Max(1, n);
             float countH = 50f;                                  // "数量（…）" + 按钮行
-            _rect = new Rect(8f, 82f, 470f, headH + rows * rowH + countH + 40f);
+            _rect = new Rect(8f, 82f, 560f, headH + rows * rowH + countH + 104f);
 
             GUI.color = new Color(0f, 0f, 0f, 0.82f);
             GUI.DrawTexture(_rect, Texture2D.whiteTexture);
@@ -159,8 +176,13 @@ namespace BadNorthNewMode
                 GUI.color = old;
             }
 
-            GUI.Label(new Rect(x, cy + countH, w, 34f),
-                "F1 关闭菜单 · F2 强制清场　｜　关菜单后：左键点单位 = 选中（Shift 点同类 = 合并）、左键点地块 = 成队前进");
+            // ---- 遥控操作说明（关菜单后生效；玩家不点 F1 也知道怎么用）----
+            float hy = cy + countH;
+            GUI.Label(new Rect(x, hy, w, 18f), "遥控操作（关闭菜单后生效）：");
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), "· 左键点\"非原生单位\" = 选中（再点同一个取消）；Shift + 左键点同类 = 合并成队");
+            GUI.Label(new Rect(x, hy + 36f, w, 18f), "· 左键点地块 = 选中的单位 / 已有的遥控小队一起前进");
+            GUI.Label(new Rect(x, hy + 54f, w, 18f), "· Alt + 左键拖动 = 从任意位置框选（相机暂停）；不按 Alt 时只有从单位上起拖才框选");
+            GUI.Label(new Rect(x, hy + 72f, w, 18f), "· 单位须已下船（HUD 的\"可选\"就是当前能选的数量）｜F1 关闭菜单 · F2 强制清场");
         }
 
         /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>

@@ -50,6 +50,7 @@ namespace BadNorthNewMode
                 _pressUnit = NearestForeignUnit(_start);
                 _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
+                else LogClickMiss(_start);       // 点空了：把"登记/可用/最近距离"打出来，便于定位是哪个环节没命中
             }
 
             if (_held && Input.GetMouseButton(0))
@@ -154,7 +155,7 @@ namespace BadNorthNewMode
 
         static List<ForeignUnit> Pick(Rect screenRect)
         {
-            ForeignUnit.Prune();
+            EnsureCandidates();
             List<ForeignUnit> res = new List<ForeignUnit>();
 
             Camera cam = Cam();
@@ -173,14 +174,34 @@ namespace BadNorthNewMode
             return res;
         }
 
+        /// <summary>
+        /// 候选来源：标记注册表 ∪ 我们登记过的 squad 成员（**自愈**：在册单位缺标记就补上）。
+        /// 这样即使 `AttachAgentBehaviours` 没跑到（旧存档/异常路径），也照样能选中。
+        /// </summary>
+        static void EnsureCandidates()
+        {
+            ForeignUnit.Prune();
+
+            List<Agent> ours = new List<Agent>();
+            SpawnLedger.CollectOurAgents(ours);
+            for (int i = 0; i < ours.Count; i++)
+            {
+                Agent a = ours[i];
+                if (a == null || a.GetComponent<ForeignUnit>() != null) continue;
+
+                VikingAgent va = a.GetComponent<VikingAgent>();
+                ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
+            }
+        }
+
         /// <summary>按下点附近最近的非原生单位（决定"单击选择"的目标；也决定拖动是否算框选）。</summary>
         static ForeignUnit NearestForeignUnit(Vector2 screenPos)
         {
-            ForeignUnit.Prune();
+            EnsureCandidates();
             Camera cam = Cam();
             if (cam == null) return null;
 
-            int radius = Util.V(ModConfig.RemoteGrabRadius, 48);
+            int radius = Util.V(ModConfig.RemoteGrabRadius, 64);
             float r2 = (radius <= 0) ? float.MaxValue : (float)radius * radius;
 
             ForeignUnit best = null;
@@ -201,6 +222,43 @@ namespace BadNorthNewMode
 
                 bestD = d;
                 best = f;
+            }
+            return best;
+        }
+
+        /// <summary>点空时的诊断：登记数 / 可用数 / 最近单位的屏幕距离（px）。</summary>
+        static void LogClickMiss(Vector2 screenPos)
+        {
+            EnsureCandidates();
+            if (ForeignUnit.All.Count == 0) return;            // 没有非原生单位就不刷屏
+
+            float d = NearestDistance(screenPos);
+            Util.Log(string.Format("[NewMode][遥控] 点击处没命中：登记 {0}，可用 {1}，最近 {2}（阈值 {3}px）",
+                ForeignUnit.All.Count, ForeignUnit.UsableCount(),
+                (d < 0f) ? "不可见" : string.Format("{0:F0}px", d),
+                Util.V(ModConfig.RemoteGrabRadius, 64)));
+        }
+
+        /// <summary>离屏幕点最近的非原生单位距离（px；-1 = 没有可投影的）。</summary>
+        static float NearestDistance(Vector2 screenPos)
+        {
+            Camera cam = Cam();
+            if (cam == null) return -1f;
+
+            float best = -1f;
+            for (int i = 0; i < ForeignUnit.All.Count; i++)
+            {
+                ForeignUnit f = ForeignUnit.All[i];
+                Agent a = (f != null) ? f.agent : null;
+                if (!Usable(a)) continue;
+
+                Vector3 sp = cam.WorldToScreenPoint(a.transform.position);
+                if (sp.z <= 0f) continue;
+
+                float dx = sp.x - screenPos.x;
+                float dy = sp.y - screenPos.y;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                if (best < 0f || d < best) best = d;
             }
             return best;
         }

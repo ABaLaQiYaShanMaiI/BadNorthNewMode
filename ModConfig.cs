@@ -131,8 +131,9 @@ namespace BadNorthNewMode
                 "注意：遥控只接管行军，它们**仍然是我方的敌人**（会被你打、也会打你）。关闭投放菜单（F1）后本功能才生效。");
             RemoteMarqueePixels = cfg.Bind("Remote", "RemoteMarqueePixels", 8,
                 "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 移动命令 / 点在自己单位上时忽略）。");
-            RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 48,
-                "只有从\"非原生单位多少像素以内\"起拖才算框选；从别处拖动仍然是原版的相机平移。0 = 任意位置起拖都框选。");
+            RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 64,
+                "只有从\"非原生单位多少像素以内\"起拖才算框选（也是**左键点选**的命中半径）；从别处拖动仍然是原版的相机平移。\n" +
+                "0 = 任意位置起拖都框选。点选总不中就把这个值调大（比如 96）。");
             RemoteFreeMarqueeKey = cfg.Bind("Remote", "RemoteFreeMarqueeKey", KeyCode.LeftAlt,
                 "按住这个键再用左键拖动 = 从**任意位置**起拖都算框选（等价于临时把相机交给框选）。\n" +
                 "KeyCode.None = 关闭该快捷键（则只有从单位附近起拖能框选）。默认 左Alt。");

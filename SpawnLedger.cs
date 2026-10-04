@@ -92,6 +92,23 @@ namespace BadNorthNewMode
             }
         }
 
+        /// <summary>本 mod 投放且在册的 squad 成员（框选兜底用；单位挂在 lazy squad 下，见 §4 坑表）。</summary>
+        internal static void CollectOurAgents(List<Agent> result)
+        {
+            List<Item> items = Get()._items;
+            for (int i = 0; i < items.Count; i++)
+            {
+                Squad s = items[i].squad;
+                if (s == null || s.agents == null) continue;
+
+                for (int k = 0; k < s.agents.Count; k++)
+                {
+                    Agent a = s.agents[k];
+                    if (a != null && !result.Contains(a)) result.Add(a);
+                }
+            }
+        }
+
         int DestroyAll()
         {
             int n = 0;
