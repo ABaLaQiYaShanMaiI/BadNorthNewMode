@@ -42,15 +42,18 @@ namespace BadNorthNewMode
             string why;
             if (!Plugin.InBattle(gm, out why)) { Cancel(gm); return; }
 
+            if (SelectAllKeyDown()) SelectAll();          // R = 一键全选（单位跑远了也能选）
+
             if (Input.GetMouseButtonDown(0))
             {
                 _held = true;
                 _dragging = false;
                 _start = Input.mousePosition;
-                _pressUnit = NearestForeignUnit(_start);
+                _pressUnit = NearestForeignUnitWorld(_start);                 // 主路径：世界距离（与投放同一套 NavSpotCast）
+                if (_pressUnit == null) _pressUnit = NearestForeignUnit(_start);   // 兜底：屏幕半径
                 _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
-                else LogClickMiss(_start);       // 点空了：把"登记/可用/最近距离"打出来，便于定位是哪个环节没命中
+                else LogClickMiss(_start);       // 点空了：把"登记/可用/最近屏幕+世界距离/地面点"打出来
             }
 
             if (_held && Input.GetMouseButton(0))
@@ -123,8 +126,9 @@ namespace BadNorthNewMode
                 ? "框里没有非原生单位"
                 : string.Format("已选中 {0} 个非原生单位（左键点地块 = 成队并前进）", _pending.Count);
             IngameMenu.Say(msg);
-            Util.Log(string.Format("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}）",
-                msg, _screenRect.width, _screenRect.height, ForeignUnit.All.Count, ForeignUnit.UsableCount(), picked.Count));
+            Util.Log(string.Format("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}；最近 {6}）",
+                msg, _screenRect.width, _screenRect.height, ForeignUnit.All.Count, ForeignUnit.UsableCount(), picked.Count,
+                NearestScreenInfo(_pendingCenter)));
         }
 
         /// <summary>把待成队列表按兵种写成一串（HUD 提示用）。</summary>
@@ -226,26 +230,89 @@ namespace BadNorthNewMode
             return best;
         }
 
-        /// <summary>点空时的诊断：登记数 / 可用数 / 最近单位的屏幕距离（px）。</summary>
+        /// <summary>点选（世界距离版，主路径）：用投放同一套 NavSpotCast 取世界点，再比单位世界距离——不依赖屏幕投影。</summary>
+        static ForeignUnit NearestForeignUnitWorld(Vector2 screenPos)
+        {
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (gm != null) ? gm.island : null;
+
+            Vector3 land;
+            string diag;
+            if (!Plugin.TryGetLandPoint(island, screenPos, out land, out diag)) return null;
+
+            EnsureCandidates();
+            float radius = Util.V(ModConfig.RemoteClickRadius, 1.2f);
+            float best = radius;
+            ForeignUnit pick = null;
+
+            for (int i = 0; i < ForeignUnit.All.Count; i++)
+            {
+                ForeignUnit f = ForeignUnit.All[i];
+                Agent a = (f != null) ? f.agent : null;
+                if (!Usable(a)) continue;
+
+                Vector3 p = a.wPos;
+                p.y = land.y;
+                float d = Vector3.Distance(p, land);
+                if (d < best) { best = d; pick = f; }
+            }
+            return pick;
+        }
+
+        static bool SelectAllKeyDown()
+        {
+            ConfigEntry<KeyCode> key = ModConfig.RemoteSelectAllKey;
+            return key != null && key.Value != KeyCode.None && Input.GetKeyDown(key.Value);
+        }
+
+        /// <summary>一键全选：把所有"可选"的非原生单位加入待成队选择（等价于 Shift 全框）。</summary>
+        internal static void SelectAll()
+        {
+            EnsureCandidates();
+            if (_pending == null) _pending = new List<ForeignUnit>();
+            _pending.Clear();
+
+            for (int i = 0; i < ForeignUnit.All.Count; i++)
+            {
+                ForeignUnit f = ForeignUnit.All[i];
+                Agent a = (f != null) ? f.agent : null;
+                if (Usable(a)) _pending.Add(f);
+            }
+
+            string msg = (_pending.Count == 0)
+                ? "可选的非原生单位为 0（可能都还在船上或已阵亡）"
+                : string.Format("已全选 {0}（左键点地块 = 成队前进）", DescribePending());
+            IngameMenu.Say(msg);
+            Util.Log("[NewMode][遥控] " + msg);
+        }
+
+        /// <summary>点空时的诊断：登记/可用 + 最近单位的屏幕信息 + 地面点 + 两个阈值。</summary>
         static void LogClickMiss(Vector2 screenPos)
         {
             EnsureCandidates();
             if (ForeignUnit.All.Count == 0) return;            // 没有非原生单位就不刷屏
 
-            float d = NearestDistance(screenPos);
-            Util.Log(string.Format("[NewMode][遥控] 点击处没命中：登记 {0}，可用 {1}，最近 {2}（阈值 {3}px）",
-                ForeignUnit.All.Count, ForeignUnit.UsableCount(),
-                (d < 0f) ? "不可见" : string.Format("{0:F0}px", d),
-                Util.V(ModConfig.RemoteGrabRadius, 64)));
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (gm != null) ? gm.island : null;
+
+            Vector3 land;
+            string diag;
+            bool hasLand = Plugin.TryGetLandPoint(island, screenPos, out land, out diag);
+
+            Util.Log(string.Format("[NewMode][遥控] 点击处没命中：登记 {0}，可用 {1}；最近 {2}；地面点 {3}；阈值 点选 {4:F1}m / 框选起点 {5}px",
+                ForeignUnit.All.Count, ForeignUnit.UsableCount(), NearestScreenInfo(screenPos),
+                hasLand ? Util.Fmt(land) : ("未命中(" + diag + ")"),
+                Util.V(ModConfig.RemoteClickRadius, 1.2f), Util.V(ModConfig.RemoteGrabRadius, 64)));
         }
 
-        /// <summary>离屏幕点最近的非原生单位距离（px；-1 = 没有可投影的）。</summary>
-        static float NearestDistance(Vector2 screenPos)
+        /// <summary>最近可用单位的屏幕信息（距离/原始坐标/z/鼠标/屏幕尺寸）——用来判定投影是否可信。</summary>
+        static string NearestScreenInfo(Vector2 screenPos)
         {
             Camera cam = Cam();
-            if (cam == null) return -1f;
+            if (cam == null) return "相机不可用";
 
-            float best = -1f;
+            float best = float.MaxValue;
+            string info = "无（没有可用的非原生单位）";
             for (int i = 0; i < ForeignUnit.All.Count; i++)
             {
                 ForeignUnit f = ForeignUnit.All[i];
@@ -253,14 +320,16 @@ namespace BadNorthNewMode
                 if (!Usable(a)) continue;
 
                 Vector3 sp = cam.WorldToScreenPoint(a.transform.position);
-                if (sp.z <= 0f) continue;
-
                 float dx = sp.x - screenPos.x;
                 float dy = sp.y - screenPos.y;
                 float d = Mathf.Sqrt(dx * dx + dy * dy);
-                if (best < 0f || d < best) best = d;
+                if (d >= best) continue;
+
+                best = d;
+                info = string.Format("{0:F0}px（屏 {1:F0},{2:F0} z={3:F1}｜鼠标 {4:F0},{5:F0}｜屏幕 {6}×{7}｜相机 {8}）",
+                    d, sp.x, sp.y, sp.z, screenPos.x, screenPos.y, Screen.width, Screen.height, cam.name);
             }
-            return best;
+            return info;
         }
 
         /// <summary>按住"自由框选键"→ 从任意位置起拖都算框选（相机交给框选）。左右 Alt 都认。</summary>

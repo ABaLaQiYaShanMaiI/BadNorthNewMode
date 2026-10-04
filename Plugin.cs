@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.4.2";
+        public const string VERSION = "1.4.3";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -264,7 +264,7 @@ namespace BadNorthNewMode
         }
 
         /// <summary>屏幕坐标 → 地面点（首选 NavSpotter.NavSpotCast，兜底 viewport 射线 × Voxels 层）。</summary>
-        static bool TryGetLandPoint(Island island, Vector2 screenPos, out Vector3 point, out string diag)
+        internal static bool TryGetLandPoint(Island island, Vector2 screenPos, out Vector3 point, out string diag)
         {
             point = Vector3.zero;
             diag = null;

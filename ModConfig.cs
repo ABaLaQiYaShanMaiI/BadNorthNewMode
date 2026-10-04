@@ -18,6 +18,8 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> RemoteControl;
         public static ConfigEntry<int> RemoteMarqueePixels;
         public static ConfigEntry<int> RemoteGrabRadius;
+        public static ConfigEntry<float> RemoteClickRadius;
+        public static ConfigEntry<KeyCode> RemoteSelectAllKey;
         public static ConfigEntry<KeyCode> RemoteFreeMarqueeKey;
         public static ConfigEntry<int> RemoteSoftCap;
         public static ConfigEntry<bool> RemoteHighlight;
@@ -141,6 +143,12 @@ namespace BadNorthNewMode
                 "每个兵种小队的上限：0 = 不限；>0 = 框选时按离框中心由近到远取满该数，**多出来的不组队、保持原逻辑**。");
             RemoteHighlight = cfg.Bind("Remote", "RemoteHighlight", true,
                 "绘制框选矩形、受控单位与目标点标记（纯 GUI / 运行时贴图，不需要任何资源）。");
+            RemoteClickRadius = cfg.Bind("Remote", "RemoteClickRadius", 1.2f,
+                "**左键点选**的世界距离半径（米）：点击处的地面点与单位脚点相距 ≤ 本值即算点中。\n" +
+                "用世界距离判定（与投放同一套 NavSpotCast），不依赖屏幕投影；点不中就调大（比如 2）。");
+            RemoteSelectAllKey = cfg.Bind("Remote", "RemoteSelectAllKey", KeyCode.R,
+                "一键选中所有\"可选\"的非原生单位（等价于把它们全部加入待成队选择，之后左键点地块即可整队前进）。\n" +
+                "单位跑远、看不清时很有用。KeyCode.None = 关闭该快捷键。默认 R。");
         }
 
         static void BindDiag(ConfigFile cfg)
