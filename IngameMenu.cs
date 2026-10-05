@@ -76,7 +76,6 @@ namespace BadNorthNewMode
             if (MarqueeSelect.Dragging)
                 text += Loc.F("\n框选中…（按兵种自动分队，每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40));
 
-            // v1.5.2：按键说明只留在 F1 菜单（那里是操作台），HUD 只报状态，不再重复按键介绍
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
             int lines = 1;
@@ -89,7 +88,7 @@ namespace BadNorthNewMode
             GUI.Label(new Rect(16f, 10f, 820f, h - 4f), text);
         }
 
-        /// <summary>兵种菜单：上排选兵种、下排选数量，均为左键点击（写回 cfg，立即生效）。</summary>
+        /// <summary>兵种菜单：语言行 + 兵种列表 + 数量按钮（左键点击即写回 cfg，立即生效）。</summary>
         static void DrawMenu()
         {
             int n = (_units != null) ? _units.Count : 0;
@@ -163,8 +162,8 @@ namespace BadNorthNewMode
 
             // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
             float hy = cy + countH;
-            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 左/右键点单位 = 选整队｜R = 全选"));
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("Shift + 左/右键点地块 = 前进"));
+            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 点左右键：点单位 = 选整队，点地块 = 前进"));
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("按住 R + 点左右键 = 全选并直接前进"));
             GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场"));
         }
 

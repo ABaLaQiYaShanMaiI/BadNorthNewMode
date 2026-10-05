@@ -49,10 +49,7 @@ namespace BadNorthNewMode
             return n;
         }
 
-        /// <summary>
-        /// 清场用：销毁所有已登记的非原生单位。
-        /// 必须单独做——单位挂在 `island.runContainer` 下懒加载出的维京 squad 里（见 §4 坑表），**不在我们登记的 Wave 树**下。
-        /// </summary>
+        /// <summary>清场用：单独销毁已登记的非原生单位——它们挂在 `island.runContainer` 的懒加载 squad 下、**不在**我们的 Wave 树里（见 §4 坑表）。</summary>
         internal static int DestroyAll()
         {
             int n = 0;

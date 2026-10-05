@@ -19,7 +19,7 @@ namespace BadNorthNewMode
         static List<ForeignUnit> _pending;      // 已选中/框选、等待"点地块"成队的目标
         static Vector2 _pendingCenter;
         static ForeignUnit _pressUnit;          // 按下时指针下的非原生单位（单击选择用）
-        static bool _clickUsedForSelect;        // 本帧这一次按下已判给"选整队"→ 不能再被当成前进命令（v1.5.2）
+        static bool _clickUsedForSelect;        // 本帧这一次按下已判给"选整队"→ 不能再被当成前进命令（v1.5.3）
         static bool _slowMo;                    // 是否已向 TimeManager 申请减速
         static readonly object SlowMoOwner = new object();   // TimeManager 按 requester 记账（取最小值合并）
 
@@ -79,11 +79,11 @@ namespace BadNorthNewMode
                 _pressUnit = NearestForeignUnitWorld(_start);                 // 主路径：世界距离（与投放同一套 NavSpotCast）
                 if (_pressUnit == null) _pressUnit = NearestForeignUnit(_start);   // 兜底：屏幕半径
                 _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
-                _clickUsedForSelect = ShiftHeld() && (_pressUnit != null);   // Shift+左键点单位 = 选队（松开时执行），不是前进
+                _clickUsedForSelect = (ShiftHeld() && (_pressUnit != null)) || FreeMarqueeKeyHeld();   // 选队/框选起手的那一次按下不下令
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
             }
 
-            // Shift + 右键点单位 = 同样是"选整队"（与左键对称，适配双键设置）：右键没有拖动路径，按下即判定
+            // Shift + 右键点单位 = 也选整队（右键无拖动路径，按下即判定）
             if (Input.GetMouseButtonDown(1) && ShiftHeld())
             {
                 ForeignUnit hit = NearestForeignUnitWorld(Input.mousePosition);
@@ -98,6 +98,14 @@ namespace BadNorthNewMode
             if (_held && Input.GetMouseButton(0))
             {
                 Vector2 now = Input.mousePosition;
+                if (!_grab && FreeMarqueeKeyHeld())              // 先按下左键、再补按 FreeMarqueeKey：就地转成框选（起点 = 补按处）
+                {
+                    _grab = true;
+                    _dragging = false;
+                    _start = now;
+                    _clickUsedForSelect = true;                  // 已转框选 → 这一次按下不算下令
+                    DetachCamera(gm);
+                }
                 if (_grab && !_dragging && (now - _start).magnitude >= Util.V(ModConfig.RemoteMarqueePixels, 8))
                 {
                     _dragging = true;
@@ -326,10 +334,7 @@ namespace BadNorthNewMode
             return res;
         }
 
-        /// <summary>
-        /// 候选来源：标记注册表 ∪ 我们登记过的 squad 成员（**自愈**：在册单位缺标记就补上）。
-        /// 这样即使 `AttachAgentBehaviours` 没跑到（旧存档/异常路径），也照样能选中。
-        /// </summary>
+        /// <summary>候选来源：标记注册表 ∪ 在册 squad 成员（缺标记**自愈**补上）——装配没跑到也能选中。</summary>
         static void EnsureCandidates()
         {
             ForeignUnit.Prune();
@@ -425,6 +430,7 @@ namespace BadNorthNewMode
         {
             EnsureCandidates();
             ClearVanillaSelection();                     // 与 Shift 点选一致：选中遥控单位前先取消我方选择
+            _pendingCenter = Input.mousePosition;        // 供 Capture 按"离光标由近到远"分队（否则用的是上一次的陈旧中心）
             if (_pending == null) _pending = new List<ForeignUnit>();
             _pending.Clear();
 
@@ -437,7 +443,7 @@ namespace BadNorthNewMode
 
             string msg = (_pending.Count == 0)
                 ? Loc.T("可选的非原生单位为 0（可能都还在船上或已阵亡）")
-                : Loc.F("已全选 {0}（左键点地块 = 成队前进）", DescribePending());
+                : Loc.F("已全选 {0}（按住 R / Shift 点地块 = 前进）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
@@ -485,6 +491,14 @@ namespace BadNorthNewMode
             return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         }
 
+        /// <summary>下令修饰键（v1.5.3）：Shift（精确指挥）或按住"全选键"R（全选 + 批量下令）；两者都不按则点击 100% 归原版。</summary>
+        internal static bool CommandModifierHeld()
+        {
+            if (ShiftHeld()) return true;
+            ConfigEntry<KeyCode> key = ModConfig.RemoteSelectAllKey;
+            return key != null && key.Value != KeyCode.None && Input.GetKey(key.Value);
+        }
+
         internal static float ScreenDist2(Agent a, Vector2 center)
         {
             Camera cam = Cam();
@@ -516,10 +530,7 @@ namespace BadNorthNewMode
             AttachCamera(gm);
         }
 
-        /// <summary>
-        /// 框选中或已有选中 → 向 TimeManager 申请减速（原版"选中我方小队"用的是 0.1，同一套 API、按 requester 取最小值合并）。
-        /// 敌方单位一直在动，减速后更容易框住（见 PROJECT_SPEC §5）。
-        /// </summary>
+        /// <summary>框选中 / 已有选中 → 向原版 TimeManager 申请减速（同一套 API、按 requester 取最小值合并；见 PROJECT_SPEC §5）。</summary>
         static void UpdateSlowMo(bool want)
         {
             bool on = want && Util.V(ModConfig.RemoteSlowMo, true);
@@ -586,10 +597,7 @@ namespace BadNorthNewMode
             return _cam;
         }
 
-        /// <summary>
-        /// 用"已知世界点 ↔ 已知屏幕点"验证并挑相机：`LevelCamera.cameraRef` 在战局里可能指向 CampaignCamera（实测会把单位投到屏幕外），
-        /// 所以拿 NavSpotCast 给出的地面点来测误差，谁准用谁（见 PROJECT_SPEC §4 坑表）。
-        /// </summary>
+        /// <summary>用"已知世界点 ↔ 已知屏幕点"测误差挑相机：`cameraRef` 可能指向 CampaignCamera（会把单位投到屏幕外），谁准用谁（见 §4 坑表）。</summary>
         static Camera CamFor(Vector3 world, Vector2 screen)
         {
             Camera best = null;

@@ -37,10 +37,7 @@ namespace BadNorthNewMode
             Get()._items.Add(it);
         }
 
-        /// <summary>
-        /// 登记单位所在的维京 squad：`ShipGroup.squad` 懒加载 → `SpawnGetFromPrefab(..., island.runContainer)`，
-        /// 所以**登岛单位不在本 Wave 树里**，只销毁 Wave 会留下它们（见 §4 坑表）。同 squad 只登记一次。
-        /// </summary>
+        /// <summary>登记单位所在的维京 squad（懒加载在 `island.runContainer` 下）：**登岛单位不在本 Wave 树里**，只销毁 Wave 会留下它们（见 §4 坑表）。</summary>
         internal static void TrackSquad(Squad squad, Island island)
         {
             if (squad == null) return;

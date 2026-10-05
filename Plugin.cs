@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.2";
+        public const string VERSION = "1.5.3";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -43,6 +43,7 @@ namespace BadNorthNewMode
 
         void Update()
         {
+            LogFileSwitch.Tick();                       // 重试删日志残留（≤30s，见 LogFileSwitch）
             if (ModConfig.Hotkey == null) return;
 
             TrySubscribeGameClick();
@@ -115,11 +116,10 @@ namespace BadNorthNewMode
             if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;                // 既没有小队、也没有待成队 → 左右键完全归原版
             if (MarqueeSelect.VanillaSelected) return;                                // 你正选着我方小队 → 这次点击归原版（绝不双控）
 
-            // v1.5.2：下令必须按住 Shift——不按 Shift 的点击 100% 归原版，绝不与我方小队双控；
-            // 左/右键都认（适配双键设置），但"Shift + 左键点单位"已经用于选队，不能再当成立即前进。
+            // v1.5.3：下令需按住 Shift（精确指挥）或 R（全选+批量下令）；不按则点击 100% 归原版（见 §5/T20）
             if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
             {
-                if (!MarqueeSelect.ShiftHeld()) return;
+                if (!MarqueeSelect.CommandModifierHeld()) return;
                 if (MarqueeSelect.ClickUsedForSelect) return;
                 string why;
                 if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
