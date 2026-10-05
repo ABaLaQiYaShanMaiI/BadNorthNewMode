@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.1";
+        public const string VERSION = "1.5.2";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -106,7 +106,7 @@ namespace BadNorthNewMode
                 DoDrop(gm, screenPos, Loc.T("轮询兜底"));
         }
 
-        /// <summary>遥控模式（菜单关闭时）：右键框选非原生单位 + 左键指挥移动；不改阵营（见 PROJECT_SPEC §5）。</summary>
+        /// <summary>遥控模式（菜单关闭时）：Shift + 点单位选整队、Shift + 点地块下令前进；不改阵营（见 PROJECT_SPEC §5）。</summary>
         void HandleRemoteMode(IslandGameplayManager gm)
         {
             PlacementMarker.Get().Hide();
@@ -115,9 +115,12 @@ namespace BadNorthNewMode
             if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;                // 既没有小队、也没有待成队 → 左右键完全归原版
             if (MarqueeSelect.VanillaSelected) return;                                // 你正选着我方小队 → 这次点击归原版（绝不双控）
 
-            // 左键或右键点地块 = 集结 / 前进（覆盖游戏的两种光标模式；没有选中时上面已早退，不干扰原版）
+            // v1.5.2：下令必须按住 Shift——不按 Shift 的点击 100% 归原版，绝不与我方小队双控；
+            // 左/右键都认（适配双键设置），但"Shift + 左键点单位"已经用于选队，不能再当成立即前进。
             if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
             {
+                if (!MarqueeSelect.ShiftHeld()) return;
+                if (MarqueeSelect.ClickUsedForSelect) return;
                 string why;
                 if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
 

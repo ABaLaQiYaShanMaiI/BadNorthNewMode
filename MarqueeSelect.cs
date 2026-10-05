@@ -19,10 +19,12 @@ namespace BadNorthNewMode
         static List<ForeignUnit> _pending;      // 已选中/框选、等待"点地块"成队的目标
         static Vector2 _pendingCenter;
         static ForeignUnit _pressUnit;          // 按下时指针下的非原生单位（单击选择用）
+        static bool _clickUsedForSelect;        // 本帧这一次按下已判给"选整队"→ 不能再被当成前进命令（v1.5.2）
         static bool _slowMo;                    // 是否已向 TimeManager 申请减速
         static readonly object SlowMoOwner = new object();   // TimeManager 按 requester 记账（取最小值合并）
 
         internal static bool Dragging { get { return _dragging; } }
+        internal static bool ClickUsedForSelect { get { return _clickUsedForSelect; } }
         internal static List<ForeignUnit> Pending { get { return _pending; } }
         internal static bool HasPending { get { return _pending != null && _pending.Count > 0; } }
 
@@ -53,6 +55,7 @@ namespace BadNorthNewMode
 
         internal static void Tick(IslandGameplayManager gm)
         {
+            _clickUsedForSelect = false;                  // 每帧重算：只标记"本帧这一次按下的用途"
             if (!Util.V(ModConfig.RemoteControl, true)) { Cancel(gm); return; }
             if (IngameMenu.IsOpen) { Cancel(gm); return; }
 
@@ -76,7 +79,20 @@ namespace BadNorthNewMode
                 _pressUnit = NearestForeignUnitWorld(_start);                 // 主路径：世界距离（与投放同一套 NavSpotCast）
                 if (_pressUnit == null) _pressUnit = NearestForeignUnit(_start);   // 兜底：屏幕半径
                 _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
+                _clickUsedForSelect = ShiftHeld() && (_pressUnit != null);   // Shift+左键点单位 = 选队（松开时执行），不是前进
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
+            }
+
+            // Shift + 右键点单位 = 同样是"选整队"（与左键对称，适配双键设置）：右键没有拖动路径，按下即判定
+            if (Input.GetMouseButtonDown(1) && ShiftHeld())
+            {
+                ForeignUnit hit = NearestForeignUnitWorld(Input.mousePosition);
+                if (hit == null) hit = NearestForeignUnit(Input.mousePosition);
+                if (hit != null && hit.agent != null)
+                {
+                    _clickUsedForSelect = true;                  // 这一次按下用于选队，不做前进
+                    ClickSelectSquad(hit);
+                }
             }
 
             if (_held && Input.GetMouseButton(0))
@@ -102,7 +118,7 @@ namespace BadNorthNewMode
 
                 if (wasDrag) ApplySelection();                              // 拖动 = 框选（可选）
                 else if (pressUnit != null && pressUnit.agent != null && ShiftHeld())
-                    ClickSelectSquad(pressUnit);                            // Shift + 点单位 = 选中它所在的整队（v1.4.7）
+                    ClickSelectSquad(pressUnit);                            // Shift + 左键点单位 = 选中它所在的整队（v1.4.7）
             }
 
             UpdateSlowMo(_dragging || HasPending);             // 框选中 / 已有选中 → 减速（更易框住移动中的敌人）
@@ -464,7 +480,7 @@ namespace BadNorthNewMode
                    (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt));
         }
 
-        static bool ShiftHeld()
+        internal static bool ShiftHeld()
         {
             return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         }

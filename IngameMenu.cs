@@ -57,8 +57,8 @@ namespace BadNorthNewMode
 
             int foreign = ForeignUnit.All.Count;
             int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
-            bool help = (foreign > 0) || RemoteGroup.Any;                  // 有非原生单位/遥控小队 → 常显操作提示
-            if (!IsOpen && !help && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
+            bool active = (foreign > 0) || RemoteGroup.Any;                // 有非原生单位/遥控小队 → 常显状态
+            if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
 
             string text = IsOpen
                 ? Loc.T("BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）")
@@ -66,7 +66,7 @@ namespace BadNorthNewMode
             if (IsOpen && !string.IsNullOrEmpty(Hover)) text += "\n" + Hover;
 
             if (RemoteGroup.Any)
-                text += Loc.F("\n遥控小队：{0}（共 {1}）｜左键点地块 = 全队前进",
+                text += Loc.F("\n遥控小队：{0}（共 {1}）",
                     RemoteGroup.DescribeAll(), RemoteGroup.TotalCount);
 
             if (foreign > 0)
@@ -76,10 +76,7 @@ namespace BadNorthNewMode
             if (MarqueeSelect.Dragging)
                 text += Loc.F("\n框选中…（按兵种自动分队，每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40));
 
-            if (help)
-                text += (IsOpen ? Loc.T("\n[关菜单后·仅调控非原生单位] ") : Loc.T("\n[遥控·仅调控非原生单位] ")) +
-                        Loc.T("Shift+左/右键点单位 = 选中整队｜R = 全选｜左/右键点地块 = 集结前进｜Alt+拖动 = 框选｜选中时减速");
-
+            // v1.5.2：按键说明只留在 F1 菜单（那里是操作台），HUD 只报状态，不再重复按键介绍
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
             int lines = 1;
@@ -166,8 +163,8 @@ namespace BadNorthNewMode
 
             // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
             float hy = cy + countH;
-            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 左/右键点单位 = 选整队"));
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("R = 全选｜左/右键点地块 = 前进"));
+            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 左/右键点单位 = 选整队｜R = 全选"));
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("Shift + 左/右键点地块 = 前进"));
             GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场"));
         }
 

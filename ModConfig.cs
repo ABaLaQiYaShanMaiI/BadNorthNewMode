@@ -133,14 +133,14 @@ namespace BadNorthNewMode
         static void BindRemote(ConfigFile cfg)
         {
             RemoteControl = cfg.Bind("Remote", "RemoteControl", true,
-                "遥控非原生单位（v1.4.7）：\n" +
-                "**Shift + 左键/右键点**一个非原生单位 = 选中它所在的**整队**（再点同一队 = 取消）；按 **R** = 全选所有可选单位。\n" +
-                "然后**左键或右键点一个地块** = 选中的单位集结到那里：按兵种各成一个小队，多兵种/人多时就地分到**相邻格**（占完为止）。\n" +
-                "没有选中时，左右键完全交还原版（选我方 / 移动我方）。注意：遥控只接管行军，它们**仍是我方的敌人**。");
+                "遥控非原生单位（v1.5.2：选队与下令都需按住 Shift，不再与我方小队双控）：\n" +
+                "**Shift + 左键或右键点**一个非原生单位 = 选中它所在的**整队**（再点同一队 = 取消）；按 **R** = 全选所有可选单位。\n" +
+                "**Shift + 左键或右键点一个地块** = 选中的单位集结到那里：按兵种各成一个小队，多兵种/人多时就地分到**相邻格**（占完为止）。\n" +
+                "点单位 / 点地块都认左右键（适配双键设置）；不按 Shift 时，左右键完全交还原版（选我方 / 移动我方）——所以一次点击绝不会同时指挥我方与遥控单位。注意：遥控只接管行军，它们**仍是我方的敌人**。");
             RemoteMarqueePixels = cfg.Bind("Remote", "RemoteMarqueePixels", 8,
-                "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 移动命令 / 点在自己单位上时忽略）。");
+                "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 按住 Shift 时下达前进命令 / 点在自己单位上时忽略）。");
             RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 64,
-                "只有从\"非原生单位多少像素以内\"起拖才算框选（也是**左键点选**的命中半径）；从别处拖动仍然是原版的相机平移。\n" +
+                "只有从\"非原生单位多少像素以内\"起拖才算框选（也是 **Shift+左键点选** 的命中半径）；从别处拖动仍然是原版的相机平移。\n" +
                 "0 = 任意位置起拖都框选。点选总不中就把这个值调大（比如 96）。");
             RemoteFreeMarqueeKey = cfg.Bind("Remote", "RemoteFreeMarqueeKey", KeyCode.LeftAlt,
                 "按住这个键再用左键拖动 = 从**任意位置**起拖都算框选（等价于临时把相机交给框选）。\n" +
@@ -150,10 +150,10 @@ namespace BadNorthNewMode
             RemoteHighlight = cfg.Bind("Remote", "RemoteHighlight", true,
                 "绘制框选矩形、受控单位与目标点标记（纯 GUI / 运行时贴图，不需要任何资源）。");
             RemoteClickRadius = cfg.Bind("Remote", "RemoteClickRadius", 1.2f,
-                "**左键点选**的世界距离半径（米）：点击处的地面点与单位脚点相距 ≤ 本值即算点中。\n" +
+                "**Shift+左键点选**的世界距离半径（米）：点击处的地面点与单位脚点相距 ≤ 本值即算点中。\n" +
                 "用世界距离判定（与投放同一套 NavSpotCast），不依赖屏幕投影；点不中就调大（比如 2）。");
             RemoteSelectAllKey = cfg.Bind("Remote", "RemoteSelectAllKey", KeyCode.R,
-                "一键选中所有\"可选\"的非原生单位（之后左/右键点地块即可集结前进）。默认 R；KeyCode.None = 关闭。");
+                "一键选中所有\"可选\"的非原生单位（之后 **Shift+左/右键点地块** 即可集结前进）。默认 R；KeyCode.None = 关闭。");
             RemoteSlowMo = cfg.Bind("Remote", "RemoteSlowMo", true,
                 "框选中或已有选中时**放慢时间**（与原版\"选中我方小队\"同一套 TimeManager，按 requester 取最小值合并）。\n" +
                 "敌方单位一直在动，减速后更容易框住。默认开。");
