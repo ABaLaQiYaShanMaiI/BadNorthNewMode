@@ -62,7 +62,7 @@ namespace BadNorthNewMode
 
             string text = IsOpen
                 ? Loc.T("BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）")
-                : "BadNorthNewMode";
+                : ("BadNorthNewMode v" + Plugin.VERSION);
             if (IsOpen && !string.IsNullOrEmpty(Hover)) text += "\n" + Hover;
 
             if (RemoteGroup.Any)
@@ -110,6 +110,7 @@ namespace BadNorthNewMode
             bool isZh = !Loc.IsEnglish;
             DrawLangButton(new Rect(x + 72f, _rect.y + 4f, 54f, 22f), "中文", isZh, "zh");
             DrawLangButton(new Rect(x + 130f, _rect.y + 4f, 76f, 22f), "English", !isZh, "en");
+            GUI.Label(new Rect(x + 340f, _rect.y + 6f, 60f, 20f), "v" + Plugin.VERSION);   // 版本号：文件日志默认关闭后，这是反馈问题时唯一的可见来源
 
             GUI.Label(new Rect(x, _rect.y + 30f, w, 20f), Loc.T("兵种（左键点选；括号内为 cfg 内部名）"));
 
@@ -162,8 +163,8 @@ namespace BadNorthNewMode
 
             // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
             float hy = cy + countH;
-            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 点左右键：点单位 = 选整队，点地块 = 前进"));
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("按住 R + 点左右键 = 全选并直接前进"));
+            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 点左右键点单位 = 选整队"));
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("有选中时点左右键点地块 = 前进｜R = 全选"));
             GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场"));
         }
 

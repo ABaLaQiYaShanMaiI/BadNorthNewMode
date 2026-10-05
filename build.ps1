@@ -67,6 +67,15 @@ if (Test-Path $apiCheck) {
     Write-Host "[build] 未找到 tools\check-api.ps1，跳过运行时 API 校验" -ForegroundColor Yellow
 }
 
+# ---------- 3.5 本地化一致性校验（构建闸门：漏 key 会静默回退中文、占位符不一致会在 OnGUI 抛 FormatException）----------
+$locCheck = Join-Path $root 'tools\check-loc.ps1'
+if (Test-Path $locCheck) {
+    & $locCheck -Root $root
+    if ($LASTEXITCODE -ne 0) { throw "本地化校验失败（见上方 loc-check 输出）" }
+} else {
+    Write-Host "[build] 未找到 tools\check-loc.ps1，跳过本地化校验" -ForegroundColor Yellow
+}
+
 if ($SkipDeploy) {
     Write-Host "[build] SkipDeploy=true，仅编译+校验。产物: $builtDll"
     exit 0

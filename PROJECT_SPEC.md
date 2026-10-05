@@ -26,7 +26,7 @@
 | 游戏 | `D:\Steam\steamapps\common\BadNorth`（Unity 2018.4 + Mono + BepInEx 5.4.23.4） |
 | 运行时 BCL | `mscorlib 2.0.0.0` / `System.Core 3.5`（`CLR 2.0.50727`）——**不是** .NET 4.x |
 | 引用 | `BadNorth_Data\Managed\{Assembly-CSharp, UnityEngine.CoreModule, PhysicsModule, AnimationModule, UI, IMGUIModule}.dll`、`BepInEx\core\BepInEx.dll` |
-| 构建 | `.\build.ps1`（`-BadNorthDir/-Configuration/-SkipDeploy`）：编译 → API 闸门 → 备份 → 部署 → 哈希校验 |
+| 构建 | `.\build.ps1`（`-BadNorthDir/-Configuration/-SkipDeploy`）：编译 → API 闸门 → **本地化闸门** → 备份 → 部署 → 哈希校验 |
 | 反编译源码 | `C:\Users\ABaLaQiYaShanMaiI\Desktop\BadNorthDatabase-main\src\Assembly-CSharp`（下称**源码**） |
 | 同类范例 | `C:\Users\ABaLaQiYaShanMaiI\Desktop\BadNorthEnemy-main` |
 | 本地化取数 | UnityPy 载 `BadNorth_Data\data.unity3d` → 取"含 CJK 最多的 MonoBehaviour"（本作 `path_id=1150`，11047 串）→ 词条结构 `term + 12 语言`，简中恒为第 9 项 |
@@ -138,27 +138,28 @@ Raid.IIslandFirstEnter:
   - **点选（主路径，完全绕开相机）**：**按住 `Shift` + 左键或右键点一个非原生单位**（v1.5.3：左右键对称）= 选中它所在的**整队**（再点同一队 = 取消）；**`RemoteSelectAllKey`（默认 R）= 一键全选**所有"可选"单位（单位跑远看不清时最省事）。命中判定用**世界距离**（`RemoteClickRadius` 默认 1.2m，走与投放同一套 `NavSpotCast`，**不依赖屏幕投影**），屏幕半径（`RemoteGrabRadius` 默认 **64px**）仅作兜底。选中的单位用亮青十字标记，HUD 显示"非原生单位 N（可选 M, 已选中 K）"。候选来源 = **标记注册表 ∪ 我们在册 squad 的成员**（缺标记时自动补上，见 §4）。
   - **框选（次路径）**：**左键从非原生单位附近按住拖动**（移动 > `RemoteMarqueePixels`（默认 8px）才算框选；"附近" = `RemoteGrabRadius`（默认 **64px**）内）；或**按住 `RemoteFreeMarqueeKey`（默认左 Alt，左右 Alt 都认）从任意位置拖动**（按下左键**前后**按住都行，中途补按会就地转成框选、起点 = 补按处）。默认替换"已选中"，按住 `Shift` 则并入。**所有输入模式统一**（双键 / 单键 / 触摸）。
   - **成队（下令时发生）**：框里/已选中混了几种兵种就**按兵种各成一个小队**（同类并入已有队）；每队上限 `RemoteSoftCap`（默认 **40**，0 = 不限），超出的单位**不组队、保持原逻辑**；同队内按离框中心 / 点击处由近到远入选。
-  - **下令（v1.5.3：必须显式修饰键）**：**按住 `Shift` + 左键或右键点地块**（精确指挥）或**按住 `R` + 左键或右键点地块**（先全选、再批量下令）→ 先把"已选中"按兵种分队，再让**最近一次命中的小队**一起前往该 `NavSpot`（没有待成队时直接命令已有小队）；各队独立排布（`SquadFormation` 槽位，槽距 = `radius*2.01`）。**都不按修饰键时点击不下令**（双控根治，见 T20）。
+  - **下令（v1.5.4：普通点击即可，无需修饰键）**：有选中时**左键或右键点地块** → 先把"已选中"按兵种分队，再让**最近一次命中的小队**一起前往该 `NavSpot`（没有待成队时直接命令已有小队）；各队独立排布（`SquadFormation` 槽位，槽距 = `radius*2.01`）。普通点击会**挂起 2 帧**再执行：若原版把这次点击当成"选/移我方小队"（`VanillaSelected`）或正在框选，就**放弃**这次下令（双控根治见 T22）；按住 `Shift` / `R` 点地块则**立即**下令、跳过仲裁。
   - **落位（T8 已落实）**：到位（`orderDist < 0.12` 且离槽位 < 0.3m）即停稳；连续 1.5s 几乎无位移判定为被堵 → 之后 0.8s 放弃槽位、走距离场并加横向绕行解卡。
   - **不提供"释放回原 AI"（T9 不落实）**：小队一旦成立就持续受遥控，只在成员阵亡 / `F2` 清场 / 换岛 / 战局结束时清理（清理时会把接管前的 order 还原回去）。
   - **减速（缓解"框不住移动中的敌人"）**：**框选中 / 已有选中**时向原版 `TimeManager` 申请减速（`RemoteSlowMo` 默认开、`RemoteSlowMoScale` 默认 0.1，与"选中我方小队"同款；`UpdateTimeScale` 取最小值合并，所以与暂停/过场互不干扰）。菜单打开 / 离开战局 / 清场 / 卸载都会立即释放，不留残账。
-  - **交互（v1.5.3 定稿：所有遥控操作都要显式修饰键）**：
-    - **选择**：`Shift` + **左键或右键**点一个非原生单位 = 选中它所在的**整队**（同一次投送的 `Squad`，一般一船 4 个；再点同一队 = 取消）；`R` = **全选**所有"可选"单位（**按住 `R` 再点左/右键 = 全选 + 直接下令**）；`Alt`+拖动（或从单位上起拖）= 框选（可选手段）。
-    - **下令**：**按住 `Shift`（或按住 `R`）+ 左键或右键点一个地块** = 把"已选中"的单位集结过去——按兵种各成一个小队，**多兵种/人多时就地分到相邻格**（`NavSpot.neighbours[8]`，占满就都挤点击格）；**移动后自动取消选择**（与原版 `SquadMover.MoveTo` 一致，也立刻恢复时间流速）。
-    - **不干扰原版（v1.5.3 强化）**：即使已有"已选中 / 已有遥控小队"，也**必须按住 `Shift` 或 `R`** 我们才接管点击；不按修饰键时左右键 100% 交还原版（左=选我方、右=移动我方）→ 一次点击绝不会同时指挥我方与遥控单位（原设计靠 `VanillaSelected` 互斥，在帧序上有窗口期）。不再有 `Z/X` 等额外键（v1.4.6 的换队键已移除）。
+  - **交互（v1.5.4 定稿：选队要修饰键，下令不强制）**：
+    - **选择**：`Shift` + **左键或右键**点一个非原生单位 = 选中它所在的**整队**（同一次投送的 `Squad`，一般一船 4 个；再点同一队 = 取消）；`R` = **全选**所有"可选"单位；`Alt`+拖动（或从单位上起拖）= 框选（可选手段）。
+    - **下令**：**左键或右键点一个地块**（有选中即可，无需修饰键）= 把"已选中"的单位集结过去——按兵种各成一个小队，**多兵种/人多时就地分到相邻格**（`NavSpot.neighbours[8]`，占满就都挤点击格）；**移动后自动取消选择**（与原版 `SquadMover.MoveTo` 一致，也立刻恢复时间流速）。按住 `Shift`/`R` 点 = **立即下令**（给"确定要动"的场景，且不受仲裁影响）。
+    - **不干扰原版（v1.5.4：延迟仲裁）**：普通点击先**挂起 2 帧**，等原版表态——原版选中了我方小队（`VanillaSelected`）或正在框选（`Dragging`）就**放弃**这次遥控下令（verbose 模式会留一行证据）→ "一次点击同时指挥我方与遥控单位"从构造上不会发生，也不需要为每次移动按住 Shift。取消选择 / 拖动超过 `RemoteMarqueePixels`(8px) / 落在 F1 菜单区域内的按下，都不算"点击下令"。不再有 `Z/X` 等额外键（v1.4.6 的换队键已移除）。
+    - **点无效目标 = 取消选中（v1.5.4，照抄原版）**：点海面 / 非可站立地块时，原版 `Navigator.SelectPC` 走 `DeselectUnit()`（并有 `UI/InGame/UnitDeselect` 音）；我们同样**清掉"已选中"**（`ClearPending`，时间流速一并恢复）并播同一音效；若当时没有"已选中"则算无效点击，播原版 `UI/InGame/Error` 音（见 T23）。
     - **与我方选择互斥（v1.4.8）**：选中遥控单位（Shift 点 / R / 框选）时顺手调用原版 `SquadSelector.SelectSquad(null, false)` **取消我方小队的选择**；反过来，你若选了我方小队（或点到空地触发原版取消），我们的"已选中"会自动清空、左右键完全归原版 → **任何时刻只有一方"被选中"，点击永远不双控**（覆盖双键与单键两种光标模式）。
     - **减速**：`RemoteSlowMo`（默认开、0.1×，与原版"选中我方小队"同款）在**框选中 / 已有选中**时生效；原版 `ManualSlomo`（按住）与本自动减速由 `TimeManager` 取最小值合并。
 
   - **表现（对齐原版手感）**：受控/选中单位画**亮青十字**（选中的更大更亮）、目标格画**空心方框**、**鼠标落点光标**（指针处地面点吸附最近 `NavSpot` 再画框——原版选中我队时也是这个提示）；框选矩形自绘（复用 `PlacementMarker` 的运行时贴图技术）；**不复用**原版选中环 / 小队 banner / 相机聚焦。
-  - **UI 内置简要说明**（免得玩家不知道）：**按键说明只出现在 F1 菜单**（v1.5.3 起）——菜单底部 3 行「Shift + 点左右键：点单位 = 选整队，点地块 = 前进」「按住 R + 点左右键 = 全选并直接前进」「Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场」；**HUD 只报状态**（"非原生单位 N（可选 M[, 已选中 K]）"、"遥控小队：…"、框选中提示、一次性 toast），不再重复按键串。
+  - **UI 内置简要说明**（免得玩家不知道）：**按键说明只出现在 F1 菜单**（v1.5.3 起）——菜单底部 3 行「Shift + 点左右键点单位 = 选整队」「有选中时点左右键点地块 = 前进｜R = 全选」「Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场」；**HUD 只报状态**（"非原生单位 N（可选 M[, 已选中 K]）"、"遥控小队：…"、框选中提示、一次性 toast），不再重复按键串。
   - **相机**：只在"左键从非原生单位附近按下"的那一次拖动里临时接管相机（**按下即接管、松开即交还**，避免"先平移一点再被接管"的偏移）；其余任何拖动都完全交给原版相机。
-  - **与原版输入的边界（T12）**：新增的只有两件事 —— ① 左键**从非原生单位附近**按下并拖动（或按住 `RemoteFreeMarqueeKey` 拖动）= 框选；② **按住 `Shift` / `R`** 且有待成队框选 / 已有小队时，左键或右键点地块 = 成队并前进 / 前进。其余与原版一致：
+  - **与原版输入的边界（T12）**：新增的只有两件事 —— ① 左键**从非原生单位附近**按下并拖动（或按住 `RemoteFreeMarqueeKey` 拖动）= 框选；② 有"已选中 / 已有小队"时，左键或右键点地块 = 成队并前进 / 前进（**普通点击经 2 帧仲裁**，`Shift`/`R` 为立即）。其余与原版一致：
 
     | 操作 | 本 mod 下的行为 |
     |---|---|
     | `Shift`+左/右键单击**非原生单位** | 本 mod：选中它所在的**整队**（再点同一队 = 取消）；原版那边视作"点了空地"（它们不在我方可选列表 `english.livingSquads` 里），不会误选英雄小队 |
     | 左键单击我方小队 / 空地 | 原版：选中 / 取消（单键模式下还会移动已选的小队） |
-    | 按住 `Shift`/`R` + 单(右)击地块 | 原版照旧；本 mod 额外：有"已选中"或已有小队时 → 成队并前进（**不按修饰键则纯原版**） |
+    | 单(右)击地块 | 原版照旧；本 mod 额外：有"已选中"或已有小队时 → 成队并前进（**挂起 2 帧**、原版接管则放弃；`Shift`/`R` 立即） |
     | 左键拖动（起点不在非原生单位附近） | 原版：平移相机 |
     | 左键拖动（起点在非原生单位附近） | 框选；这一次拖动不平移相机（按下接管、松开交还） |
     | 按住 `RemoteFreeMarqueeKey`（默认左 Alt，左右 Alt 都认）+ 左键拖动 | 从任意位置起拖都算框选；这一次拖动不平移相机（按下左键前后按住都行；按住该键时这一次按下**不会**被当成下令） |
@@ -190,6 +191,8 @@ Raid.IIslandFirstEnter:
 - **T18（v1.5.1）**：**中英切换只覆盖界面 + 日志**（HUD/F1 菜单/提示 + `Util.Log/Warn/Error` 与 `Log.LogInfo`），实现 = `Loc` 文案对照表（key **就是简中原文**，缺表回退中文，绝不抛异常）；`[General] Language = auto / zh / en`，`auto` 只读 `I2.Loc.LocalizationManager.mCurrentLanguage` 私有字段（**不调用** LocalizationManager → 不会把游戏语言提前写进 PlayerPrefs），读不到再按系统语言；**cfg 说明文案保持简中**、不随语言切换（只有 `[General] Language` 一项自带中英双语说明），`UnitNames` 增英文显示名；`README.md` 改双语（内容与 v1.5.0 完全一致，仍 ≤250 汉字）。
 - **T19（v1.5.1，作者实测反馈后瘦身）**：**F1 菜单只留关键信息**——删掉"数量：…（本兵种默认 X，上限 Y）　船：Z"整行、每一行的"默认 N 个"、以及 5 行遥控操作说明，改为「语言行 + 标题/当前 + 兵种列表 + 数量按钮 + 3 行按键」；**数量按钮去掉"默认"**，预设为 `1/2/3/4/6/8/10/12`，**点多少装多少**（仍受"最大长船容量"这一物理上限裁剪，船型按人数自动匹配）；`SquadSize = 0`（按兵种梯度表）只保留在 cfg 层、UI 不再暴露，**投放算法与 cfg 默认行为不变**；顺带删掉因此失去调用者的 `IngameMenu.SelectedUnit` 与 `UnitCatalog.MaxSquadSize`。**菜单宽度 560 → 420（-25%，少挡横向地图）**，内容改纵向展开：按键拆成 3 行，并在顶部加 **中文 / English 语言按钮**（按钮各自用本语言书写、不依赖当前语言；点击 `Loc.SetLanguage` 写回 cfg，下一帧即生效，玩家不必去手改 cfg）。
 - **T20（v1.5.3，作者实测反馈）**：① **按键说明只留一处**——HUD 只报状态（删掉整行遥控按键串、`[关菜单后/遥控·仅调控非原生单位]` 两处前缀、以及"遥控小队：…"里的"左键点地块 = 全队前进"），按键说明只保留在 F1 菜单；② **遥控下令改为必须按住 Shift**（`Shift + 左键/右键点地块` = 前进；不按 Shift 的点击 100% 归原版），根治"一次左键同时把我方与遥控单位指挥到同一格"：原设计靠 `VanillaSelected` 互斥，但本 Mod 与游戏的 `Update` 帧序不确定（游戏那侧可能在本帧之后才写 `selectedSquad`）→ 存在窗口期；③ 新增 `MarqueeSelect.ClickUsedForSelect`（每帧重算）：`Shift + 点单位` 已判给"选整队"的那一次按下，不再被同帧的前进逻辑消费（顺带修掉 v1.4.7 遗留的"已有选择时 Shift 点单位会误当前进并清空选择"）；④ **选队与前进都认左右键**（适配双键设置）：`Shift + 左键/右键点单位` = 选整队（左键走"松开且未拖动"路径、右键在按下帧直接判定），`Shift + 左键/右键点地块` = 前进；README 英文改用 "Hold `Shift` and …" 表达"按住"，中文同步为"按住 `Shift` + …"；⑤ **`R` 兼作下令修饰键**（作者实测反馈"按住 R 再点左右键失效"）：`Shift` = 精确指挥、**按住 R = 全选 + 批量下令**，两者都不按时点击仍 100% 归原版（双控防线不破）；`SelectAll` 顺带补上 `_pendingCenter = 鼠标位置`（此前用陈旧中心给分桶排序）；⑥ **Alt 审计（作者提问）**：`Alt` 只与"框选起手"绑定、不参与下令 —— 修两处：(a) 按下瞬间若按着 `RemoteFreeMarqueeKey`，这一次按下不再被当成前进命令（此前 `Alt+Shift` / `Alt+R` 拖动会一边框选一边下令）；(b) 允许**先按左键、再补按 Alt** 就地转成框选（起点 = 补按处），不再"Alt 按晚一点就框不上"。原版代码层无 Alt 动作绑定（仅 `KeyCodeDisplayNames` 提到）；Rewired 的按键映射存在玩家 PlayerPrefs 里，静态无法判定，若原版把 Alt 当修饰键则二者会叠加，可用 `RemoteFreeMarqueeKey` 换键规避。
+- **T23（v1.5.4，作者观察"原版点海面会打破选中"）**：**照抄原版"点无效目标 = 取消选中"**——原版 `Navigator.SelectPC` 里，右键（及 OneButton 下有选中时的任意键）点在**没有有效 NavSpot** 的地方（海面 / 被建筑挡住的格）走 `DeselectUnit()` = `squadSelector.SelectSquad(null,false)` + `FabricWrapper.PostEvent("UI/InGame/UnitDeselect")`；完全没有选中时走 `FailedClick()` = `UI/InGame/Error` 音。我们的对应物 = `MarqueeSelect.ClearPending()`（清"已选中" + 恢复时间流速）+ 同一套音效；`[NewMode]` 只多一条 toast（原因 + "已取消选择"）。**注**：原版左键点**有效**地块也是"取消选中"（TwoButton 下左键不移动），这一条我们**不抄**——我们的普通点击在有效地块上是"前进"（v1.5.4 的设计意图）。
+- **T22（v1.5.4，作者反馈"长按 Shift 操作依旧存在问题"）**：**选队仍要 `Shift`，但下令不再强制修饰键**——有选中时普通点击地块即可前进（恢复 v1.5.1 手感），代价是**挂起 2 帧**再执行：`FlushPendingMove` 先看原版有没有把这次点击当成"选/移我方小队"（`VanillaSelected`）或正在框选（`Dragging`），有则**放弃**（verbose 留一行证据）。这样既避开 v1.4.x 协作式互斥的帧序窗口，也不用为每次移动按住 Shift；`Shift`/`R` 点地块保留为**立即下令**通道。另加 `[Remote] RemoteMoveRequiresModifier`（默认 false）可一键回到 v1.5.3 的保守模式。拖动判定：按下→松手位移 > `RemoteMarqueePixels`(8px) 视为平移/框选，不算点击；`MarqueeSelect` 新增 `PressWasDrag`、`ClickUsedForSelect` 改为"按下置位、保持到松开"。**源码审查补丁**：读 `Navigator.SelectPC` 发现 **OneButton** 模式下原版点地块是「移动我方小队 + 自动取消选择」→ 事后 2 帧再查 `VanillaSelected` 已查不出来（会双控）；改为**按下那一帧**记 `_pressVanillaSelected` 并随挂起带到执行时（`_pendingVanillaBusy`），松开分支与 Flush 都认它。
 - **T21（v1.5.3，作者实测反馈"运行后仍在 mod 目录生成日志"）**：根因 = BepInEx `DiskLogListener.Dispose()` 的 IL 对 writer 是 `call`（**非虚**）→ `StreamWriter` 未被 Dispose → 文件被占 → `File.Delete` 抛 IOException，被旧代码的 `catch { }` **静默吞掉**，于是每次启动都留下 `BepInEx\LogOutput.log`（实测残留 751 B，末尾正好是 "Loading [Bad North - New Mode]"）。修法：① 摘监听器后**亲自 `LogWriter.Dispose()`**，并从 `TextWriter.BaseStream as FileStream` 的 `.Name` 取**真实路径**（比拼 `Paths.BepInExRootPath` 更准，另备 `GameRootPath\BepInEx` 兜底）；② 残留**无条件删除**、失败**每 0.25s 重试 ≤30s**（`Plugin.Update` 驱动），首次失败与超时都打**控制台警告**（含路径 + 原因 + "把 BepInEx.cfg 的 `[Logging.Disk] Enabled` 设为 false"的建议）；③ `Dispose` 与 `Remove` 各自兜异常，避免"一处抛异常连累清残留"。**分发版默认零日志文件**（`[Diag] LogToFile=true` 仍可恢复 BepInEx 原行为）。
 
 ## 7. 命名与提交约定
@@ -202,6 +205,7 @@ Raid.IIslandFirstEnter:
 - **代码结构**（v1.3.1 按职责拆分）：`Plugin`(入口/输入/取点) · `IngameMenu`(HUD + 兵种菜单) · `DropPlanner`(滩头解析/落差/占用/廊道，长方法拆成 `CheckClickHeight`/`CollectCandidates`/`PreferClearCorridor`) · `UnitCatalog`(兵种·船·人数) · `LandingInjector`(建树/投放/装配) · `FlotillaLauncher` · `SpawnLedger` · `DisembarkWatchdog` · `ShipboardThreat` · `PlacementMarker` · `ModConfig` · `UnitNames` · `Util`(向量格式化 / cfg 守卫 / 日志守卫)。
 - **遥控相关文件**（v1.4.0）：`ForeignUnit`(非原生标记 + 注册表) · `RemoteGroup`(控制组容器：成组/并入/释放/槽位) · `GroupOrder`(自研 `IAgentOrder`：距离场 + 槽位) · `MarqueeSelect`(右键框选 + 相机拖拽让位)。
 - **日志文件开关**（v1.5.0）：`LogFileSwitch`(摘掉 BepInEx 磁盘日志监听 + 清启动残留；`[Diag] LogToFile` 默认 false)。
+- **构建闸门**（v1.5.4）：`tools/check-api.ps1`（**全部被引用程序集**的成员引用都要在游戏侧存在——BCL + UnityEngine* + BepInEx* + Assembly-CSharp；430 项）+ `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key；带"正则失效"假阳性自检）。
 - **中英切换**（v1.5.1）：`Loc`(界面/日志文案对照表 + `[General] Language`) · `UnitNames`(增英文显示名) · `README.md`(双语)。
 
 ## 8. 版本对照（仓库提交 ↔ DLL）
@@ -233,3 +237,4 @@ Raid.IIslandFirstEnter:
 | **v1.5.0** | **1.5.0** | **新增 `README.md`**（操作说明 + 项目链接 + 开源许可，≤250 汉字）；**文件日志默认关闭**（`[Diag] LogToFile = false` → `LogFileSwitch` 摘掉 BepInEx 的磁盘日志监听器并清掉启动残留，控制台不受影响，玩家装完不再生成 `LogOutput.log`）；版本号与仓库提交对齐（1.4.8 的内部跳号并入本版） |
 | **v1.5.1** | **1.5.1** | **中英切换（界面 + 日志）**：新增 `Loc`（key = 简中原文，缺表回退；`[General] Language = auto / zh / en`，auto 只读游戏语言私有字段、不触发 I2 初始化），`UnitNames` 增英文显示名，`README.md` 改双语（内容同 v1.5.0），**cfg 说明保持简中**；**F1 菜单瘦身**：删掉默认数量/上限/船型整行 + 每行"默认 N 个" + 5 行遥控说明，只留「兵种 · 当前 · 数量按钮 · 2 行按键」，数量预设去掉"默认"改为 1/2/3/4/6/8/10/12（点多少装多少，仅受最大船容量裁剪），并删掉失去调用者的 `IngameMenu.SelectedUnit` / `UnitCatalog.MaxSquadSize`；菜单宽度 560 → 420（-25%）、按键拆 3 行，顶部加 **中文 / English 语言按钮**（写回 cfg 立即生效，与 `[General] Language` 同一份设置） |
 | **v1.5.3** | **1.5.3** | **遥控交互 v2（显式修饰键）**：**按住 `Shift` = 精确指挥**（点单位=选整队、点地块=前进）、**按住 `R` = 全选 + 批量下令**，**两者都不按则点击 100% 归原版** → 根治"一次点击同时指挥我方与遥控单位"的双控（原靠 `VanillaSelected` 互斥，帧序上有窗口期）；选队/下令**左右键对称**（适配双键设置）；新增 `MarqueeSelect.ClickUsedForSelect`（每帧重算）阻止"选队那一下"被同帧当前进消费，修掉 v1.4.7 遗留的"已有选择时点单位会误当前进并清空选择"；**Alt 审计**：按住 `RemoteFreeMarqueeKey` 的那一次按下不再被当成下令、允许先按左键再补按 Alt 就地转框选（cfg 补注"左右 Alt 都认 / 前后按住都行"）；**按键说明只留 F1 菜单**（3 行），HUD 只报状态；`SelectAll` 补 `_pendingCenter`；同步 cfg 说明、README 与 §5 过时描述（`RemoteGrabRadius` 48→64px 等）；**版本号快进**（v1.5.2 的内部跳号并入本版） |
+| **v1.5.4** | **1.5.4** | **下令不再强制修饰键**：有选中时**普通点击地块 = 前进**（选队仍要 `Shift`），执行前**挂起 2 帧**由原版状态仲裁（原版接管则放弃）→ 保留双控根治、去掉"每次移动都要按住 Shift"的手感问题；`Shift`/`R` 点地块 = 立即下令；新增 `[Remote] RemoteMoveRequiresModifier`（默认 false，可回到 v1.5.3 保守模式）；`MarqueeSelect` 新增 `PressWasDrag`、`ClickUsedForSelect` 改为按下置位到松开；F1 菜单按键行与 README 同步；**工程加固**：新增 `tools/check-loc.ps1`（i18n 一致性闸门，已并入 `build.ps1`）、`check-api.ps1` 检查面扩到全部被引用程序集（153→430 项）、HUD/菜单显示版本号；另按原版源码审查补上 OneButton 模式下的双控漏洞（按下瞬间留证"原版是否在管我方小队"）与**"点海面/非可站立地块 = 取消选中"**（照抄原版 `DeselectUnit` + 同名音效，T23） |

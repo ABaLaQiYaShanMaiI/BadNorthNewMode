@@ -14,13 +14,19 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.3";
+        public const string VERSION = "1.5.4";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
 
         bool _subscribed;
         bool _subscribeFailed;
+        Vector2 _pressPos;                 // 本次按下的屏幕位置（区分"点击"与"拖动/平移相机"）
+        Vector2 _pendingMovePos;           // 挂起的"普通点击下令"（见 HandleRemoteMode / FlushPendingMove）
+        int _pendingMoveFrame;             // 0 = 无挂起
+        bool _pressOrdered;                // 本次按下是否已下过令（避免"按下立即下令 + 松开又挂起"）
+        bool _pressVanillaSelected;        // **按下那一帧**原版是否正选着我方小队（OneButton 模式下原版会"移动并取消选择"，松开时已查不出来）
+        bool _pendingVanillaBusy;          // 挂起的这次点击当时原版正管着我方小队 → 整次点击归原版
 
         void Awake()
         {
@@ -59,7 +65,7 @@ namespace BadNorthNewMode
             MarqueeSelect.Tick(gm);                        // 菜单开着时内部自动取消
             RemoteGroup.Tick();                            // 组维护与投放/遥控模式无关
 
-            if (IngameMenu.IsOpen) { HandleDropMode(gm); return; }
+            if (IngameMenu.IsOpen) { _pendingMoveFrame = 0; HandleDropMode(gm); return; }   // 开菜单：丢弃挂起的下令
             HandleRemoteMode(gm);                          // v1.4.0：菜单关闭时 = 遥控模式
         }
 
@@ -107,58 +113,122 @@ namespace BadNorthNewMode
                 DoDrop(gm, screenPos, Loc.T("轮询兜底"));
         }
 
-        /// <summary>遥控模式（菜单关闭时）：Shift + 点单位选整队、Shift + 点地块下令前进；不改阵营（见 PROJECT_SPEC §5）。</summary>
+        /// <summary>遥控模式（菜单关闭时）：Shift + 点单位选整队；有选中时**普通点地块 = 前进**；不改阵营（见 PROJECT_SPEC §5）。</summary>
         void HandleRemoteMode(IslandGameplayManager gm)
         {
             PlacementMarker.Get().Hide();
 
-            if (MarqueeSelect.Dragging) return;                                      // 正在框选：不下令
-            if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;                // 既没有小队、也没有待成队 → 左右键完全归原版
-            if (MarqueeSelect.VanillaSelected) return;                                // 你正选着我方小队 → 这次点击归原版（绝不双控）
+            // 按下瞬间记下"原版此刻是否正选着我方小队"：OneButton 模式下原版点地块会「移动我方小队 + 取消选择」，
+            // 松开/事后都已查不出来 → 必须在按下那一帧留证（见 §5/T22）。
+            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) _pressVanillaSelected = MarqueeSelect.VanillaSelected;
 
-            // v1.5.3：下令需按住 Shift（精确指挥）或 R（全选+批量下令）；不按则点击 100% 归原版（见 §5/T20）
-            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
+            FlushPendingMove(gm);                                             // ① 先结算上一次"普通点击下令"
+
+            if (MarqueeSelect.Dragging) return;                               // 正在框选：不下令
+            if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;         // 既没有小队、也没有待成队 → 左右键完全归原版
+            if (MarqueeSelect.VanillaSelected) return;                        // 你正选着我方小队 → 这次点击归原版（绝不双控）
+
+            bool down = Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1);
+            bool up = Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(1);
+
+            if (down)
             {
-                if (!MarqueeSelect.CommandModifierHeld()) return;
-                if (MarqueeSelect.ClickUsedForSelect) return;
-                string why;
-                if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
+                _pressOrdered = false;
+                _pressPos = Input.mousePosition;
+                if (MarqueeSelect.ClickUsedForSelect) return;                 // 这一下是"选整队 / 框选起手"
+                if (!MarqueeSelect.CommandModifierHeld()) return;             // 普通点击：留到松开后再挂起（见下方 up）
 
-                Vector2 screenPos = Input.mousePosition;
-                if (IngameMenu.Contains(screenPos)) return;      // 菜单区域内的点击不做下令
-
-                Vector3 land;
-                string diag;
-                if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
-                {
-                    IngameMenu.Say(Loc.F("那里不是可站立的地面：{0}", diag));
-                    return;
-                }
-
-                NavSpot spot = NavSpot.GetNavSpot(land, true);
-                if (spot == null) { IngameMenu.Say(Loc.T("那里不是可站立的陆地地块")); return; }
-
-                // 有待成队 → 先按兵种分队（多兵种就地分到相邻格），再一起前进；没有待成队 → 直接命令已有小队
-                Vector2 center;
-                List<ForeignUnit> pending = MarqueeSelect.TakePending(out center);
-
-                string msg;
-                if (pending != null && pending.Count > 0)
-                {
-                    string capMsg;
-                    RemoteGroup.Capture(pending, center, out capMsg);
-                    RemoteGroup.MoveTo(spot, out msg);
-                    msg = capMsg + " → " + msg;
-                }
-                else
-                {
-                    RemoteGroup.MoveTo(spot, out msg);
-                }
-
-                IngameMenu.Say(msg);
-                Util.Log(Loc.T("[NewMode][遥控] ") + msg);
-                MarqueeSelect.ClearPending();                    // 移动后取消选择（与原版 SquadMover 一致，也恢复时间流速）
+                ExecuteMove(gm, _pressPos);                                   // Shift / 按住 R：立即下令
+                _pressOrdered = true;
+                return;
             }
+
+            // v1.5.4：普通点击（无需修饰键）也能下令——松手时挂起，满 2 帧确认原版没接管这次点击才执行（见 §5/T22）
+            if (!up || _pressOrdered) return;
+            if (MarqueeSelect.ClickUsedForSelect || MarqueeSelect.PressWasDrag) return;
+            if (MarqueeSelect.CommandModifierHeld()) return;                  // 修饰键在按下帧已立即下令
+            if (Util.V(ModConfig.RemoteMoveRequiresModifier, false)) return;  // cfg：要求修饰键 → 普通点击 100% 归原版
+            if (((Vector2)Input.mousePosition - _pressPos).magnitude > Util.V(ModConfig.RemoteMarqueePixels, 8)) return;   // 拖过 → 是平移/框选，不是点击
+            if (_pressVanillaSelected) return;                                // 按下时你正管着我方小队 → 这次点击归原版
+
+            _pendingMovePos = Input.mousePosition;
+            _pendingMoveFrame = Time.frameCount;
+            _pendingVanillaBusy = _pressVanillaSelected;
+        }
+
+        /// <summary>结算挂起的"普通点击下令"：满 2 帧、且原版没把它当成"选/移我方小队"也没在框选 → 执行。</summary>
+        void FlushPendingMove(IslandGameplayManager gm)
+        {
+            if (_pendingMoveFrame <= 0) return;
+            if (Time.frameCount <= _pendingMoveFrame + 1) return;             // 等 2 帧：给原版的点击处理表态的时间
+
+            Vector2 pos = _pendingMovePos;
+            _pendingMoveFrame = 0;
+
+            if (MarqueeSelect.VanillaSelected || MarqueeSelect.Dragging || _pendingVanillaBusy)
+            {
+                if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode][遥控] 原版接管了这次点击 → 放弃遥控下令"));
+                return;
+            }
+
+            string why;
+            if (!InBattle(gm, out why)) return;                              // 开菜单 / 暂停 / 离岛：静默丢弃
+            ExecuteMove(gm, pos);
+        }
+
+        /// <summary>把"已选中"的单位派到该屏幕坐标对应的地块（立即路径与延迟路径共用）。</summary>
+        void ExecuteMove(IslandGameplayManager gm, Vector2 screenPos)
+        {
+            string why;
+            if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
+            if (IngameMenu.Contains(screenPos)) return;                      // 菜单区域内的点击不做下令
+
+            Vector3 land;
+            string diag;
+            if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
+            {
+                FailedTarget(Loc.F("那里不是可站立的地面：{0}", diag));
+                return;
+            }
+
+            NavSpot spot = NavSpot.GetNavSpot(land, true);
+            if (spot == null) { FailedTarget(Loc.T("那里不是可站立的陆地地块")); return; }
+
+            // 有待成队 → 先按兵种分队（多兵种就地分到相邻格），再一起前进；没有待成队 → 直接命令已有小队
+            Vector2 center;
+            List<ForeignUnit> pending = MarqueeSelect.TakePending(out center);
+
+            string msg;
+            if (pending != null && pending.Count > 0)
+            {
+                string capMsg;
+                RemoteGroup.Capture(pending, center, out capMsg);
+                RemoteGroup.MoveTo(spot, out msg);
+                msg = capMsg + " → " + msg;
+            }
+            else
+            {
+                RemoteGroup.MoveTo(spot, out msg);
+            }
+
+            IngameMenu.Say(msg);
+            Util.Log(Loc.T("[NewMode][遥控] ") + msg);
+            MarqueeSelect.ClearPending();                                    // 移动后取消选择（与原版 SquadMover 一致，也恢复时间流速）
+        }
+
+        /// <summary>照抄原版 `Navigator.SelectPC`：点在海面/非可站立地块 = 有选中则**取消选中**（原版 `DeselectUnit` + `UnitDeselect` 音），没选中则算无效点击（`Error` 音，见 §5/T23）。</summary>
+        void FailedTarget(string reason)
+        {
+            if (MarqueeSelect.HasPending)
+            {
+                MarqueeSelect.ClearPending();                                // 对应原版 squadSelector.SelectSquad(null,false)：取消选中 + 恢复时间流速
+                FabricWrapper.PostEvent("UI/InGame/UnitDeselect");
+                IngameMenu.Say(reason + Loc.T("（已取消选择）"));
+                return;
+            }
+
+            FabricWrapper.PostEvent("UI/InGame/Error");
+            IngameMenu.Say(reason);
         }
 
         /// <summary>反射订阅 pointerRationalizer.onClick（System.Core 3.5 的 Action`2，见 §4 坑表）。</summary>

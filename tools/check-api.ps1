@@ -1,6 +1,8 @@
 ﻿# 运行时 API 链接校验（构建闸门）：模组 DLL 里对 mscorlib / System / System.Core 的每个成员引用，
 # 必须真的存在于【游戏自带】的同名程序集里——游戏 Mono 是 mscorlib 2.0.0.0，缺 .NET 4.x 的 API
 # （典型：params 空数组被 Roslyn 优化成 Array.Empty<T>() → 运行期 MissingMethodException 且游戏内毫无反馈）。
+# v1.5.4 起检查面扩大到**全部被引用程序集**（含 UnityEngine* / BepInEx* / Assembly-CSharp）：游戏更新删成员时
+# 同样会 MissingMethodException，这一层也能提前拦下；只跳过不参与运行时加载的元数据特性（见 $KnownHarmless）。
 param([Parameter(Mandatory=$true)][string]$Dll, [Parameter(Mandatory=$true)][string]$GameDir)
 $ErrorActionPreference = 'Stop'
 Add-Type -Path (Join-Path $GameDir 'BepInEx\core\Mono.Cecil.dll')
@@ -26,7 +28,6 @@ foreach ($mr in $a.MainModule.GetMemberReferences()) {
     $scope = $dt.Scope
     $asmName = $null
     if ($scope -is [Mono.Cecil.AssemblyNameReference]) { $asmName = $scope.Name }
-    if ($asmName -ne 'mscorlib' -and $asmName -ne 'System' -and $asmName -ne 'System.Core') { continue }
     if ($KnownHarmless -contains $dt.FullName) { continue }
     $checked++
 
@@ -45,7 +46,7 @@ foreach ($mr in $a.MainModule.GetMemberReferences()) {
 }
 $a.Dispose()
 
-Write-Host "[api-check] 已检查 BCL 成员引用 $checked 个"
+Write-Host "[api-check] 已检查程序集成员引用 $checked 个（BCL + UnityEngine + BepInEx + Assembly-CSharp）"
 if ($missing.Count -gt 0) {
     Write-Host "[api-check] 以下成员在游戏运行时不存-> 会抛 MissingMethodException：" -ForegroundColor Red
     $missing | Sort-Object -Unique | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }

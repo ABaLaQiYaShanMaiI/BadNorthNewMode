@@ -19,12 +19,14 @@ namespace BadNorthNewMode
         static List<ForeignUnit> _pending;      // 已选中/框选、等待"点地块"成队的目标
         static Vector2 _pendingCenter;
         static ForeignUnit _pressUnit;          // 按下时指针下的非原生单位（单击选择用）
-        static bool _clickUsedForSelect;        // 本帧这一次按下已判给"选整队"→ 不能再被当成前进命令（v1.5.3）
+        static bool _clickUsedForSelect;        // 这一次按下已判给"选整队 / 框选起手"→ 不能再被当成前进命令（按下时置位，保持到松开）
+        static bool _pressWasDrag;              // 这一次按下最终变成了拖动（框选/平移相机）→ 普通点击的延迟下令据此排除
         static bool _slowMo;                    // 是否已向 TimeManager 申请减速
         static readonly object SlowMoOwner = new object();   // TimeManager 按 requester 记账（取最小值合并）
 
         internal static bool Dragging { get { return _dragging; } }
         internal static bool ClickUsedForSelect { get { return _clickUsedForSelect; } }
+        internal static bool PressWasDrag { get { return _pressWasDrag; } }
         internal static List<ForeignUnit> Pending { get { return _pending; } }
         internal static bool HasPending { get { return _pending != null && _pending.Count > 0; } }
 
@@ -55,7 +57,8 @@ namespace BadNorthNewMode
 
         internal static void Tick(IslandGameplayManager gm)
         {
-            _clickUsedForSelect = false;                  // 每帧重算：只标记"本帧这一次按下的用途"
+            // 每次按下先清零、再由下面的分支置位——两个标记要**从按下保持到松开**（普通点击的延迟下令据此判断"这次点击属于选队/框选"）
+            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) { _clickUsedForSelect = false; _pressWasDrag = false; }
             if (!Util.V(ModConfig.RemoteControl, true)) { Cancel(gm); return; }
             if (IngameMenu.IsOpen) { Cancel(gm); return; }
 
@@ -118,6 +121,7 @@ namespace BadNorthNewMode
             {
                 bool wasDrag = _dragging;
                 ForeignUnit pressUnit = _pressUnit;
+                _pressWasDrag = wasDrag;
                 _held = false;
                 _dragging = false;
                 _grab = false;
@@ -491,7 +495,7 @@ namespace BadNorthNewMode
             return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         }
 
-        /// <summary>下令修饰键（v1.5.3）：Shift（精确指挥）或按住"全选键"R（全选 + 批量下令）；两者都不按则点击 100% 归原版。</summary>
+        /// <summary>立即下令的修饰键：Shift（精确指挥）或按住"全选键"R（全选 + 批量下令）；不按也能下令，只是走"延迟仲裁"路径（见 §5/T22）。</summary>
         internal static bool CommandModifierHeld()
         {
             if (ShiftHeld()) return true;

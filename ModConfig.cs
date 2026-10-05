@@ -16,6 +16,7 @@ namespace BadNorthNewMode
 
         // ============ Remote（v1.4.0 遥控非原生单位）============
         public static ConfigEntry<bool> RemoteControl;
+        public static ConfigEntry<bool> RemoteMoveRequiresModifier;
         public static ConfigEntry<int> RemoteMarqueePixels;
         public static ConfigEntry<int> RemoteGrabRadius;
         public static ConfigEntry<float> RemoteClickRadius;
@@ -133,11 +134,16 @@ namespace BadNorthNewMode
         static void BindRemote(ConfigFile cfg)
         {
             RemoteControl = cfg.Bind("Remote", "RemoteControl", true,
-                "遥控非原生单位（v1.5.3：选队与下令都需按住 Shift，不再与我方小队双控）：\n" +
+                "遥控非原生单位（v1.5.4：按 Shift 选队，**选中后普通点击即可下令**）：\n" +
                 "**Shift + 左键或右键点**一个非原生单位 = 选中它所在的**整队**（再点同一队 = 取消）；按 **R** = 全选所有可选单位。\n" +
-                "**Shift + 左键或右键点一个地块** = 选中的单位集结到那里：按兵种各成一个小队，多兵种/人多时就地分到**相邻格**（占完为止）。\n" +
-                "**按住 R（全选键）再点左/右键** = 全选并直接前进（一次手势把所有人派出去，不必先选后点）；\n" +
-                "点单位 / 点地块都认左右键（适配双键设置）；Shift 与 R 都不按时，左右键完全交还原版（选我方 / 移动我方）——所以一次点击绝不会同时指挥我方与遥控单位。注意：遥控只接管行军，它们**仍是我方的敌人**。");
+                "有选中时，**左键或右键点地块** = 选中的单位集结到那里：按兵种各成一个小队，多兵种/人多时就地分到**相邻格**（占完为止）。\n" +
+                "想跳过等待可直接按住 **Shift / R** 点地块立即下令；**按住 R 再点** = 全选 + 直接前进。\n" +
+                "普通点击会**等 2 帧**确认原版没把这次点击当成\"选/移我方小队\"（也没在框选）才执行 → 一次点击绝不会同时指挥我方与遥控单位。\n" +
+                "注意：遥控只接管行军，它们**仍是我方的敌人**。");
+            RemoteMoveRequiresModifier = cfg.Bind("Remote", "RemoteMoveRequiresModifier", false,
+                "下令是否必须按住 Shift / R：\n" +
+                "false（默认）= 有选中时**普通点击地块**也能下令（更顺手），代价是每次下令多等 2 帧（约 33ms）用于确认原版是否接管这次点击；\n" +
+                "true = 回到 v1.5.3 的手感——不按修饰键的点击 100% 归原版（最保守）。");
             RemoteMarqueePixels = cfg.Bind("Remote", "RemoteMarqueePixels", 8,
                 "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 按住 Shift 时下达前进命令 / 点在自己单位上时忽略）。");
             RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 64,
