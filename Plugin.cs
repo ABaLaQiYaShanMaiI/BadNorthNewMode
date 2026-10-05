@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.0";
+        public const string VERSION = "1.5.1";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -30,15 +30,15 @@ namespace BadNorthNewMode
             catch (System.Exception e)
             {
                 // 配置绑定失败不再让整个插件在 Awake 抛异常（否则游戏里完全无反馈），只报错后降级。
-                Log.LogError("[NewMode] 配置绑定失败：" + e);
+                Log.LogError(Loc.F("[NewMode] 配置绑定失败：{0}", e));
             }
 
             // v1.5.0：默认不生成日志文件（尽早执行，cfg 里的启动日志也一并清掉）。
             LogFileSwitch.Apply(Util.V(ModConfig.LogToFile, false));
 
             ConfigEntry<KeyboardShortcut> hk = ModConfig.Hotkey;
-            Log.LogInfo(string.Format("[NewMode] v{0} 已加载：{1} 开关投放模式，点击滩头陆地投放敌舰。",
-                VERSION, (hk != null) ? hk.Value.ToString() : "(热键未绑定)"));
+            Log.LogInfo(Loc.F("[NewMode] v{0} 已加载：{1} 开关投放模式，点击滩头陆地投放敌舰。",
+                VERSION, (hk != null) ? hk.Value.ToString() : Loc.T("(热键未绑定)")));
         }
 
         void Update()
@@ -68,7 +68,7 @@ namespace BadNorthNewMode
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
             {
                 IngameMenu.Close();
-                IngameMenu.Say("已取消投放");
+                IngameMenu.Say(Loc.T("已取消投放"));
                 return;
             }
 
@@ -79,7 +79,7 @@ namespace BadNorthNewMode
 
             // 悬停预览（点击本身由游戏事件负责）
             Vector2 screenPos = Input.mousePosition;
-            if (IngameMenu.Contains(screenPos)) { PlacementMarker.Get().Hide(); IngameMenu.Hover = "（指针在菜单上）"; return; }
+            if (IngameMenu.Contains(screenPos)) { PlacementMarker.Get().Hide(); IngameMenu.Hover = Loc.T("（指针在菜单上）"); return; }
 
             Vector3 land;
             string diag;
@@ -96,14 +96,14 @@ namespace BadNorthNewMode
             }
 
             IngameMenu.Hover = !hasLand
-                ? "指针不在陆地上（" + diag + "）"
-                : (ok ? string.Format("滩头可用：落差 {0:F2}m，距点击处 {1:F1}m",
+                ? Loc.F("指针不在陆地上（{0}）", diag)
+                : (ok ? Loc.F("滩头可用：落差 {0:F2}m，距点击处 {1:F1}m",
                         target.beach.navPos.pos.y - Util.V(ModConfig.WaterLevelY, 0f), target.shoreDist)
                       : reason);
 
             // 兜底：未订阅成功才轮询（避免一次点击投两艘）
             if (!_subscribed && Input.GetMouseButtonDown(0))
-                DoDrop(gm, screenPos, "轮询兜底");
+                DoDrop(gm, screenPos, Loc.T("轮询兜底"));
         }
 
         /// <summary>遥控模式（菜单关闭时）：右键框选非原生单位 + 左键指挥移动；不改阵营（见 PROJECT_SPEC §5）。</summary>
@@ -128,12 +128,12 @@ namespace BadNorthNewMode
                 string diag;
                 if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
                 {
-                    IngameMenu.Say("那里不是可站立的地面：" + diag);
+                    IngameMenu.Say(Loc.F("那里不是可站立的地面：{0}", diag));
                     return;
                 }
 
                 NavSpot spot = NavSpot.GetNavSpot(land, true);
-                if (spot == null) { IngameMenu.Say("那里不是可站立的陆地地块"); return; }
+                if (spot == null) { IngameMenu.Say(Loc.T("那里不是可站立的陆地地块")); return; }
 
                 // 有待成队 → 先按兵种分队（多兵种就地分到相邻格），再一起前进；没有待成队 → 直接命令已有小队
                 Vector2 center;
@@ -153,7 +153,7 @@ namespace BadNorthNewMode
                 }
 
                 IngameMenu.Say(msg);
-                Util.Log("[NewMode][遥控] " + msg);
+                Util.Log(Loc.T("[NewMode][遥控] ") + msg);
                 MarqueeSelect.ClearPending();                    // 移动后取消选择（与原版 SquadMover 一致，也恢复时间流速）
             }
         }
@@ -178,19 +178,19 @@ namespace BadNorthNewMode
                 if (object.ReferenceEquals(ev, null) || object.ReferenceEquals(mi, null))
                 {
                     _subscribeFailed = true;
-                    Util.Warn("[NewMode] 找不到 onClick 事件或回调方法 → 改用轮询兜底。");
+                    Util.Warn(Loc.T("[NewMode] 找不到 onClick 事件或回调方法 → 改用轮询兜底。"));
                     return;
                 }
 
                 System.Delegate d = System.Delegate.CreateDelegate(ev.EventHandlerType, this, mi);
                 ev.AddEventHandler(pr, d);
                 _subscribed = true;
-                Util.Log("[NewMode] 已反射订阅原版世界点击事件 pointerRationalizer.onClick（同 Navigator/ConfirmButton 的数据源）。");
+                Util.Log(Loc.T("[NewMode] 已反射订阅原版世界点击事件 pointerRationalizer.onClick（同 Navigator/ConfirmButton 的数据源）。"));
             }
             catch (System.Exception e)
             {
                 _subscribeFailed = true;
-                Util.Warn("[NewMode] 订阅 onClick 失败：" + e.Message + " → 改用轮询兜底。");
+                Util.Warn(Loc.F("[NewMode] 订阅 onClick 失败：{0} → 改用轮询兜底。", e.Message));
             }
         }
 
@@ -203,57 +203,57 @@ namespace BadNorthNewMode
                 if (button != PointerEventData.InputButton.Left) return;
                 if (IngameMenu.Contains(screenPos))                            // 菜单内的左键属于选兵种，不做投放
                 {
-                    if (Util.V(ModConfig.VerboseLog, false)) Util.Log("[NewMode] 菜单内点击 → 忽略投放");
+                    if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode] 菜单内点击 → 忽略投放"));
                     return;
                 }
 
                 IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
                 string why;
-                if (!InBattle(gm, out why)) { Util.Warn("[NewMode][点击] " + why); return; }
+                if (!InBattle(gm, out why)) { Util.Warn(Loc.T("[NewMode][点击] ") + why); return; }
 
-                DoDrop(gm, screenPos, "游戏事件");
+                DoDrop(gm, screenPos, Loc.T("游戏事件"));
             }
             catch (System.Exception e)
             {
-                Util.Warn("[NewMode][点击] 处理异常：" + e);
+                Util.Warn(Loc.F("[NewMode][点击] 处理异常：{0}", e));
             }
         }
 
         /// <summary>一次投放尝试：全程打日志（排查"点了没反应"的唯一依据）。</summary>
         void DoDrop(IslandGameplayManager gm, Vector2 screenPos, string source)
         {
-            Util.Log(string.Format("[NewMode][点击] 屏幕 ({0:F0},{1:F0}) 来源={2}", screenPos.x, screenPos.y, source));
+            Util.Log(Loc.F("[NewMode][点击] 屏幕 ({0:F0},{1:F0}) 来源={2}", screenPos.x, screenPos.y, source));
 
             Vector3 land;
             string diag;
             if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
             {
-                Util.Warn("[NewMode][点击] 地形未命中：" + diag);
-                IngameMenu.Say("这一点不是陆地地块：" + diag);
+                Util.Warn(Loc.F("[NewMode][点击] 地形未命中：{0}", diag));
+                IngameMenu.Say(Loc.F("这一点不是陆地地块：{0}", diag));
                 return;
             }
-            Util.Log(string.Format("[NewMode][点击] 命中地形：{0}，点 {1}，海拔 {2:F2}m",
+            Util.Log(Loc.F("[NewMode][点击] 命中地形：{0}，点 {1}，海拔 {2:F2}m",
                 diag, Util.Fmt(land), land.y - Util.V(ModConfig.WaterLevelY, 0f)));
 
             DropTarget t;
             string reason;
             if (!DropPlanner.TryResolve(gm.island, land, out t, out reason))
             {
-                Util.Warn("[NewMode][点击] 无法投放：" + reason);
-                IngameMenu.Say("无法投放：" + reason);
+                Util.Warn(Loc.F("[NewMode][点击] 无法投放：{0}", reason));
+                IngameMenu.Say(Loc.F("无法投放：{0}", reason));
                 return;
             }
 
             string info;
             if (LandingInjector.TrySpawn(gm.island, land, out info))
             {
-                Util.Log("[NewMode][点击] " + info);
+                Util.Log(Loc.T("[NewMode][点击] ") + info);
                 IngameMenu.Say(info);
             }
             else
             {
-                Util.Warn("[NewMode][点击] 投放失败：" + info);
-                IngameMenu.Say("投放失败：" + info);
+                Util.Warn(Loc.F("[NewMode][点击] 投放失败：{0}", info));
+                IngameMenu.Say(Loc.F("投放失败：{0}", info));
             }
         }
 
@@ -261,12 +261,12 @@ namespace BadNorthNewMode
         internal static bool InBattle(IslandGameplayManager gm, out string why)
         {
             why = null;
-            if (gm == null) { why = "不在战局中"; return false; }
-            if (gm.levelPauser != null && gm.levelPauser.isPaused) { why = "已暂停"; return false; }
+            if (gm == null) { why = Loc.T("不在战局中"); return false; }
+            if (gm.levelPauser != null && gm.levelPauser.isPaused) { why = Loc.T("已暂停"); return false; }
             Island island = gm.island;
-            if (island == null || !island.generated) { why = "岛屿未就绪"; return false; }
-            if (island.state != Island.State.Playing) { why = "岛屿未进入 Playing 状态"; return false; }
-            if (island.raid == null) { why = "Raid 未就绪"; return false; }
+            if (island == null || !island.generated) { why = Loc.T("岛屿未就绪"); return false; }
+            if (island.state != Island.State.Playing) { why = Loc.T("岛屿未进入 Playing 状态"); return false; }
+            if (island.raid == null) { why = Loc.T("Raid 未就绪"); return false; }
             return true;
         }
 
@@ -285,19 +285,19 @@ namespace BadNorthNewMode
                     if (hit.collider != null)
                     {
                         point = hit.point;
-                        diag = "NavSpotCast 命中 " + HitName(hit);
+                        diag = Loc.F("NavSpotCast 命中 {0}", HitName(hit));
                         return true;
                     }
-                    diag = "NavSpotCast 未命中";
+                    diag = Loc.T("NavSpotCast 未命中");
                 }
                 catch (System.Exception e)
                 {
-                    diag = "NavSpotCast 异常 " + e.GetType().Name;
+                    diag = Loc.F("NavSpotCast 异常 {0}", e.GetType().Name);
                 }
             }
             else
             {
-                diag = "navSpotter 不可用";
+                diag = Loc.T("navSpotter 不可用");
             }
 
             LevelCamera lc = Singleton<LevelCamera>.instance;
@@ -311,16 +311,16 @@ namespace BadNorthNewMode
             if (mask != 0 && Physics.Raycast(ray, out h, 500f, mask))
             {
                 point = h.point;
-                diag += "；Voxels 层命中 " + HitName(h);
+                diag += Loc.F("；Voxels 层命中 {0}", HitName(h));
                 return true;
             }
             if (Physics.Raycast(ray, out h, 500f))
             {
                 point = h.point;
-                diag += "；任意碰撞体命中 " + HitName(h);
+                diag += Loc.F("；任意碰撞体命中 {0}", HitName(h));
                 return true;
             }
-            diag += string.Format("；射线仍未命中（mask={0}，vp={1:F3},{2:F3}）", mask, vp.x, vp.y);
+            diag += Loc.F("；射线仍未命中（mask={0}，vp={1:F3},{2:F3}）", mask, vp.x, vp.y);
             return false;
         }
 

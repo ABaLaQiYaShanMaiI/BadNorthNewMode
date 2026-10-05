@@ -35,13 +35,13 @@ namespace BadNorthNewMode
                     Logger.Listeners.Remove(disk[i]);        // 先摘：之后一行都不会再落盘
                     ((DiskLogListener)disk[i]).Dispose();    // 再关句柄：文件停在此刻
                 }
-                Util.Log("[NewMode] 文件日志默认关闭（[Diag] LogToFile = false）：本次不写 BepInEx\\" + FileName +
-                         "。需要排查时把它设成 true 再启动。");
+                Util.Log(Loc.F("[NewMode] 文件日志默认关闭（[Diag] LogToFile = false）：本次不写 BepInEx\\{0}。需要排查时把它设成 true 再启动。",
+                    FileName));
                 DeleteStartupRemnant();
             }
             catch (Exception e)
             {
-                Util.Warn("[NewMode] 关闭文件日志失败（不影响游戏）：" + e.Message);
+                Util.Warn(Loc.F("[NewMode] 关闭文件日志失败（不影响游戏）：{0}", e.Message));
             }
         }
 
@@ -54,7 +54,7 @@ namespace BadNorthNewMode
                 if (!File.Exists(path)) return;
                 if (new FileInfo(path).Length > StartupRemnantLimit) return;
                 File.Delete(path);
-                Util.Log("[NewMode] 已删除启动残留：" + path);
+                Util.Log(Loc.F("[NewMode] 已删除启动残留：{0}", path));
             }
             catch { }
         }

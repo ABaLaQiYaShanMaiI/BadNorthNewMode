@@ -71,21 +71,21 @@ namespace BadNorthNewMode
         internal static void Diagnose(Landing landing, Longship ship)
         {
             Animator anim = ship.GetComponent<Animator>();
-            Util.Warn(string.Format(
+            Util.Warn(Loc.F(
                 "[NewMode][下船] 到岸后仍未下船：interpolator={0:F3} landed={1} enabled={2} agents={3} haveAllSpawned={4} animator={5}",
                 ship.interpolator, ship.landed, ship.enabled, ship.agents.Count, ship.haveAllSpawned,
-                (anim == null) ? "无" : ("有/enabled=" + anim.enabled.ToString())));
+                (anim == null) ? Loc.T("无") : (Loc.T("有/enabled=") + anim.enabled.ToString())));
 
             for (int i = 0; i < ship.agents.Count; i++)
             {
                 Agent a = ship.agents[i];
-                if (a == null) { Util.Warn("[NewMode][下船]   敌 " + i + "：已销毁"); continue; }
+                if (a == null) { Util.Warn(Loc.F("[NewMode][下船]   敌 {0}：已销毁", i)); continue; }
 
                 Pirate pirate = a.GetComponent<Pirate>();
                 Brain brain = a.brain;
                 bool inActions = (brain != null) && (pirate != null) && brain.actions.Contains(pirate);
                 bool isOrder = (brain != null) && (pirate != null) && object.ReferenceEquals(brain.order, pirate);
-                Util.Warn(string.Format(
+                Util.Warn(Loc.F(
                     "[NewMode][下船]   敌 {0}：navPos.island={1} orderDist={2:F3} spawned={3} pirate={4} brainActions={5}(含Pirate={6}) brainOrder={7}(是Pirate={8})",
                     i, (a.navPos.island != null), a.orderDist, (a.spawned != null && a.spawned.active),
                     (pirate != null), (brain != null) ? brain.actions.Count : -1, inActions,
@@ -106,7 +106,7 @@ namespace BadNorthNewMode
                 Pirate pirate = a.GetComponent<Pirate>();
                 if (pirate == null)
                 {
-                    Util.Warn("[NewMode][下船]   该敌人没有 Pirate 组件，跳过（无法走原版下船逻辑）");
+                    Util.Warn(Loc.T("[NewMode][下船]   该敌人没有 Pirate 组件，跳过（无法走原版下船逻辑）"));
                     continue;
                 }
 
@@ -118,7 +118,7 @@ namespace BadNorthNewMode
                 moved++;
             }
 
-            Util.Log(string.Format("[NewMode][下船] 兜底下船：把 {0} 个敌人移下船（走原版 RemoveFromShip）", moved));
+            Util.Log(Loc.F("[NewMode][下船] 兜底下船：把 {0} 个敌人移下船（走原版 RemoveFromShip）", moved));
             return moved;
         }
     }

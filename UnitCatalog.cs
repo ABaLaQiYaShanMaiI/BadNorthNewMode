@@ -110,24 +110,6 @@ namespace BadNorthNewMode
             return Mathf.Max(1, Mathf.RoundToInt(minArea / unitArea));
         }
 
-        /// <summary>该兵种在最大长船上的容量上限（人数可调到这么多，船会随人数自动换大）。</summary>
-        internal static int MaxSquadSize(Island island, VikingReference vr)
-        {
-            if (island == null || island.levelNode == null || vr == null || vr.agent == null) return 1;
-
-            List<Longship> ships = island.levelNode.possibleShips;
-            float maxArea = 0f;
-            for (int i = 0; i < ships.Count; i++)
-            {
-                Longship s = ships[i];
-                if (s != null && s.area > maxArea) maxArea = s.area;
-            }
-
-            float unitArea = vr.agent.area;
-            if (maxArea <= 0f || unitArea <= 0.0001f) return 1;
-            return Mathf.Max(1, Mathf.RoundToInt(maxArea / unitArea));
-        }
-
         /// <summary>实际装载数：cfg &gt;0 用它，否则用兵种默认值；两者都受容量上限裁剪。</summary>
         internal static int EffectiveSquadSize(Island island, List<Longship> ships, VikingReference vr, int cfgSize)
         {
@@ -180,7 +162,7 @@ namespace BadNorthNewMode
                     {
                         found = v;
                         Util.LogOnce("fallback:" + name,
-                            "[NewMode] \"" + name + "\" 不在本关生成池，改用全局引用字典里的同一单位。");
+                            Loc.F("[NewMode] \"{0}\" 不在本关生成池，改用全局引用字典里的同一单位。", name));
                     }
                 }
             }
@@ -188,7 +170,7 @@ namespace BadNorthNewMode
             if (found == null)
             {
                 Util.LogOnce("missing:" + name,
-                    "[NewMode] cfg EnemyName=\"" + name + "\" 既不在生成池也不在引用字典，退回随机。");
+                    Loc.F("[NewMode] cfg EnemyName=\"{0}\" 既不在生成池也不在引用字典，退回随机。", name));
                 found = pool[Random.Range(0, pool.Count)];
             }
 

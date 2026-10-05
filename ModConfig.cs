@@ -50,6 +50,7 @@ namespace BadNorthNewMode
 
         public static void Bind(ConfigFile cfg)
         {
+            Loc.Bind(cfg);                 // 先绑语言项；本文件的说明文案保持简中，不随语言切换
             BindGeneral(cfg);
             BindRemote(cfg);
             BindLanding(cfg);

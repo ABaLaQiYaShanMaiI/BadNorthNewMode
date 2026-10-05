@@ -187,6 +187,8 @@ Raid.IIslandFirstEnter:
 - **T15（v1.4.2 排错）**：点空/框空都会打诊断——HUD 常显"非原生单位 登记 N（可选 M[, 已选中 K]）"；**点空**日志含"最近单位 屏幕 Xpx（屏 x,y z=…｜鼠标 x,y｜屏幕 W×H｜相机名）+ 地面点 + 两个阈值"；**框空**日志含"登记/可用/命中 + 最近单位屏幕信息"。判读：**世界距离**才是点选依据（`RemoteClickRadius` 1.2m）——若日志里最近单位的**屏幕** Xpx 很大而它明明在你鼠标旁，就是投影问题；若它不在画面里，说明单位已经跑远（用 `R` 全选即可）。另：**原版自己的敌人没有标记、也绝不能被遥控**（设计如此）。
 - **T16（v1.4.7 待实测）**：① `Shift`+左/右键点单位是否选中**整队**、再点同一队是否取消；② 左/右键点地块是否**集结并前进**、多兵种是否**分到相邻格**、移动后选择是否自动清空；③ 不按 Shift 时左右键是否**完全归原版**（选我方 / 移动我方，不误动遥控单位）；④ `R` 全选与 `Alt` 框选仍可用。
 - **T17（v1.5.0，取舍已定）**：关掉文件日志后**没有 `LogOutput.log` 可查**——要排查就先在 `BepInEx\config\badnorth.newmode.cfg` 把 `[Diag] LogToFile` 设成 `true` 再启动（我们的开关只是"摘掉磁盘监听"，属 **BepInEx 全局行为**：同一份日志文件里其他 mod 的内容同样不再落盘；`true` 即恢复原样）。
+- **T18（v1.5.1）**：**中英切换只覆盖界面 + 日志**（HUD/F1 菜单/提示 + `Util.Log/Warn/Error` 与 `Log.LogInfo`），实现 = `Loc` 文案对照表（key **就是简中原文**，缺表回退中文，绝不抛异常）；`[General] Language = auto / zh / en`，`auto` 只读 `I2.Loc.LocalizationManager.mCurrentLanguage` 私有字段（**不调用** LocalizationManager → 不会把游戏语言提前写进 PlayerPrefs），读不到再按系统语言；**cfg 说明文案保持简中**、不随语言切换（只有 `[General] Language` 一项自带中英双语说明），`UnitNames` 增英文显示名；`README.md` 改双语（内容与 v1.5.0 完全一致，仍 ≤250 汉字）。
+- **T19（v1.5.1，作者实测反馈后瘦身）**：**F1 菜单只留关键信息**——删掉"数量：…（本兵种默认 X，上限 Y）　船：Z"整行、每一行的"默认 N 个"、以及 5 行遥控操作说明，改为「语言行 + 标题/当前 + 兵种列表 + 数量按钮 + 3 行按键」；**数量按钮去掉"默认"**，预设为 `1/2/3/4/6/8/10/12`，**点多少装多少**（仍受"最大长船容量"这一物理上限裁剪，船型按人数自动匹配）；`SquadSize = 0`（按兵种梯度表）只保留在 cfg 层、UI 不再暴露，**投放算法与 cfg 默认行为不变**；顺带删掉因此失去调用者的 `IngameMenu.SelectedUnit` 与 `UnitCatalog.MaxSquadSize`。**菜单宽度 560 → 420（-25%，少挡横向地图）**，内容改纵向展开：按键拆成 3 行，并在顶部加 **中文 / English 语言按钮**（按钮各自用本语言书写、不依赖当前语言；点击 `Loc.SetLanguage` 写回 cfg，下一帧即生效，玩家不必去手改 cfg）。
 
 ## 7. 命名与提交约定
 
@@ -198,6 +200,7 @@ Raid.IIslandFirstEnter:
 - **代码结构**（v1.3.1 按职责拆分）：`Plugin`(入口/输入/取点) · `IngameMenu`(HUD + 兵种菜单) · `DropPlanner`(滩头解析/落差/占用/廊道，长方法拆成 `CheckClickHeight`/`CollectCandidates`/`PreferClearCorridor`) · `UnitCatalog`(兵种·船·人数) · `LandingInjector`(建树/投放/装配) · `FlotillaLauncher` · `SpawnLedger` · `DisembarkWatchdog` · `ShipboardThreat` · `PlacementMarker` · `ModConfig` · `UnitNames` · `Util`(向量格式化 / cfg 守卫 / 日志守卫)。
 - **遥控相关文件**（v1.4.0）：`ForeignUnit`(非原生标记 + 注册表) · `RemoteGroup`(控制组容器：成组/并入/释放/槽位) · `GroupOrder`(自研 `IAgentOrder`：距离场 + 槽位) · `MarqueeSelect`(右键框选 + 相机拖拽让位)。
 - **日志文件开关**（v1.5.0）：`LogFileSwitch`(摘掉 BepInEx 磁盘日志监听 + 清启动残留；`[Diag] LogToFile` 默认 false)。
+- **中英切换**（v1.5.1）：`Loc`(界面/日志文案对照表 + `[General] Language`) · `UnitNames`(增英文显示名) · `README.md`(双语)。
 
 ## 8. 版本对照（仓库提交 ↔ DLL）
 
@@ -226,4 +229,5 @@ Raid.IIslandFirstEnter:
 | **v1.4.6** | **1.4.6** | **按键不再与原版共键**：换队改用自建 `Z`/`X`（`RemotePrevGroupKey`/`RemoteNextGroupKey`）；新增 `RemoteAlsoUseVanillaKeys`（默认 false）；**点选改为"连点累加"**（Shift 移除、右键清空）；"已接管/前进"提示只列本次涉及的小队；细长/退化拖动按"点一下"兜底 |
 | **v1.4.7** | **1.4.7** | **交互定稿（少按键）**：选择 = `Shift` + 左/右键点单位（选中**整队**，再点取消）/ `R` 全选 / `Alt` 框选；下令 = **左键或右键点地块**集结前进（按兵种各成队，多兵种**就地分到相邻格**），**移动后自动取消选择**（同原版 `SquadMover`）；不按 Shift 时左右键完全归原版；移除 Z/X 换队键与 `GameInput`；**与我方选择互斥**（选中遥控单位时调用原版 `SelectSquad(null,false)` 取消我方选择，我方被选中时自动清空遥控选择 → 永不双控） |
 | **v1.5.0** | **1.5.0** | **新增 `README.md`**（操作说明 + 项目链接 + 开源许可，≤250 汉字）；**文件日志默认关闭**（`[Diag] LogToFile = false` → `LogFileSwitch` 摘掉 BepInEx 的磁盘日志监听器并清掉启动残留，控制台不受影响，玩家装完不再生成 `LogOutput.log`）；版本号与仓库提交对齐（1.4.8 的内部跳号并入本版） |
+| **v1.5.1** | **1.5.1** | **中英切换（界面 + 日志）**：新增 `Loc`（key = 简中原文，缺表回退；`[General] Language = auto / zh / en`，auto 只读游戏语言私有字段、不触发 I2 初始化），`UnitNames` 增英文显示名，`README.md` 改双语（内容同 v1.5.0），**cfg 说明保持简中**；**F1 菜单瘦身**：删掉默认数量/上限/船型整行 + 每行"默认 N 个" + 5 行遥控说明，只留「兵种 · 当前 · 数量按钮 · 2 行按键」，数量预设去掉"默认"改为 1/2/3/4/6/8/10/12（点多少装多少，仅受最大船容量裁剪），并删掉失去调用者的 `IngameMenu.SelectedUnit` / `UnitCatalog.MaxSquadSize`；菜单宽度 560 → 420（-25%）、按键拆 3 行，顶部加 **中文 / English 语言按钮**（写回 cfg 立即生效，与 `[General] Language` 同一份设置） |
 

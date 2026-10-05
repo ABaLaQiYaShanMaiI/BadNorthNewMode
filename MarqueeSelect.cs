@@ -65,7 +65,7 @@ namespace BadNorthNewMode
             if (VanillaSelected && HasPending)
             {
                 ClearPending();
-                if (Util.V(ModConfig.VerboseLog, false)) Util.Log("[NewMode][遥控] 你选中了我方小队 → 已清空遥控选择");
+                if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode][遥控] 你选中了我方小队 → 已清空遥控选择"));
             }
 
             if (Input.GetMouseButtonDown(0))
@@ -85,7 +85,7 @@ namespace BadNorthNewMode
                 if (_grab && !_dragging && (now - _start).magnitude >= Util.V(ModConfig.RemoteMarqueePixels, 8))
                 {
                     _dragging = true;
-                    if (Util.V(ModConfig.VerboseLog, false)) Util.Log("[NewMode][遥控] 开始框选");
+                    if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode][遥控] 开始框选"));
                 }
                 if (_dragging) _screenRect = RectFrom(_start, now);
             }
@@ -134,10 +134,10 @@ namespace BadNorthNewMode
             }
 
             string msg = (_pending.Count == 0)
-                ? "已清空选择"
-                : string.Format("已选中 {0}（再 Shift 点同一队 = 取消；左/右键点地块 = 集结前进）", DescribePending());
+                ? Loc.T("已清空选择")
+                : Loc.F("已选中 {0}（再 Shift 点同一队 = 取消；左/右键点地块 = 集结前进）", DescribePending());
             IngameMenu.Say(msg);
-            Util.Log("[NewMode][遥控] " + msg);
+            Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
 
         /// <summary>取该单位所在**引擎小队**（同一次投送的 squad）里所有"可选"的非原生单位。</summary>
@@ -197,10 +197,10 @@ namespace BadNorthNewMode
 
             _pendingCenter = _screenRect.center;
             string msg = (_pending.Count == 0)
-                ? "框里没有非原生单位"
-                : string.Format("已选中 {0} 个非原生单位（左键点地块 = 成队并前进）", _pending.Count);
+                ? Loc.T("框里没有非原生单位")
+                : Loc.F("已选中 {0} 个非原生单位（左键点地块 = 成队并前进）", _pending.Count);
             IngameMenu.Say(msg);
-            Util.Log(string.Format("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}；最近 {6}）",
+            Util.Log(Loc.F("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}；最近 {6}）",
                 msg, _screenRect.width, _screenRect.height, ForeignUnit.All.Count, ForeignUnit.UsableCount(), picked.Count,
                 NearestScreenInfo(_pendingCenter)));
         }
@@ -208,7 +208,7 @@ namespace BadNorthNewMode
         /// <summary>把待成队列表按兵种写成一串（HUD 提示用）。</summary>
         static string DescribePending()
         {
-            if (_pending == null || _pending.Count == 0) return "无";
+            if (_pending == null || _pending.Count == 0) return Loc.T("无");
 
             List<string> types = new List<string>();
             List<int> counts = new List<int>();
@@ -225,10 +225,10 @@ namespace BadNorthNewMode
             string s = null;
             for (int i = 0; i < types.Count; i++)
             {
-                s = (s == null) ? "" : (s + "、");
+                s = (s == null) ? "" : (s + Loc.T("、"));
                 s += UnitNames.Of(types[i]) + "×" + counts[i];
             }
-            return (s == null) ? "无" : s;
+            return (s == null) ? Loc.T("无") : s;
         }
 
         /// <summary>用矩形中心的地面点校正相机（拿不到地面点就保持原样）。</summary>
@@ -420,20 +420,20 @@ namespace BadNorthNewMode
             }
 
             string msg = (_pending.Count == 0)
-                ? "可选的非原生单位为 0（可能都还在船上或已阵亡）"
-                : string.Format("已全选 {0}（左键点地块 = 成队前进）", DescribePending());
+                ? Loc.T("可选的非原生单位为 0（可能都还在船上或已阵亡）")
+                : Loc.F("已全选 {0}（左键点地块 = 成队前进）", DescribePending());
             IngameMenu.Say(msg);
-            Util.Log("[NewMode][遥控] " + msg);
+            Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
 
         /// <summary>最近可用单位的屏幕信息（距离/原始坐标/z/鼠标/屏幕尺寸）——用来判定投影是否可信。</summary>
         static string NearestScreenInfo(Vector2 screenPos)
         {
             Camera cam = Cam();
-            if (cam == null) return "相机不可用";
+            if (cam == null) return Loc.T("相机不可用");
 
             float best = float.MaxValue;
-            string info = "无（没有可用的非原生单位）";
+            string info = Loc.T("无（没有可用的非原生单位）");
             for (int i = 0; i < ForeignUnit.All.Count; i++)
             {
                 ForeignUnit f = ForeignUnit.All[i];
@@ -447,7 +447,7 @@ namespace BadNorthNewMode
                 if (d >= best) continue;
 
                 best = d;
-                info = string.Format("{0:F0}px（屏 {1:F0},{2:F0} z={3:F1}｜鼠标 {4:F0},{5:F0}｜屏幕 {6}×{7}｜相机 {8}）",
+                info = Loc.F("{0:F0}px（屏 {1:F0},{2:F0} z={3:F1}｜鼠标 {4:F0},{5:F0}｜屏幕 {6}×{7}｜相机 {8}）",
                     d, sp.x, sp.y, sp.z, screenPos.x, screenPos.y, Screen.width, Screen.height, cam.name);
             }
             return info;
@@ -513,7 +513,7 @@ namespace BadNorthNewMode
             if (on)
             {
                 TimeManager.RequestTimeScale(SlowMoOwner, Util.V(ModConfig.RemoteSlowMoScale, 0.1f));
-                if (Util.V(ModConfig.VerboseLog, false)) Util.Log("[NewMode][遥控] 减速中（框选/已选中）");
+                if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode][遥控] 减速中（框选/已选中）"));
             }
             else
             {
@@ -593,8 +593,8 @@ namespace BadNorthNewMode
             {
                 if (!object.ReferenceEquals(best, _cam) && Util.V(ModConfig.VerboseLog, false))
                 {
-                    Util.Log(string.Format("[NewMode][遥控] 改用相机 {0}（与已知点误差 {1:F0}px；原 {2}）",
-                        best.name, bestErr, (_cam != null) ? _cam.name : "无"));
+                    Util.Log(Loc.F("[NewMode][遥控] 改用相机 {0}（与已知点误差 {1:F0}px；原 {2}）",
+                        best.name, bestErr, (_cam != null) ? _cam.name : Loc.T("无")));
                 }
                 _cam = best;
             }

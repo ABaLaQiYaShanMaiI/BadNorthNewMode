@@ -16,7 +16,7 @@ namespace BadNorthNewMode
             if (!DropPlanner.TryResolve(island, landPoint, out t, out reason)) { info = reason; return false; }
 
             if (Util.V(ModConfig.VerboseLog, false))
-                Util.Log(string.Format("[NewMode] 点击陆地 {0}（海拔 {1:F2}m）→ 滩头 {2} 距离 {3:F2}m 船 {4}",
+                Util.Log(Loc.F("[NewMode] 点击陆地 {0}（海拔 {1:F2}m）→ 滩头 {2} 距离 {3:F2}m 船 {4}",
                     Util.Fmt(landPoint), landPoint.y - Util.V(ModConfig.WaterLevelY, 0f),
                     Util.Fmt(t.beach.navPos.pos), t.shoreDist, t.shipPrefab.name));
 
@@ -75,7 +75,7 @@ namespace BadNorthNewMode
             if (!placedOk)
             {
                 UnityEngine.Object.Destroy(landingGo);
-                info = string.Format("附近 {0} 个滩头都被地形/建筑挡住或被占用，换个位置点", tried);
+                info = Loc.F("附近 {0} 个滩头都被地形/建筑挡住或被占用，换个位置点", tried);
                 return false;
             }
 
@@ -86,20 +86,20 @@ namespace BadNorthNewMode
             wave.arriveAudioId = t.vikingRef.arriveAudioId;
 
             string crewIssue = CrewCheck(landing.spawnedShip, t.vikingRef.name);
-            if (crewIssue != null) Util.Warn("[NewMode] 船员异常：" + crewIssue + "（疑似船体叠加，请反馈此日志）");
+            if (crewIssue != null) Util.Warn(Loc.F("[NewMode] 船员异常：{0}（疑似船体叠加，请反馈此日志）", crewIssue));
 
             DropPlanner.InvalidateOccupancy();
             DisembarkWatchdog.Get().Watch(landing);                    // 到岸后若卡住不下船 → 诊断 + 兜底
             if (Util.V(ModConfig.FlotillaDelay, 1f) <= 0f) FlotillaLauncher.FlushNow();
 
             if (Util.V(ModConfig.VerboseLog, false))
-                Util.Log(string.Format("[NewMode] 采用第 {0} 个候选滩头 {1}（距点击处 {2:F2}m）",
+                Util.Log(Loc.F("[NewMode] 采用第 {0} 个候选滩头 {1}（距点击处 {2:F2}m）",
                     tried, Util.Fmt(used.navPos.pos), Vector3.Distance(used.navPos.pos, t.beach.navPos.pos)));
 
-            info = string.Format("已投放 {0} ×{1}（船 {2}，滩头离点击处 {3:F1}m{4}{5}）",
+            info = Loc.F("已投放 {0} ×{1}（船 {2}，滩头离点击处 {3:F1}m{4}{5}）",
                 t.vikingRef.name, load.count, landing.shipPrefab.name, t.shoreDist,
-                t.relaxed ? "，已放宽间距" : "",
-                t.fallback ? "，附近满员 → 改用最近空滩头" : "");
+                t.relaxed ? Loc.T("，已放宽间距") : "",
+                t.fallback ? Loc.T("，附近满员 → 改用最近空滩头") : "");
             return true;
         }
 
@@ -135,7 +135,7 @@ namespace BadNorthNewMode
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
             if (Util.V(ModConfig.VerboseLog, false))
-                Util.Log("[NewMode] 已装配 " + n + " 个敌人（order→Pirate + 舰上威胁）");
+                Util.Log(Loc.F("[NewMode] 已装配 {0} 个敌人（order→Pirate + 舰上威胁）", n));
             return n;
         }
 
@@ -159,7 +159,7 @@ namespace BadNorthNewMode
                     if (other == null) other = n;
                 }
             }
-            return (bad == 0) ? null : string.Format("应有 {0}，实际混入 {1} 个其他单位（如 {2}）", expected, bad, other);
+            return (bad == 0) ? null : Loc.F("应有 {0}，实际混入 {1} 个其他单位（如 {2}）", expected, bad, other);
         }
     }
 }

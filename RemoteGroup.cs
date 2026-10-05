@@ -37,12 +37,12 @@ namespace BadNorthNewMode
         /// <summary>HUD 用：把各队写成一串。</summary>
         internal static string DescribeAll()
         {
-            if (_groups.Count == 0) return "无";
+            if (_groups.Count == 0) return Loc.T("无");
             string s = null;
             for (int i = 0; i < _groups.Count; i++)
             {
                 Group g = _groups[i];
-                s = (s == null) ? "" : (s + "、");
+                s = (s == null) ? "" : (s + Loc.T("、"));
                 s += g.display + "×" + g.orders.Count;
             }
             return s;
@@ -65,7 +65,7 @@ namespace BadNorthNewMode
         internal static bool Capture(List<ForeignUnit> picked, Vector2 boxCenter, out string message)
         {
             message = null;
-            if (picked == null || picked.Count == 0) { message = "没框到非原生单位"; return false; }
+            if (picked == null || picked.Count == 0) { message = Loc.T("没框到非原生单位"); return false; }
 
             // ① 按兵种分桶（框里混了多种 → 各自组队）
             List<string> types = new List<string>();
@@ -85,7 +85,7 @@ namespace BadNorthNewMode
                 }
                 bucket.Add(f);
             }
-            if (types.Count == 0) { message = "没框到可用的非原生单位"; return false; }
+            if (types.Count == 0) { message = Loc.T("没框到可用的非原生单位"); return false; }
 
             int cap = MaxPerGroup();
             int skipped = 0;
@@ -119,7 +119,7 @@ namespace BadNorthNewMode
                     Add(g, bucket[i].agent);
                 }
 
-                joined = (joined == null) ? "" : (joined + "、");
+                joined = (joined == null) ? "" : (joined + Loc.T("、"));
                 joined += g.display + "×" + g.orders.Count;
             }
 
@@ -127,8 +127,8 @@ namespace BadNorthNewMode
             CaptureIsland();
             for (int i = 0; i < _groups.Count; i++) Reslot(_groups[i]);
 
-            message = string.Format("已接管 {0}{1}（左键点地块前进；再点/再框同兵种可并入）", joined,
-                (skipped > 0) ? string.Format("；另有 {0} 个超过每队上限 {1}，保持原逻辑", skipped, cap) : "");
+            message = Loc.F("已接管 {0}{1}（左键点地块前进；再点/再框同兵种可并入）", joined,
+                (skipped > 0) ? Loc.F("；另有 {0} 个超过每队上限 {1}，保持原逻辑", skipped, cap) : "");
             return true;
         }
 
@@ -178,8 +178,8 @@ namespace BadNorthNewMode
         /// <summary>左键点地块：命令"本次选中的小队"前进（最近一次没框到任何队时，命令全部队）。</summary>
         internal static bool MoveTo(NavSpot target, out string message)
         {
-            if (target == null) { message = "那里不是可站立的陆地地块"; return false; }
-            if (_groups.Count == 0) { message = "还没有遥控小队：左键从单位上拖动即可框选"; return false; }
+            if (target == null) { message = Loc.T("那里不是可站立的陆地地块"); return false; }
+            if (_groups.Count == 0) { message = Loc.T("还没有遥控小队：左键从单位上拖动即可框选"); return false; }
 
             List<Group> targets = new List<Group>();
             for (int i = 0; i < _groups.Count; i++)
@@ -199,12 +199,12 @@ namespace BadNorthNewMode
                 for (int k = 0; k < g.orders.Count; k++)
                     if (g.orders[k] != null) g.orders[k].SetTarget(spot);
                 Reslot(g);
-                who = (who == null) ? "" : (who + "、");
+                who = (who == null) ? "" : (who + Loc.T("、"));
                 who += g.display + "×" + g.orders.Count;
             }
 
             FabricWrapper.PostEvent("UI/InGame/UnitMove");     // 借用原版的移动反馈音
-            message = "遥控小队前进：" + who;
+            message = Loc.F("遥控小队前进：{0}", who);
             return true;
         }
 
@@ -261,9 +261,9 @@ namespace BadNorthNewMode
                 if (rosterChanged) Reslot(g);
             }
 
-            if (_groups.Count == 0) { _island = null; IngameMenu.Say("遥控小队已全部阵亡 / 消失"); return; }
-            if (cur != null && !object.ReferenceEquals(cur, _island)) { ClearAll("换岛：已清空遥控小队"); return; }
-            if (cur != null && cur.state != Island.State.Playing) { ClearAll("战局结束：已清空遥控小队"); return; }
+            if (_groups.Count == 0) { _island = null; IngameMenu.Say(Loc.T("遥控小队已全部阵亡 / 消失")); return; }
+            if (cur != null && !object.ReferenceEquals(cur, _island)) { ClearAll(Loc.T("换岛：已清空遥控小队")); return; }
+            if (cur != null && cur.state != Island.State.Playing) { ClearAll(Loc.T("战局结束：已清空遥控小队")); return; }
         }
 
         /// <summary>清场（F2 / 换岛 / 结算）：还原接管前的 order 并销毁组件。T9：不提供"战斗中释放回原 AI"。</summary>

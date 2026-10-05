@@ -23,7 +23,7 @@ namespace BadNorthNewMode
 
             f.agent = agent;
             f.unitType = type;
-            f.displayName = string.IsNullOrEmpty(type) ? "非原生单位" : UnitNames.Of(type);
+            f.displayName = string.IsNullOrEmpty(type) ? Loc.T("非原生单位") : UnitNames.Of(type);
             if (!_all.Contains(f)) _all.Add(f);
         }
 

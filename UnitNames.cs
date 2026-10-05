@@ -17,6 +17,19 @@ namespace BadNorthNewMode
             { "Viking_TankArcher",  "重装弓箭手" },
         };
 
+        /// <summary>英文显示名（v1.5.1 中英切换用；官方英文用词，和 Map 一一对应）。</summary>
+        static readonly Dictionary<string, string> MapEn = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+        {
+            { "Viking_Sword",       "Swordsman" },
+            { "Viking_SwordShield", "Shield Swordsman" },
+            { "Viking_Archer",      "Archer" },
+            { "Viking_AxeThrower",  "Axe Thrower" },
+            { "Viking_Twohanded",   "Two-handed Swordsman" },
+            { "Viking_Berserker",   "Berserker" },
+            { "Viking_Tank",        "Brute" },
+            { "Viking_TankArcher",  "Brute Archer" },
+        };
+
         /// <summary>每兵种默认装载数（梯度：弱兵成群、巨人 1 个）；未收录返回 0 → 回退原版公式。</summary>
         static readonly Dictionary<string, int> DefaultCounts = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
         {
@@ -40,13 +53,14 @@ namespace BadNorthNewMode
             return 0;
         }
 
-        /// <summary>内部名 → 简中显示名；未收录的去掉 Viking_ 前缀原样显示。</summary>
+        /// <summary>内部名 → 当前语言显示名；未收录的去掉 Viking_ 前缀原样显示。</summary>
         internal static string Of(string internalName)
         {
-            if (string.IsNullOrEmpty(internalName)) return "随机";
+            if (string.IsNullOrEmpty(internalName)) return Loc.T("随机");
 
-            string cn;
-            if (Map.TryGetValue(internalName, out cn)) return cn;
+            string shown;
+            Dictionary<string, string> map = Loc.IsEnglish ? MapEn : Map;
+            if (map.TryGetValue(internalName, out shown)) return shown;
             if (internalName.StartsWith("Viking_")) return internalName.Substring("Viking_".Length);
             return internalName;
         }

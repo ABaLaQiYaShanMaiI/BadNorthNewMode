@@ -1,5 +1,29 @@
 # Bad North - New Mode
 
+A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and remote-controlling enemy units.
+
+## Controls
+
+- `F1`: toggle the drop menu; inside it, left-click a unit type and a count.
+- In the menu: left-click a unit type → left-click beachhead land to drop; `Esc` or right-click closes the menu.
+- `F2`: clean up — destroys every ship and unit dropped by this mod.
+- After closing the menu you can remote-control dropped units:
+  - `Shift` + left- or right-click a unit: select the whole squad it belongs to; click the same squad again to deselect.
+  - `R`: select all remote-controllable units.
+  - Left- or right-click a tile: the selected units regroup and advance; each unit type forms its own squad, and large groups spread onto neighbouring tiles.
+  - Hold `Alt` and drag: box select.
+  - Selected units slow down time, making them easier to handle.
+- With no remote-controllable unit selected, the mouse buttons behave exactly like vanilla.
+
+## Links & License
+
+- Project: https://github.com/ABaLaQiYaShanMaiI/BadNorthNewMode
+- License: MIT
+
+---
+
+# Bad North - New Mode（简体中文）
+
 BepInEx 模组：给《Bad North》加"投放敌舰 + 遥控敌方单位"两种玩法。
 
 ## 操作
@@ -19,3 +43,4 @@ BepInEx 模组：给《Bad North》加"投放敌舰 + 遥控敌方单位"两种�
 
 - 项目地址：https://github.com/ABaLaQiYaShanMaiI/BadNorthNewMode
 - 开源许可：MIT
+

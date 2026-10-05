@@ -21,7 +21,7 @@ namespace BadNorthNewMode
             IsOpen = !IsOpen;
             Hover = "";
             PlacementMarker.Get().Hide();
-            Say(IsOpen ? "投放菜单：左键点兵种选择，再点滩头陆地投放（F1 关闭 / F2 强制清场）" : "已关闭投放菜单");
+            Say(IsOpen ? Loc.T("投放菜单：左键点兵种选择，再点滩头陆地投放（F1 关闭 / F2 强制清场）") : Loc.T("已关闭投放菜单"));
             Util.Log("[NewMode] " + _hud);
         }
 
@@ -61,24 +61,24 @@ namespace BadNorthNewMode
             if (!IsOpen && !help && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
 
             string text = IsOpen
-                ? "BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）"
+                ? Loc.T("BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）")
                 : "BadNorthNewMode";
             if (IsOpen && !string.IsNullOrEmpty(Hover)) text += "\n" + Hover;
 
             if (RemoteGroup.Any)
-                text += string.Format("\n遥控小队：{0}（共 {1}）｜左键点地块 = 全队前进",
+                text += Loc.F("\n遥控小队：{0}（共 {1}）｜左键点地块 = 全队前进",
                     RemoteGroup.DescribeAll(), RemoteGroup.TotalCount);
 
             if (foreign > 0)
-                text += string.Format("\n非原生单位 {0}（可选 {1}{2}）", foreign, ForeignUnit.UsableCount(),
-                    (selected > 0) ? (", 已选中 " + selected) : "");
+                text += Loc.F("\n非原生单位 {0}（可选 {1}{2}）", foreign, ForeignUnit.UsableCount(),
+                    (selected > 0) ? (Loc.T(", 已选中 ") + selected) : "");
 
             if (MarqueeSelect.Dragging)
-                text += "\n框选中…（按兵种自动分队，每队上限 " + Util.V(ModConfig.RemoteSoftCap, 40) + "）";
+                text += Loc.F("\n框选中…（按兵种自动分队，每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40));
 
             if (help)
-                text += (IsOpen ? "\n[关菜单后·仅调控非原生单位] " : "\n[遥控·仅调控非原生单位] ") +
-                        "Shift+左/右键点单位 = 选中整队｜R = 全选｜左/右键点地块 = 集结前进｜Alt+拖动 = 框选｜选中时减速";
+                text += (IsOpen ? Loc.T("\n[关菜单后·仅调控非原生单位] ") : Loc.T("\n[遥控·仅调控非原生单位] ")) +
+                        Loc.T("Shift+左/右键点单位 = 选中整队｜R = 全选｜左/右键点地块 = 集结前进｜Alt+拖动 = 框选｜选中时减速");
 
             if (!string.IsNullOrEmpty(_hud)) text += "\n" + _hud;
 
@@ -97,10 +97,10 @@ namespace BadNorthNewMode
         {
             int n = (_units != null) ? _units.Count : 0;
             float rowH = 26f;
-            float headH = 74f;                                   // 标题 + 当前 + 数量信息
+            float headH = 72f;                                   // 语言行 + 标题 + 当前
             float rows = Mathf.Max(1, n);
-            float countH = 50f;                                  // "数量（…）" + 按钮行
-            _rect = new Rect(8f, 82f, 560f, headH + rows * rowH + countH + 122f);
+            float countH = 48f;                                  // "数量" + 按钮行
+            _rect = new Rect(8f, 82f, 420f, headH + rows * rowH + countH + 74f);
 
             GUI.color = new Color(0f, 0f, 0f, 0.82f);
             GUI.DrawTexture(_rect, Texture2D.whiteTexture);
@@ -109,34 +109,23 @@ namespace BadNorthNewMode
             float x = _rect.x + 10f;
             float w = _rect.width - 20f;
 
-            GUI.Label(new Rect(x, _rect.y + 6f, w, 20f), "兵种选择（按难度递增，左键点选；括号内为 cfg 内部名）");
+            // ---- 语言切换（按钮各自用本语言书写，不依赖当前语言；写回 cfg，下一帧生效）----
+            GUI.Label(new Rect(x, _rect.y + 6f, 70f, 20f), Loc.T("语言"));
+            bool isZh = !Loc.IsEnglish;
+            DrawLangButton(new Rect(x + 72f, _rect.y + 4f, 54f, 22f), "中文", isZh, "zh");
+            DrawLangButton(new Rect(x + 130f, _rect.y + 4f, 76f, 22f), "English", !isZh, "en");
+
+            GUI.Label(new Rect(x, _rect.y + 30f, w, 20f), Loc.T("兵种（左键点选；括号内为 cfg 内部名）"));
 
             string cur = Util.V(ModConfig.EnemyName, "");
-            GUI.Label(new Rect(x, _rect.y + 26f, w, 20f),
-                "当前：" + (string.IsNullOrEmpty(cur) ? "随机" : UnitNames.Of(cur) + "（" + cur + "）"));
+            GUI.Label(new Rect(x, _rect.y + 50f, w, 20f),
+                Loc.T("当前：") + (string.IsNullOrEmpty(cur) ? Loc.T("随机") : UnitNames.Of(cur) + Loc.T("（") + cur + Loc.T("）")));
 
             int curSize = Util.V(ModConfig.SquadSize, 0);
-            VikingReference sel = SelectedUnit();
-            string sizeInfo;
-            if (sel != null && _island != null)
-            {
-                int def = UnitCatalog.DefaultSquadSize(_island, sel);
-                int cap = UnitCatalog.MaxSquadSize(_island, sel);
-                int now = (curSize > 0) ? curSize : def;
-                Longship auto = UnitCatalog.PickShipForCount(_island, sel, now);
-                sizeInfo = string.Format("数量：{0}（本兵种默认 {1}，上限 {2}）　船：{3}（自动匹配）",
-                    (curSize > 0) ? curSize.ToString() : "默认 " + def, def, cap,
-                    (auto != null) ? auto.name : "无");
-            }
-            else
-            {
-                sizeInfo = "数量：" + ((curSize > 0) ? curSize.ToString() : "默认（按兵种原版算法）");
-            }
-            GUI.Label(new Rect(x, _rect.y + 46f, w, 20f), sizeInfo);
 
             if (n == 0)
             {
-                GUI.Label(new Rect(x, _rect.y + headH + 2f, w, 20f), "（进入战局后才会列出可用兵种）");
+                GUI.Label(new Rect(x, _rect.y + headH + 2f, w, 20f), Loc.T("（进入战局后才会列出可用兵种）"));
             }
             else
             {
@@ -149,9 +138,8 @@ namespace BadNorthNewMode
                                  string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
                     Rect r = new Rect(x, _rect.y + headH + i * rowH, w, rowH - 3f);
 
-                    int def = (_island != null) ? UnitCatalog.DefaultSquadSize(_island, u) : 0;
-                    string label = string.Format("{0}{1}. {2}（{3}）   默认 {4} 个",
-                        isSel ? "▶ " : "     ", i + 1, UnitNames.Of(u.name), u.name, def);
+                    string label = Loc.F("{0}{1}. {2}（{3}）",
+                        isSel ? "▶ " : "     ", i + 1, UnitNames.Of(u.name), u.name);
 
                     Color old = GUI.color;
                     if (isSel) GUI.color = new Color(0.45f, 1f, 1f, 1f);
@@ -160,11 +148,11 @@ namespace BadNorthNewMode
                 }
             }
 
-            // ---- 数量预设（0 = 默认：按兵种梯度表）----
+            // ---- 数量预设（点多少就装多少；0 不再出现在 UI，cfg 里的 0 仍走原版梯度表）----
             float cy = _rect.y + headH + rows * rowH + 2f;
-            GUI.Label(new Rect(x, cy, w, 18f), "数量（左键点击；默认 = 按该兵种原版算法）");
+            GUI.Label(new Rect(x, cy, w, 18f), Loc.T("数量（左键点击）"));
 
-            int[] presets = { 0, 1, 2, 3, 4, 6, 8, 10, 12 };
+            int[] presets = { 1, 2, 3, 4, 6, 8, 10, 12 };
             float bw = 44f, gap = 4f;
             for (int i = 0; i < presets.Length; i++)
             {
@@ -172,18 +160,33 @@ namespace BadNorthNewMode
                 Rect br = new Rect(x + i * (bw + gap), cy + 20f, bw, 24f);
                 Color old = GUI.color;
                 if (curSize == v) GUI.color = new Color(0.45f, 1f, 1f, 1f);
-                if (GUI.Button(br, (v == 0) ? "默认" : v.ToString())) SelectCount(v);
+                if (GUI.Button(br, v.ToString())) SelectCount(v);
                 GUI.color = old;
             }
 
-            // ---- 遥控操作说明（关菜单后生效；玩家不点 F1 也知道怎么用）----
+            // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
             float hy = cy + countH;
-            GUI.Label(new Rect(x, hy, w, 18f), "遥控操作（关闭菜单后生效）：");
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), "· Shift + 左键/右键点\"非原生单位\" = 选中它所在的整队（再点同一队 = 取消）；R = 全选所有可选单位");
-            GUI.Label(new Rect(x, hy + 36f, w, 18f), "· 左键或右键点地块 = 选中的单位集结前进（按兵种各成队，多兵种就地分到相邻格）；移动后自动取消选择");
-            GUI.Label(new Rect(x, hy + 54f, w, 18f), "· 不按 Shift 时，左右键完全交还原版（选我方 / 移动我方）；Alt + 拖动 = 框选（相机暂停）");
-            GUI.Label(new Rect(x, hy + 72f, w, 18f), "· 单位须已下船（HUD 的\"可选\"就是当前能选的数量）｜选中/框选时放慢时间；原版\"手动慢动作\"键按住也减速");
-            GUI.Label(new Rect(x, hy + 90f, w, 18f), "· 本功能只调控\"非原生单位\"，不会切换或影响我方小队｜F1 关闭菜单 · F2 强制清场");
+            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 左/右键点单位 = 选整队"));
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("R = 全选｜左/右键点地块 = 前进"));
+            GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场"));
+        }
+
+        /// <summary>语言按钮：当前语言高亮；点击写回 cfg。</summary>
+        static void DrawLangButton(Rect r, string label, bool active, string mode)
+        {
+            Color old = GUI.color;
+            if (active) GUI.color = new Color(0.45f, 1f, 1f, 1f);
+            if (GUI.Button(r, label)) SelectLanguage(mode);
+            GUI.color = old;
+        }
+
+        /// <summary>切换语言：写回 cfg（自动保存），下次启动/下一帧均生效。</summary>
+        static void SelectLanguage(string mode)
+        {
+            if (!Loc.SetLanguage(mode)) return;
+
+            Say(Loc.T("语言已切换（立即生效）"));
+            Util.Log("[NewMode] Language = " + mode);
         }
 
         /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>
@@ -193,34 +196,18 @@ namespace BadNorthNewMode
             if (string.Equals(ModConfig.EnemyName.Value, unit.name, System.StringComparison.OrdinalIgnoreCase)) return;
 
             ModConfig.EnemyName.Value = unit.name;
-            Say("已选择兵种：" + unit.name);
-            Util.Log("[NewMode] 已选择兵种：" + unit.name);
+            Say(Loc.F("已选择兵种：{0}", unit.name));
+            Util.Log(Loc.F("[NewMode] 已选择兵种：{0}", unit.name));
         }
 
-        /// <summary>设定装载数量：0 = 默认（按兵种梯度表），&gt;0 = 固定数量。</summary>
+        /// <summary>设定装载数量：点多少就装多少（超出最大船容量才会被裁）。</summary>
         static void SelectCount(int value)
         {
             if (ModConfig.SquadSize == null || ModConfig.SquadSize.Value == value) return;
 
             ModConfig.SquadSize.Value = value;
-            Say(value > 0 ? ("已设定数量：" + value + "（超出船容量会自动裁剪）") : "数量：按兵种默认（原版算法）");
-            Util.Log("[NewMode] 数量设定：" + ((value > 0) ? value.ToString() : "默认(原版算法)"));
-        }
-
-        /// <summary>当前 cfg 里选中的兵种对象（用于显示该兵种的默认/上限数量）。</summary>
-        static VikingReference SelectedUnit()
-        {
-            if (_units == null) return null;
-
-            string cur = Util.V(ModConfig.EnemyName, "");
-            if (string.IsNullOrEmpty(cur)) return null;
-
-            for (int i = 0; i < _units.Count; i++)
-            {
-                VikingReference u = _units[i];
-                if (u != null && string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase)) return u;
-            }
-            return null;
+            Say(Loc.F("已设定数量：{0}（超出船容量会自动裁剪）", value));
+            Util.Log(Loc.F("[NewMode] 数量设定：{0}", value));
         }
 
         /// <summary>兵种列表随岛屿缓存（同岛复用；换岛重建）。</summary>
@@ -229,7 +216,7 @@ namespace BadNorthNewMode
             if (object.ReferenceEquals(_island, island) && _units != null) return;
             _island = island;
             _units = UnitCatalog.AvailableUnits(island);
-            Util.Log("[NewMode] 菜单：本关可用兵种 " + _units.Count + " 种");
+            Util.Log(Loc.F("[NewMode] 菜单：本关可用兵种 {0} 种", _units.Count));
         }
     }
 }

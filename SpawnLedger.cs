@@ -63,7 +63,7 @@ namespace BadNorthNewMode
             if (ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown())
             {
                 int n = DestroyAll();
-                Util.Log("[NewMode][清理] 手动清场：销毁 " + n + " 组投放对象");
+                Util.Log(Loc.F("[NewMode][清理] 手动清场：销毁 {0} 组投放对象", n));
             }
 
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
@@ -75,7 +75,7 @@ namespace BadNorthNewMode
             {
                 int n = DestroyAll();
                 if (n > 0)
-                    Util.Log("[NewMode][清理] 离开战局：已清除本 mod 投放的 " + n + " 组残留（对齐原版 IIslandWipe）");
+                    Util.Log(Loc.F("[NewMode][清理] 离开战局：已清除本 mod 投放的 {0} 组残留（对齐原版 IIslandWipe）", n));
                 return;
             }
 
@@ -136,7 +136,7 @@ namespace BadNorthNewMode
 
             eol.postProcess += OnLevelPostProcess;
             _subscribedLevelEnd = true;
-            Util.Log("[NewMode] 已订阅原版战局结束事件 EndOfLevel.postProcess（用于自动清场）。");
+            Util.Log(Loc.T("[NewMode] 已订阅原版战局结束事件 EndOfLevel.postProcess（用于自动清场）。"));
         }
 
         /// <summary>战局结束（结算完成）→ 立刻清掉本 mod 投放的对象。</summary>
@@ -145,11 +145,11 @@ namespace BadNorthNewMode
             try
             {
                 int n = DestroyAll();
-                Util.Log(string.Format("[NewMode][清理] 战局结束（{0}）：已清除本 mod 投放的 {1} 组对象", ReasonName(), n));
+                Util.Log(Loc.F("[NewMode][清理] 战局结束（{0}）：已清除本 mod 投放的 {1} 组对象", ReasonName(), n));
             }
             catch (System.Exception e)
             {
-                Util.Error("[NewMode][清理] 战局结束清理异常：" + e);
+                Util.Error(Loc.F("[NewMode][清理] 战局结束清理异常：{0}", e));
             }
         }
 

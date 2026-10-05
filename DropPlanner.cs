@@ -44,16 +44,16 @@ namespace BadNorthNewMode
             reason = null;
 
             Raid raid = island.raid;
-            if (raid == null || raid.landingContainer == null) { reason = "Raid / landingContainer 未就绪"; return false; }
+            if (raid == null || raid.landingContainer == null) { reason = Loc.T("Raid / landingContainer 未就绪"); return false; }
 
             List<VikingReference> pool = (island.levelNode != null) ? island.levelNode.enemies : null;
             List<Longship> ships = (island.levelNode != null) ? island.levelNode.possibleShips : null;
-            if (pool == null || pool.Count == 0) { reason = "敌人生成池为空"; return false; }
-            if (ships == null || ships.Count == 0) { reason = "possibleShips 为空"; return false; }
-            if (island.beaches == null) { reason = "Beaches 未就绪"; return false; }
+            if (pool == null || pool.Count == 0) { reason = Loc.T("敌人生成池为空"); return false; }
+            if (ships == null || ships.Count == 0) { reason = Loc.T("possibleShips 为空"); return false; }
+            if (island.beaches == null) { reason = Loc.T("Beaches 未就绪"); return false; }
 
             VikingReference vikingRef = UnitCatalog.PickEnemy(island, pool, Util.V(ModConfig.EnemyName, null));
-            if (vikingRef == null || vikingRef.agent == null) { reason = "没有可用的 VikingReference"; return false; }
+            if (vikingRef == null || vikingRef.agent == null) { reason = Loc.T("没有可用的 VikingReference"); return false; }
 
             float seaY = Util.V(ModConfig.WaterLevelY, 0f);
             float maxH = Util.V(ModConfig.MaxLandHeight, 0.5f);
@@ -61,7 +61,7 @@ namespace BadNorthNewMode
 
             int squadSize = UnitCatalog.EffectiveSquadSize(island, ships, vikingRef, Util.V(ModConfig.SquadSize, 0));
             Longship ship = UnitCatalog.PickShipForCount(island, vikingRef, squadSize);   // 人数 → 自动配"装得下的最小船"
-            if (ship == null) { reason = "没有可用长船"; return false; }
+            if (ship == null) { reason = Loc.T("没有可用长船"); return false; }
 
             float maxShore = Mathf.Max(0.5f, Util.V(ModConfig.MaxShoreDistance, 3f));
             List<Beaches.Beach.Pos> cand;
@@ -100,8 +100,8 @@ namespace BadNorthNewMode
             if (!ok)
             {
                 reason = (occWho == null)
-                    ? "附近与全岛的滩头进近廊道都被地形/建筑挡住了——换个位置点"
-                    : string.Format("附近的滩头都被船占着（最近一艘 {0} 离 {1:F1}m，本船需要 ≥{2:F1}m），全岛也没有空位",
+                    ? Loc.T("附近与全岛的滩头进近廊道都被地形/建筑挡住了——换个位置点")
+                    : Loc.F("附近的滩头都被船占着（最近一艘 {0} 离 {1:F1}m，本船需要 ≥{2:F1}m），全岛也没有空位",
                         occWho, Mathf.Sqrt(occDist), minimal);
                 return false;
             }
@@ -119,9 +119,9 @@ namespace BadNorthNewMode
             }
 
             if (Util.V(ModConfig.VerboseLog, false))
-                Util.Log(string.Format("[NewMode] 候选 {0} 个，选中第 {1} 个（阈值 {2:F1}m{3}{4}）",
+                Util.Log(Loc.F("[NewMode] 候选 {0} 个，选中第 {1} 个（阈值 {2:F1}m{3}{4}）",
                     cand.Count, pickIdx + 1, (tier == 0) ? prefer : minimal,
-                    (tier == 1) ? "，已放宽间距" : "", fallback ? "，已改用全岛最近空滩头" : ""));
+                    (tier == 1) ? Loc.T("，已放宽间距") : "", fallback ? Loc.T("，已改用全岛最近空滩头") : ""));
 
             target.beach = pick;
             target.candidates = ordered;
@@ -140,7 +140,7 @@ namespace BadNorthNewMode
         {
             float h = Mathf.Abs(landPoint.y - seaY);
             if (h <= maxH) { reason = null; return true; }
-            reason = string.Format("这里是高地/悬崖（海拔 {0:F2}m，上限 {1:F2}m）——请点与海面齐平的滩头", h, maxH);
+            reason = Loc.F("这里是高地/悬崖（海拔 {0:F2}m，上限 {1:F2}m）——请点与海面齐平的滩头", h, maxH);
             return false;
         }
 
@@ -153,7 +153,7 @@ namespace BadNorthNewMode
             candSq = new List<float>();
 
             List<Beaches.Beach.Pos> positions = BeachPositions(island);
-            if (positions.Count == 0) { reason = "本关没有可用滩头"; return false; }
+            if (positions.Count == 0) { reason = Loc.T("本关没有可用滩头"); return false; }
 
             float radius = ship.radius;
             float maxSq = (maxShore >= 1e6f) ? float.MaxValue : maxShore * maxShore;
@@ -174,7 +174,7 @@ namespace BadNorthNewMode
             }
 
             if (cand.Count > 0) return true;
-            reason = string.Format("附近没有与海面齐平的滩头（最近 {0:F1}m，上限 {1:F1}m；或岸线余量不足）",
+            reason = Loc.F("附近没有与海面齐平的滩头（最近 {0:F1}m，上限 {1:F1}m；或岸线余量不足）",
                 Mathf.Sqrt(nearSq), maxShore);
             return false;
         }
@@ -288,7 +288,7 @@ namespace BadNorthNewMode
                 Landing l = placed[i];
                 if (l == null) continue;
                 _occPos.Add(l.navPos.pos);
-                _occName.Add((l.spawnedShip != null) ? l.spawnedShip.name : "已放置的船");
+                _occName.Add((l.spawnedShip != null) ? l.spawnedShip.name : Loc.T("已放置的船"));
             }
             _occIsland = island;
             _occDirty = false;

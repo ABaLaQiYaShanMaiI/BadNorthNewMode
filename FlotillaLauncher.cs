@@ -91,7 +91,7 @@ namespace BadNorthNewMode
             wave.timeSpreadShip = spread;
             wave.RefreshLandings();
             if (wave.raid != null) wave.raid.StartCoroutine(wave.BeginWave());
-            Util.Log("[NewMode] 编队出发：" + group.landings.Count + " 艘（一条接近音乐）");
+            Util.Log(Loc.F("[NewMode] 编队出发：{0} 艘（一条接近音乐）", group.landings.Count));
         }
 
         static void Clear()
