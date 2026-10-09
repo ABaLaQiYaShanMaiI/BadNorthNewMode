@@ -70,12 +70,13 @@ namespace BadNorthNewMode
             // 原版语义补刀：离开战局 / 岛屿未就绪 / Raid 失效 → 我们的对象也一起走
             bool leaving = (island == null) || (island.state != Island.State.Playing) || (island.raid == null);
 
-            // 重玩关卡：`ReplayIslandRoutine` 只销毁 runContainer、**不碰 raid.landingContainer**，
-            // 我们的船不会被 vanilla 打扫 → 用"runContainer 换新"判断这局是重开的（见 §4 坑表）
+            // 重玩关卡：`ReplayIslandRoutine` 只销毁 runContainer、不碰 landingContainer → 用"换新"判断重开（见 §4）
             if (!leaving)
             {
                 Transform rc = island.runContainer;
-                if (_seenContainer == null) _seenContainer = rc;
+
+                // 用 ReferenceEquals：被 Destroy 的 Transform 用 Unity 的 == 也"等于 null"，会把"换了新容器（= 重开了一局）"误当成"还没初始化"（见 §4）
+                if (object.ReferenceEquals(_seenContainer, null)) _seenContainer = rc;
                 else if (!object.ReferenceEquals(rc, _seenContainer))
                 {
                     int nr = DestroyAll();
@@ -156,7 +157,6 @@ namespace BadNorthNewMode
             Util.Log(Loc.T("[NewMode] 已订阅原版战局结束事件 EndOfLevel.postProcess（用于自动清场）。"));
         }
 
-        /// <summary>战局结束（结算完成）→ 立刻清掉本 mod 投放的对象。</summary>
         void OnLevelPostProcess(Island island)
         {
             try

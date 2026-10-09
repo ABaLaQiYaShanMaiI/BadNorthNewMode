@@ -56,7 +56,6 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>可选（含船上）数量；native = 只数原生 / 只数非原生。</summary>
         internal static int SelectableCount(bool native)
         {
             int n = 0;

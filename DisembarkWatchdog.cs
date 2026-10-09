@@ -29,7 +29,6 @@ namespace BadNorthNewMode
             return _instance;
         }
 
-        /// <summary>登记一艘本 mod 投放的船。</summary>
         internal void Watch(Landing landing)
         {
             if (landing == null) return;

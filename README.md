@@ -1,4 +1,4 @@
-# Bad North - New Mode
+# Bad North - New Mode  v1.6.0
 
 A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and remote-controlling enemy units.
 
@@ -10,12 +10,14 @@ A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and
 - Remote control (after closing the menu) — the mouse scheme follows the game's own cursor setting:
   - Two-button setting: left-click a unit = select that one unit; double-click = select its whole squad; right-click a tile = advance.
   - One-button / touch setting: one button does both, exactly like vanilla — with nothing selected it selects the unit you click, and with a selection it advances when you click a tile.
-  - Hold `Shift` and click = add / remove a unit. `R` = select all. Hold `Alt` and drag = box select.
-  - You may select units while they are still aboard a ship: click a tile to set the rally point they walk to right after landing.
-  - Clicking the sea or any invalid tile clears the selection (same as vanilla).
-- Dropped units stand still once they reach the rally point (no more twitching) and can burn houses like any viking.
+  - Hold `Shift` and click = add / remove a unit. `R` = select all. Hold `Alt` and drag = box select; dragging **without** `Alt` pans the camera as vanilla.
+  - Box-selecting several squads lets you command them together: each squad takes one tile (the clicked tile, then the tiles around it) and lines up on it exactly like your own squads do.
+  - You may select units while they are still aboard a ship (native ones too): click a tile to set the rally point they walk to right after landing.
+  - Clicking the sea or any invalid tile clears the selection (same as vanilla). Nothing moves unless something is selected.
+- The `F1` menu has a one-click **Release remote control** button: every controlled squad goes back to vanilla AI.
+- Units line up on arrival (compact, exactly like your own squads) and hold position without twitching, and can burn houses like any viking.
 - Your own squads keep the mouse buttons as vanilla.
-- Options (`BepInEx/config/badnorth.newmode.cfg`), both toggleable from the `F1` menu: `[Native] RemoteNativeUnits` (on by default) lets you select and command the vanilla enemies too; `[Native] BlockVanillaWaves` = endless custom mode (no vanilla waves, and the battle never ends by itself — press `F3` to leave); `[Remote] RemoteOrderButton` = `Auto` follows your cursor setting, `Left` restores the old v1.5.4 feel.
+- Options (`BepInEx/config/badnorth.newmode.cfg`), both toggleable from the `F1` menu: `[Native] ControlNativeUnits` (on by default) lets you select and command the vanilla-spawned enemies (the native units) as well; `[Native] BlockVanillaWaves` = endless custom mode (no vanilla waves, and the battle never ends by itself — press `F3` to leave); `[Remote] RemoteOrderButton` = `Auto` follows your cursor setting, `Left` restores the old v1.5.4 feel.
 
 ## Links & License
 
@@ -24,7 +26,7 @@ A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and
 
 ---
 
-# Bad North - New Mode（简体中文）
+# Bad North - New Mode v1.6.0（简体中文）
 
 BepInEx 模组：给《Bad North》加“投放敌舰 + 遥控敌方单位”。
 
@@ -36,9 +38,12 @@ BepInEx 模组：给《Bad North》加“投放敌舰 + 遥控敌方单位”。
 - 遥控（关闭菜单后，**鼠标方案跟随游戏的单/双键设置**）：
   - 双键：左键点单位 = 选中这**一个**；双击 = 选整队；右键点地块 = 前进。
   - 单键/触摸：没选中时点单位 = 选中；有选中时点地块 = 前进。
-  - `Shift` + 点 = 并入/移出；`R` = 全选；`Alt` + 拖动 = 框选。
-  - 船上也能选：点地块定下登陆集结点，落地自动前往。
-  - 点海面 = 取消选中；单位集结后站得住、能烧房子。
+  - `Shift` + 点 = 并入/移出；`R` = 全选；`Alt` + 拖动 = 框选（**不按 Alt** 拖动 = 原版平移相机）。
+  - 框选**多支部队**可一起指挥：点地块后它们分头前往该格与相邻格，**每支部队在各自格上排成和我方小队一样的紧凑队形**。
+  - 船上也能选（原生单位同样可以）：点地块定下登陆集结点，落地自动前往。
+  - 点海面 = 取消选中；**没选中任何单位时点地块不会移动**。
+- `F1` 菜单里有一键**释放遥控**（全部小队交还原版 AI）。
+- 单位集结后站在目标格上排好队形、不抽动（人多也一样），能烧房子。
 - 我方小队仍按原版。
 - 选项见 `badnorth.newmode.cfg`：原版敌人也可遥控（默认开），F1 菜单里可切两个接管开关。
 

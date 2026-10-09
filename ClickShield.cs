@@ -9,7 +9,6 @@ namespace BadNorthNewMode
         static GameObject _root;
         static RawImage _block;
 
-        /// <summary>菜单开 → 盖上并摆位（用上一帧矩形）；关或 cfg 关闭 → 撤掉。</summary>
         internal static void Sync(bool menuOpen, Rect menuRect)
         {
             if (!menuOpen || !Util.V(ModConfig.MenuBlocksWorldClicks, true)) { Hide(); return; }

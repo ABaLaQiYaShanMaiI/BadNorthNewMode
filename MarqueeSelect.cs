@@ -84,13 +84,16 @@ namespace BadNorthNewMode
                 _start = Input.mousePosition;
                 _pressUnit = NearestForeignUnitWorld(_start);                 // 主路径：世界距离（与投放同一套 NavSpotCast）
                 if (_pressUnit == null) _pressUnit = NearestForeignUnit(_start);   // 兜底：屏幕半径
-                _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
+                // 框选入口：按住 Alt（v1.6.0 起唯一）；"从自己单位上起拖"要 cfg RemoteMarqueeFromUnit 开（见 §5）
+                _grab = FreeMarqueeKeyHeld() ||
+                        (Util.V(ModConfig.RemoteMarqueeFromUnit, false) && _pressUnit != null);
                 _clickUsedForSelect = FreeMarqueeKeyHeld() || (!routed && ShiftHeld() && (_pressUnit != null));
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
 
-                // 空点（不在我们的单位上、也不在我方小队上）→ 清掉遥控选择（照抄原版 DeselectUnit + 同名音效）
-                if (routed && !single && !_grab && !FreeMarqueeKeyHeld() && !VanillaSelected && !OverVanillaSquad(_start))
-                    ClearPendingWithSound();
+                // 左键点在"我们的单位 / 我方小队"以外 = 取消我们的选中；**不看落点有效性**（否则贴岸海面会漏取消，见 §5/T34）
+                if (routed && !single && !FreeMarqueeKeyHeld() && !VanillaSelected && !OverVanillaSquad(_start)
+                    && HasPending && PickAtTight(_start) == null)
+                    CancelSelectionLikeVanilla();
             }
 
             // 接管模式下右键专用于下令，所以只有非接管模式才需要"Shift + 右键点单位 = 选整队"（右键无拖动路径，按下即判定）
@@ -247,7 +250,6 @@ namespace BadNorthNewMode
                 NearestScreenInfo(_pendingCenter)));
         }
 
-        /// <summary>把待成队列表按兵种写成一串（HUD 提示用）。</summary>
         static string DescribePending()
         {
             if (_pending == null || _pending.Count == 0) return Loc.T("无");
@@ -368,30 +370,48 @@ namespace BadNorthNewMode
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
 
-            // 控制敌我：原版上岛的敌人也登记进来（`[Native] RemoteNativeUnits`）——它们与我们投放的单位同为 vikings 阵营
-            if (!Util.V(ModConfig.RemoteNativeUnits, true)) return;
+            // 原生单位（原版上岛的敌人）也登记进来：与我们投放的（非原生）同为 vikings 阵营
+            if (!Util.V(ModConfig.ControlNativeUnits, true)) return;
 
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
             Island island = (gm != null) ? gm.island : null;
             Faction vik = (island != null) ? island.vikings : null;
             if (vik == null || vik.agents == null) return;
 
+            int added = 0;
             for (int i = 0; i < vik.agents.Count; i++)
             {
                 Agent a = vik.agents[i];
                 if (a == null || a.GetComponent<ForeignUnit>() != null) continue;
-                if (!ForeignUnit.Commandable(a)) continue;                  // 船上 / 未生成的跳过（原生单位不给"预令"）
+                if (!ForeignUnit.Selectable(a)) continue;                   // v1.6.0：船上的原生单位也先登记，能像我们的单位一样"上船前就选好"（落地自动去集结点）
 
                 VikingAgent va = a.GetComponent<VikingAgent>();
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name, true);
+                added++;
+            }
+
+            if (added > 0 && !object.ReferenceEquals(_loggedIsland, island))
+            {
+                _loggedIsland = island;
+                Util.Log(Loc.F("[NewMode] 已登记原生单位 {0} 个（可遥控；F1 菜单可关）。", added));
             }
         }
+
+        static Island _loggedIsland;
 
         /// <summary>指针下的可选单位（世界距离主路径 + 屏幕半径兜底）。</summary>
         internal static ForeignUnit PickAt(Vector2 screenPos)
         {
             ForeignUnit f = NearestForeignUnitWorld(screenPos);
             if (f == null) f = NearestForeignUnit(screenPos);
+            return f;
+        }
+
+        /// <summary>接管点击用的严格命中：落点不可站立（点海面）时跳过世界距离匹配，只留 24px 屏幕兜底（否则点击会被抢走，见 §5/T34）。</summary>
+        internal static ForeignUnit PickAtTight(Vector2 screenPos)
+        {
+            ForeignUnit f = ValidStand(screenPos) ? NearestForeignUnitWorld(screenPos) : null;
+            if (f == null) f = NearestForeignUnitWithin(screenPos, 24);
             return f;
         }
 
@@ -409,22 +429,73 @@ namespace BadNorthNewMode
             return !object.ReferenceEquals(ss.GetSquadFromRaycast(screenPos), null);
         }
 
-        /// <summary>清掉"已选中"并播原版取消音（同 `Navigator.DeselectUnit`，见 §5/T23）。</summary>
-        internal static void ClearPendingWithSound()
+        /// <summary>原版"有效目标格"的判据（同 `NavSpotter.NavSpotCast`）：Voxels/Modules 两层取最近格，**离落点 >1m 即无效**（点崖壁/建筑侧面/海面都会命中）。</summary>
+        internal static NavSpot NavSpotAt(Vector2 screenPos, Island island)
         {
-            if (!HasPending) return;
-            ClearPending();
-            FabricWrapper.PostEvent("UI/InGame/UnitDeselect");
+            // ① 原版同源：返回 null 就是"无效格"，直接采信——用自家全场景射线"翻案"会把点海面判成有效（见 §5/T34）
+            try { return NavSpot.NavSpotCast(screenPos); }
+            catch { }                                        // 只有取点本身抛异常（currentLevel 未就绪等）才兜底
+
+            // ② 兜底：照抄原版 NavSpotter.NavSpotCast（Voxels/Modules 命中点 → GetNavSpot → 同一道 1m 闸门）
+            if (island != null && island.navSpotter != null)
+            {
+                try
+                {
+                    RaycastHit hit;
+                    island.navSpotter.NavSpotCast(screenPos, out hit);
+                    if (hit.collider == null) return null;
+                    NavSpot spot = NavSpot.GetNavSpot(hit.point, true);
+                    if (spot == null) return null;
+                    return (Vector3.SqrMagnitude(spot.navPos.pos - hit.point) <= 1f) ? spot : null;
+                }
+                catch { }
+            }
+
+            Vector3 land;
+            string diag;
+            if (island == null || !Plugin.TryGetLandPoint(island, screenPos, out land, out diag)) return null;
+
+            NavSpot near = NavSpot.GetNavSpot(land, true);
+            return (near != null && Vector3.SqrMagnitude(near.navPos.pos - land) <= 1f) ? near : null;
+        }
+
+        static Island CurrentIsland()
+        {
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            return (gm != null) ? gm.island : null;
+        }
+
+        static bool ValidStand(Vector2 screenPos)
+        {
+            return NavSpotAt(screenPos, CurrentIsland()) != null;
+        }
+
+        /// <summary>照抄原版：点海面 / 非可站立地块 = 取消选中（有选中播 `UnitDeselect`，否则播 `Error`）。</summary>
+        internal static void CancelSelectionLikeVanilla()
+        {
+            if (HasPending)
+            {
+                ClearPending();
+                FabricWrapper.PostEvent("UI/InGame/UnitDeselect");
+                IngameMenu.Say(Loc.T("已取消选择"));
+                return;
+            }
+
+            FabricWrapper.PostEvent("UI/InGame/Error");
         }
 
         /// <summary>按下点附近最近的非原生单位（决定"单击选择"的目标；也决定拖动是否算框选）。</summary>
         static ForeignUnit NearestForeignUnit(Vector2 screenPos)
         {
+            return NearestForeignUnitWithin(screenPos, Util.V(ModConfig.RemoteGrabRadius, 64));
+        }
+
+        static ForeignUnit NearestForeignUnitWithin(Vector2 screenPos, int radius)
+        {
             EnsureCandidates();
             Camera cam = Cam();
             if (cam == null) return null;
 
-            int radius = Util.V(ModConfig.RemoteGrabRadius, 64);
             float r2 = (radius <= 0) ? float.MaxValue : (float)radius * radius;
 
             ForeignUnit best = null;
@@ -593,7 +664,7 @@ namespace BadNorthNewMode
 
         internal static bool HasSelection()
         {
-            return HasPending || RemoteGroup.Any;
+            return HasPending;      // 只看"本次选中"：已有小队在册 ≠ 有选中（未选中不得移动，见 §5）
         }
         /// <summary>可被框选/标记/点选：还活着、已生成——**含仍在船上**（v1.5.6 起可以在船上就选好）。</summary>
         static bool Usable(Agent a)
@@ -815,7 +886,6 @@ namespace BadNorthNewMode
             GUI.color = Color.white;
         }
 
-        /// <summary>空心方框（目标格用）。</summary>
         static void DrawRing(Camera cam, Vector3 world, Color c, float size)
         {
             Vector3 sp = cam.WorldToScreenPoint(world);

@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.7";
+        public const string VERSION = "1.6.0";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -46,6 +46,8 @@ namespace BadNorthNewMode
             ConfigEntry<KeyboardShortcut> hk = ModConfig.Hotkey;
             Log.LogInfo(Loc.F("[NewMode] v{0} 已加载：{1} 开关投放模式，点击滩头陆地投放敌舰。",
                 VERSION, (hk != null) ? hk.Value.ToString() : Loc.T("(热键未绑定)")));
+            Log.LogInfo(Loc.F("[NewMode] 接管开关：原版波次拦下 = {0}，原生单位可遥控 = {1}（F1 菜单可切）。",
+                Util.V(ModConfig.BlockVanillaWaves, false), Util.V(ModConfig.ControlNativeUnits, true)));
         }
 
         void Update()
@@ -80,7 +82,6 @@ namespace BadNorthNewMode
             HandleRemoteMode(gm);                          // v1.4.0：菜单关闭时 = 遥控模式
         }
 
-        /// <summary>投放模式（F1 菜单开着时）：滩头悬停预览 + 点击投放。</summary>
         void HandleDropMode(IslandGameplayManager gm)
         {
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
@@ -137,7 +138,7 @@ namespace BadNorthNewMode
             FlushPendingMove(gm);                                             // ① 先结算上一次"普通点击下令"
 
             if (MarqueeSelect.Dragging) return;                               // 正在框选：不下令
-            if (!RemoteGroup.Any && !MarqueeSelect.HasPending) return;         // 既没有小队、也没有待成队 → 左右键完全归原版
+            if (!MarqueeSelect.HasPending) return;                            // 我们这边没选中 → 左右键完全归原版（未选中不接管，见 §5）
             if (MarqueeSelect.VanillaSelected) return;                        // 你正选着我方小队 → 这次点击归原版（绝不双控）
 
             bool down = Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1);
@@ -201,29 +202,20 @@ namespace BadNorthNewMode
             if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
             if (IngameMenu.Contains(screenPos)) return;                      // 菜单区域内的点击不做下令
 
-            Vector3 land;
-            string diag;
-            if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
-            {
-                FailedTarget(Loc.F("那里不是可站立的地面：{0}", diag));
-                return;
-            }
+            NavSpot spot = MarqueeSelect.NavSpotAt(screenPos, gm.island);
+            if (spot == null) { FailedTarget(Loc.T("那里不是可站立的陆地地块")); return; }   // 内部按"有没有选中"选音效
 
-            NavSpot spot = NavSpot.GetNavSpot(land, true);
-            if (spot == null) { FailedTarget(Loc.T("那里不是可站立的陆地地块")); return; }
-
-            // 有待成队 → 先按兵种分队（多兵种就地分到相邻格），再一起前进；没有待成队 → 直接命令已有小队
             Vector2 center;
             List<ForeignUnit> pending = MarqueeSelect.TakePending(out center);
 
-            if ((pending == null || pending.Count == 0) && RemoteGroup.GroupCount == 0)
+            // 没有"本次选中"就什么都不做：哪怕册上已有遥控小队也不移动（未选中不得移动，见 §5）
+            if (pending == null || pending.Count == 0)
             {
-                IngameMenu.Say(Loc.T("没有选中任何单位：先点一个单位选中它"));
+                IngameMenu.Say(Loc.T("没有选中单位：先点一个单位选中它"));
                 return;
             }
 
             string msg;
-            if (pending != null && pending.Count > 0)
             {
                 List<ForeignUnit> ready = new List<ForeignUnit>();
                 List<ForeignUnit> aboard = new List<ForeignUnit>();
@@ -256,10 +248,6 @@ namespace BadNorthNewMode
                 }
                 if (string.IsNullOrEmpty(msg)) msg = Loc.T("没有可下令的单位");
             }
-            else
-            {
-                RemoteGroup.MoveTo(spot, out msg);
-            }
 
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
@@ -282,6 +270,26 @@ namespace BadNorthNewMode
         }
 
         /// <summary>反射订阅 pointerRationalizer.onClick（System.Core 3.5 的 Action`2，见 §4 坑表）。</summary>
+        /// <summary>一键释放遥控（F1 菜单）：受控小队全部还原接管前的 order，交还原版 AI（见 §5）。</summary>
+        internal static void ReleaseRemoteControl()
+        {
+            int groups = RemoteGroup.GroupCount;
+            int units = RemoteGroup.TotalCount;
+
+            MarqueeSelect.ClearPending();
+            RemoteGroup.Clear();                                     // 还原 order + 销毁我们挂的组件
+
+            if (groups == 0 && units == 0)
+            {
+                IngameMenu.Say(Loc.T("没有受控的遥控小队"));
+                return;
+            }
+
+            string msg = Loc.F("已释放遥控：{0} 支小队 / {1} 个单位交还原版 AI", groups, units);
+            IngameMenu.Say(msg);
+            Util.Log(Loc.T("[NewMode][遥控] ") + msg);
+        }
+
         void TrySubscribeGameClick()
         {
             if (_subscribed || _subscribeFailed) return;
@@ -454,7 +462,6 @@ namespace BadNorthNewMode
             return go.name + "@" + (string.IsNullOrEmpty(layer) ? go.layer.ToString() : layer);
         }
 
-        /// <summary>HUD + 投放菜单（IngameMenu）+ 遥控框选与标记（MarqueeSelect）。</summary>
         void OnGUI()
         {
             IngameMenu.Draw();

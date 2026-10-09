@@ -18,9 +18,11 @@ namespace BadNorthNewMode
         /// <summary>菜单打开时盖住"原版点击"（v1.5.6，见 PROJECT_SPEC §6 T2）。</summary>
         public static ConfigEntry<bool> MenuBlocksWorldClicks;
 
-        // ============ Native（拦下原版波次 / 控制原版单位）============
+        // ============ Native（拦下原版波次 / 控制原生单位）============
         public static ConfigEntry<bool> BlockVanillaWaves;
-        public static ConfigEntry<bool> RemoteNativeUnits;
+
+        /// <summary>控制**原生单位**（原版上岛敌人）。v1.6.0 从 RemoteNativeUnits 改名 —— 旧键的 false 不再影响默认值。</summary>
+        public static ConfigEntry<bool> ControlNativeUnits;
 
         // ============ Remote（v1.4.0 遥控非原生单位）============
         public static ConfigEntry<bool> RemoteControl;
@@ -33,6 +35,7 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> RemoteSlowMo;
         public static ConfigEntry<float> RemoteSlowMoScale;
         public static ConfigEntry<KeyCode> RemoteFreeMarqueeKey;
+        public static ConfigEntry<bool> RemoteMarqueeFromUnit;
         public static ConfigEntry<int> RemoteSoftCap;
         public static ConfigEntry<bool> RemoteHighlight;
 
@@ -155,11 +158,11 @@ namespace BadNorthNewMode
                 "于是本关只会出现你自己投放的单位，且这些永不发射的登陆点不再占滩头（投放更宽松）。\n" +
                 "⚠️ 本关**不会自然结束**：清光自己投放的单位也不会判胜（留给你思考布局的时间）—— 退出请按 F3 强制胜利。\n" +
                 "关掉开关会把原版波次的计时还回去（原版敌人会立刻补发）。默认关。");
-            RemoteNativeUnits = cfg.Bind("Native", "RemoteNativeUnits", true,
-                "**控制敌我**：让**原版上岛的敌人**也能被选中 / 框选 / 点地块前进。\n" +
-                "开启后它们与投放单位共用同一套操作（与原版单位同为 vikings 阵营，只是补一个标记）。\n" +
-                "被遥控期间它们不再自行作战；F2 清场与离开战局**不会销毁**它们（只撤我们的登记）。\n" +
-                "与 BlockVanillaWaves 同时开启时没有意义（那时根本没有原版单位）。默认开。");
+            ControlNativeUnits = cfg.Bind("Native", "ControlNativeUnits", true,
+                "**控制敌我**：让**原生单位**（原版上岛的敌人）也能被选中 / 框选 / 点地块前进。\n" +
+                "开启后它们与**非原生单位**（本 mod 投放的）共用同一套操作；被遥控期间不再自行作战。\n" +
+                "F2 清场与离开战局**不会销毁**它们（只撤我们的登记）。与 BlockVanillaWaves 同时开启时没有意义（那时没有原生单位）。\n" +
+                "（v1.6.0 起本项改名为 ControlNativeUnits：旧的 RemoteNativeUnits=false 不再被读取，默认开。）");
         }
 
         static void BindRemote(ConfigFile cfg)
@@ -187,11 +190,16 @@ namespace BadNorthNewMode
                 "左键拖动超过这么多像素才算\"框选\"，否则视为单击（= 按住 Shift 时下达前进命令 / 点在自己单位上时忽略）。");
             RemoteGrabRadius = cfg.Bind("Remote", "RemoteGrabRadius", 64,
                 "只有从\"非原生单位多少像素以内\"起拖才算框选（也是 **Shift+左键点选** 的命中半径）；从别处拖动仍然是原版的相机平移。\n" +
-                "0 = 任意位置起拖都框选。点选总不中就把这个值调大（比如 96）。");
+                "0 = 任意位置起拖都框选。点选总不中就把这个值调大（比如 96）。\n" +
+                "注意：v1.6.0 起\"从单位上起拖 = 框选\"默认**关闭**（见 RemoteMarqueeFromUnit），本值只在它开启时用于起拖判定与 Shift 点选。");
             RemoteFreeMarqueeKey = cfg.Bind("Remote", "RemoteFreeMarqueeKey", KeyCode.LeftAlt,
-                "按住这个键 + 左键拖动 = 从**任意位置**起拖都算框选（等价于临时把相机交给框选）。\n" +
+                "按住这个键 + 左键拖动 = 框选（v1.6.0 起这是**默认唯一**的框选入口；不按它就都是原版相机平移）。\n" +
                 "按下左键**前后**按住都认：中途补按会把这一次拖动就地转成框选（起点 = 补按处）；左右 Alt 都认。\n" +
-                "KeyCode.None = 关闭该快捷键（则只有从单位附近起拖能框选）。默认 左Alt。");
+                "KeyCode.None = 关闭该快捷键（则框选只能靠 RemoteMarqueeFromUnit 那条老路）。默认 左Alt。");
+            RemoteMarqueeFromUnit = cfg.Bind("Remote", "RemoteMarqueeFromUnit", false,
+                "是否保留旧版（v1.5.7）的老手感：**从自己的单位上起拖**也算框选（不必按 Alt）。\n" +
+                "false（默认，v1.6.0）= 拖动永远是原版相机平移，框选请按 Alt；\n" +
+                "true = 老行为（想拖着看地图时容易误框选，按需开启）。");
             RemoteSoftCap = cfg.Bind("Remote", "RemoteSoftCap", 40,
                 "每个兵种小队的上限：0 = 不限；>0 = 框选时按离框中心由近到远取满该数，**多出来的不组队、保持原逻辑**。");
             RemoteHighlight = cfg.Bind("Remote", "RemoteHighlight", true,

@@ -78,7 +78,6 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>HUD 用：把各队写成一串。</summary>
         internal static string DescribeAll()
         {
             if (_groups.Count == 0) return Loc.T("无");
@@ -218,8 +217,7 @@ namespace BadNorthNewMode
             return true;
         }
 
-        /// <summary>切换"当前遥控小队"（对应原版 `SelectNextSquad` / `SelectPreviousSquad`）：把 selected 标记移到下/上一队。</summary>
-        /// <summary>左键点地块：命令"本次选中的小队"前进（最近一次没框到任何队时，命令全部队）。</summary>
+        /// <summary>左键点地块：命令"本次选中的小队"前进（没有选中就什么都不做，见 §5）。</summary>
         internal static bool MoveTo(NavSpot target, out string message)
         {
             if (target == null) { message = Loc.T("那里不是可站立的陆地地块"); return false; }
@@ -228,21 +226,25 @@ namespace BadNorthNewMode
             List<Group> targets = new List<Group>();
             for (int i = 0; i < _groups.Count; i++)
                 if (_groups[i].selected) targets.Add(_groups[i]);
-            if (targets.Count == 0) targets.AddRange(_groups);
+
+            // 不再回退到"命令所有小队"：没有选中就什么都不动（未选中不得移动，见 §5）
+            if (targets.Count == 0) { message = Loc.T("没有选中单位：先点一个单位选中它"); return false; }
 
             string who = null;
             for (int i = 0; i < targets.Count; i++)
             {
                 Group g = targets[i];
 
-                // 第一队去点击格，其余队就地分到**相邻格**（多兵种/人多时不挤同一格；相邻格不够就都挤点击格）
-                NavSpot spot = (i == 0) ? target : NeighbourSpot(target, i);
-                if (spot == null) spot = target;
+                // 各队分头去点击格与相邻格（多兵种时各占一格；相邻格不够就都挤点击格）
+                NavSpot main = (i == 0) ? target : NeighbourSpot(target, i);
+                if (main == null) main = target;
 
-                g.target = spot;
+                // 队内**全在同一格上排阵**（原版我方小队就是这么站的，见 §5/T37）
+                g.target = main;
                 for (int k = 0; k < g.orders.Count; k++)
-                    if (g.orders[k] != null) g.orders[k].SetTarget(spot);
+                    if (g.orders[k] != null) g.orders[k].SetTarget(main);
                 Reslot(g);
+
                 who = (who == null) ? "" : (who + Loc.T("、"));
                 who += g.display + "×" + g.orders.Count;
             }
@@ -266,6 +268,90 @@ namespace BadNorthNewMode
                 if (found == index) return s;
             }
             return null;
+        }
+
+        /// <summary>照抄原版我方小队的站位（`NavSpotFormationSquad.UpdateFormation` + `SlotPusher`，见 §5/T37）：
+        /// 全队排在同一个目标格上；只有 `NavPos.Move` 失败时才做 20% 步长的推挤松弛。</summary>
+        static void Reslot(Group g)
+        {
+            NavSpot spot = g.target;
+
+            // 收集本次要排的成员（其余清空槽位）
+            List<GroupOrder> list = new List<GroupOrder>(g.orders.Count);
+            for (int i = 0; i < g.orders.Count; i++)
+            {
+                GroupOrder o = g.orders[i];
+                if (o == null) continue;
+                if (spot == null || o.agent == null) { o.SetSlot(default(NavPos), false); continue; }
+                list.Add(o);
+            }
+            if (spot == null || list.Count == 0) return;
+
+            NavPos basePos = spot.navPos;
+            if (!basePos.valid)
+            {
+                for (int i = 0; i < list.Count; i++) list[i].SetSlot(default(NavPos), false);
+                return;
+            }
+
+            SquadFormation formation = new SquadFormation(list.Count, spot.meshBounds, spot.lookDir);
+            NavPos[] slots = new NavPos[list.Count];
+            Vector3[] world = new Vector3[list.Count];
+            bool needsPush = false;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                GroupOrder o = list[i];
+                Vector3 offset = formation.Get(i) * (o.agent.radius * 2f * 1.01f);
+
+                NavPos slot = basePos;
+                if (!slot.Move(offset)) needsPush = true;
+
+                slots[i] = slot;
+                world[i] = slot.wPos;
+            }
+
+            if (needsPush) PushApart(list, world);
+
+            for (int i = 0; i < list.Count; i++) list[i].SetSlot(slots[i], world[i]);
+        }
+
+        /// <summary>照抄原版 `SlotPusher`：重叠的两人沿连线各挪 20% 重叠量，迭代到不再重叠（只动行走目标点，见 §5/T37）。</summary>
+        static void PushApart(List<GroupOrder> list, Vector3[] world)
+        {
+            for (int iter = 0; iter < 200; iter++)
+            {
+                bool moved = false;
+
+                for (int i = 0; i < list.Count; i++)
+                {
+                    for (int j = i + 1; j < list.Count; j++)
+                    {
+                        float need = (Radius(list[i]) + Radius(list[j])) * 1.01f;
+                        Vector3 d = world[i] - world[j];
+                        d.y = 0f;
+
+                        float sq = d.sqrMagnitude;
+                        if (sq >= need * need) continue;
+
+                        float len = Mathf.Sqrt(sq);
+                        Vector3 dir = (len <= 0.0001f) ? new Vector3(1f, 0f, 0f) : (d / len);
+                        Vector3 push = dir * (len - need) * 0.2f;      // 与 a 反向：|a| < need 时它是"朝对方"的
+
+                        world[i] -= push;                              // 原版：orderPos.push -= b; orderPos2.push += b;
+                        world[j] += push;
+                        moved = true;
+                    }
+                }
+
+                if (!moved) break;                                     // 收敛（原版靠 while(anyChange) 收敛，这里加步数上限防死循环）
+            }
+        }
+
+        static float Radius(GroupOrder o)
+        {
+            Agent a = (o != null) ? o.agent : null;
+            return (a != null) ? a.radius : 0.25f;
         }
 
         /// <summary>每帧维护：船上单位的集结点认领、剔除阵亡成员、被抢 order 时重新接管、换岛 / 结算时清场。</summary>
@@ -372,6 +458,7 @@ namespace BadNorthNewMode
                         a.brain.order = o.PrevOrder;
                         a.brain.orderMono = o.PrevMono;
                     }
+                    o.RestoreArson();
                     UnityEngine.Object.Destroy(o);
                 }
             }
@@ -379,28 +466,6 @@ namespace BadNorthNewMode
             _rallies.Clear();
             _island = null;
             if (!string.IsNullOrEmpty(reason)) IngameMenu.Say(reason);
-        }
-
-        /// <summary>按目标格重排槽位（原版 SquadFormation，槽距 = radius*2.01）。</summary>
-        static void Reslot(Group g)
-        {
-            bool hasTarget = g.target != null && g.orders.Count > 0;
-            SquadFormation formation = default(SquadFormation);
-            if (hasTarget) formation = new SquadFormation(g.orders.Count, g.target.meshBounds, g.target.lookDir);
-
-            for (int i = 0; i < g.orders.Count; i++)
-            {
-                GroupOrder o = g.orders[i];
-                if (o == null) continue;
-
-                Agent a = o.agent;
-                if (a == null || !hasTarget) { o.SetSlot(Vector3.zero, false); continue; }
-
-                Vector3 offset = formation.Get(i) * (a.radius * 2f * 1.01f);
-                NavPos slot = g.target.navPos;
-                slot.Move(offset);                                  // 失败也无妨：Move 会贴到可达位置
-                o.SetSlot(slot.wPos, true);
-            }
         }
     }
 }

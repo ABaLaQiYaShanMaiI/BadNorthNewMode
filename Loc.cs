@@ -37,7 +37,6 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>切换语言（写回 cfg，下一帧生效）；返回是否真的改了。</summary>
         internal static bool SetLanguage(string mode)
         {
             if (object.ReferenceEquals(Language, null)) return false;
@@ -54,7 +53,6 @@ namespace BadNorthNewMode
             return En.TryGetValue(zh, out en) ? en : zh;
         }
 
-        /// <summary>带占位符的简中格式串 → 当前语言后再格式化。</summary>
         internal static string F(string zhFormat, params object[] args)
         {
             return string.Format(T(zhFormat), args);
@@ -95,7 +93,6 @@ namespace BadNorthNewMode
             { "指针不在陆地上（{0}）", "Pointer is not on land ({0})" },
             { "滩头可用：落差 {0:F2}m，距点击处 {1:F1}m", "Beachhead OK: height offset {0:F2}m, {1:F1}m from the click" },
             { "轮询兜底", "polling fallback" },
-            { "那里不是可站立的地面：{0}", "Not walkable ground: {0}" },
             { "那里不是可站立的陆地地块", "That is not a walkable land tile" },
             { "[NewMode][遥控] ", "[NewMode][remote] " },
             { "[NewMode] 找不到 onClick 事件或回调方法 → 改用轮询兜底。", "[NewMode] onClick event or callback not found -> falling back to polling." },
@@ -155,7 +152,12 @@ namespace BadNorthNewMode
             { "原生单位：可遥控", "Native units: controllable" },
             { "原生单位：不可", "Native units: not controllable" },
             { "已切换：{0}", "Toggled: {0}" },
-            { "没有选中任何单位：先点一个单位选中它", "nothing selected: click a unit to select it first" },
+            { "没有选中单位：先点一个单位选中它", "no unit selected: click a unit to select it first" },
+            { "已取消选择", "selection cleared" },
+            { "一键释放遥控（全部交还原版 AI）", "Release remote control (all units back to vanilla AI)" },
+            { "拖动 = 平移相机｜Alt + 拖动 = 框选（多支部队会分到点击格与相邻格）", "Drag = pan camera | Alt + drag = box-select (extra squads take the clicked tile and its neighbours)" },
+            { "已释放遥控：{0} 支小队 / {1} 个单位交还原版 AI", "remote control released: {0} squads / {1} units back to vanilla AI" },
+            { "没有受控的遥控小队", "no remote squads under control" },
             { "已选择兵种：{0}", "Unit type selected: {0}" },
             { "[NewMode] 已选择兵种：{0}", "[NewMode] unit type selected: {0}" },
             { "已设定数量：{0}（超出船容量会自动裁剪）", "Count set to {0} (clamped to ship capacity)" },
@@ -215,7 +217,12 @@ namespace BadNorthNewMode
             { "船上已选中 {0} 人：登陆后自动前往集结点", "Selected {0} unit(s) aboard: they will head to the rally point right after landing" },
             { "登陆单位已就位 → {0}", "landed units are ready -> {0}" },
             { "没有可下令的单位", "no unit to command" },
-            { "[NewMode] 点击路由已启用：左键选整队、右键前进（自动跟随单/双键设置）。", "[NewMode] click routing enabled: left-click selects a squad, right-click advances (follows the one/two-button setting)." },
+            { "[NewMode] 点击路由已启用：单击选 1 个 / 双击选整队、点地块前进（自动跟随单/双键设置）。", "[NewMode] click routing enabled: click = select one, double-click = whole squad, click a tile = advance (follows the one/two-button setting)." },
+            { "[NewMode] 已登记原生单位 {0} 个（可遥控；F1 菜单可关）。", "[NewMode] registered {0} native unit(s) (controllable; turn it off in the F1 menu)." },
+            { "拦下 = 本关无原版敌人（无尽，F3 退出）；可遥控 = 原生敌人也能指挥", "blocked = no vanilla enemies this battle (endless, leave with F3); controllable = you can also command the native enemies" },
+            { "[NewMode] 接管开关：原版波次拦下 = {0}，原生单位可遥控 = {1}（F1 菜单可切）。", "[NewMode] takeover switches: vanilla waves blocked = {0}, native units controllable = {1} (togglable in the F1 menu)." },
+            { "[NewMode][烧房] 房距 {0:F2}｜orderDist {1:F2}｜放行 {2}｜房子 {3}", "[NewMode][arson] house distance {0:F2} | orderDist {1:F2} | allowed {2} | house {3}" },
+            { "无（没有分到房子）", "none (no house assigned)" },
             { "[NewMode] 点击路由异常：{0}", "[NewMode] click routing error: {0}" },
             { "[NewMode] 点击处理异常：{0}", "[NewMode] click handling error: {0}" },
             { "框里没有非原生单位", "no foreign units inside the box" },

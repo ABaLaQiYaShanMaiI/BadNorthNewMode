@@ -19,7 +19,6 @@ namespace BadNorthNewMode
         float _until;
         float _phase;
 
-        /// <summary>取（或懒创建）唯一的标记实例。</summary>
         internal static PlacementMarker Get()
         {
             if (_instance != null) return _instance;

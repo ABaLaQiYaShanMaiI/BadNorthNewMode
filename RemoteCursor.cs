@@ -40,7 +40,7 @@ namespace BadNorthNewMode
             }
 
             Get();
-            Util.Log(Loc.T("[NewMode] 点击路由已启用：左键选整队、右键前进（自动跟随单/双键设置）。"));
+            Util.Log(Loc.T("[NewMode] 点击路由已启用：单击选 1 个 / 双击选整队、点地块前进（自动跟随单/双键设置）。"));
         }
 
         /// <summary>按下瞬间定归属与意图（"选/走"由单双键设置决定）；只有归我们才压栈顶。</summary>
@@ -54,12 +54,13 @@ namespace BadNorthNewMode
                 Vector2 screenPos = Input.mousePosition;
                 if (!Plugin.InBattle(Singleton<IslandGameplayManager>.instance, out _)) return;
 
-                ForeignUnit over = MarqueeSelect.PickAt(screenPos);
+                ForeignUnit over = MarqueeSelect.PickAtTight(screenPos);
+                bool overVanilla = MarqueeSelect.OverVanillaSquad(screenPos);
 
                 if (MarqueeSelect.SingleButtonMode())
                 {
                     // 单键/触摸：照抄原版映射（没选中→选；有选中→走）
-                    if (MarqueeSelect.VanillaSelected) return;
+                    if (MarqueeSelect.VanillaSelected || overVanilla) return;
                     if (MarqueeSelect.ShiftHeld() && over != null) { Push(false); return; }
                     if (MarqueeSelect.HasSelection()) { Push(true); return; }
                     if (over != null) { Push(false); return; }
@@ -68,12 +69,13 @@ namespace BadNorthNewMode
 
                 if (Input.GetMouseButtonDown(0))
                 {
-                    if (over == null) return;                           // 不点在可选单位上 → 归原版
+                    if (over == null || overVanilla) return;             // 我方小队优先 → 归原版（否则选不到自己人）
                     Push(false);
                 }
                 else if (Input.GetMouseButtonDown(1))
                 {
                     if (MarqueeSelect.VanillaSelected) return;           // 原版管着我方小队 → 归原版
+                    if (!MarqueeSelect.HasSelection()) return;            // 我们这边没选中 → 100% 归原版（未选中不接管，见 §5）
                     Push(true);
                 }
             }
@@ -153,7 +155,7 @@ namespace BadNorthNewMode
 
                 if (order) { Plugin.RemoteOrderAt(screenPos); return; }
 
-                ForeignUnit unit = MarqueeSelect.PickAt(screenPos);
+                ForeignUnit unit = MarqueeSelect.PickAtTight(screenPos);
                 if (unit == null) return;
 
                 bool squad = false;                                  // 双击同一个单位 = 选整队（v1.5.7）

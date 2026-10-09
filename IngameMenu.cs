@@ -53,9 +53,32 @@ namespace BadNorthNewMode
 
         internal static void Draw()
         {
-            DrawHud();
-            if (IsOpen) DrawMenu();
+            if (GUI.skin == null) { DrawHud(); if (IsOpen) DrawMenu(); return; }
+
+            // 借用游戏自己的皮肤，只把字号临时改成 FontSize（CJK/英文都能完整显示），画完立刻原样还回去
+            GUISkin skin = GUI.skin;
+            int oldLabel = skin.label.fontSize, oldButton = skin.button.fontSize, oldBox = skin.box.fontSize;
+            skin.label.fontSize = FontSize;
+            skin.button.fontSize = FontSize;
+            skin.box.fontSize = FontSize;
+            try
+            {
+                DrawHud();
+                if (IsOpen) DrawMenu();
+            }
+            finally
+            {
+                skin.label.fontSize = oldLabel;
+                skin.button.fontSize = oldButton;
+                skin.box.fontSize = oldBox;
+            }
         }
+
+        const int FontSize = 12;
+
+        /// <summary>菜单宽度：中英分别给足，避免长句被裁。</summary>
+        static float MenuWidth { get { return Loc.IsEnglish ? 760f : 600f; } }
+        static float HudWidth { get { return Mathf.Min(920f, Mathf.Max(320f, Screen.width - 16f)); } }
 
         static void DrawHud()
         {
@@ -100,20 +123,19 @@ namespace BadNorthNewMode
             float h = 12f + lines * 18f;
 
             GUI.color = new Color(0f, 0f, 0f, 0.65f);
-            GUI.DrawTexture(new Rect(8f, 8f, 820f, h), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(8f, 8f, HudWidth, h), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            GUI.Label(new Rect(16f, 10f, 820f, h - 4f), text);
+            GUI.Label(new Rect(16f, 10f, HudWidth, h - 4f), text);
         }
 
-        /// <summary>兵种菜单：语言行 + 兵种列表 + 数量按钮（左键点击即写回 cfg，立即生效）。</summary>
         static void DrawMenu()
         {
             int n = (_units != null) ? _units.Count : 0;
             float rowH = 26f;
             float headH = 72f;                                   // 语言行 + 标题 + 当前
             float rows = Mathf.Max(1, n);
-            float countH = 48f + 26f;                            // "数量" + 按钮行 + 接管开关行（v1.5.7）
-            _rect = new Rect(8f, 82f, 420f, headH + rows * rowH + countH + 74f);
+            float countH = 48f + 26f + 18f + 30f;                // 数量行 + 接管开关行 + 开关说明行 + 一键释放行（v1.6.0）
+            _rect = new Rect(8f, 82f, MenuWidth, headH + rows * rowH + countH + 92f);   // 末段 = 4 行按键说明（v1.6.0 起多一行"拖动/框选"）
 
             GUI.color = new Color(0f, 0f, 0f, 0.82f);
             GUI.DrawTexture(_rect, Texture2D.whiteTexture);
@@ -179,13 +201,21 @@ namespace BadNorthNewMode
             }
 
             // ---- 接管开关（写回 cfg，立即生效）----
-            float ty = cy + countH;
+            float ty = cy + 48f;
             float tw = (w - 8f) * 0.5f;
             DrawToggle(new Rect(x, ty, tw, 24f), ModConfig.BlockVanillaWaves, Loc.T("原版波次：拦下"), Loc.T("原版波次：正常"));
-            DrawToggle(new Rect(x + tw + 8f, ty, tw, 24f), ModConfig.RemoteNativeUnits, Loc.T("原生单位：可遥控"), Loc.T("原生单位：不可"));
+            DrawToggle(new Rect(x + tw + 8f, ty, tw, 24f), ModConfig.ControlNativeUnits, Loc.T("原生单位：可遥控"), Loc.T("原生单位：不可"));
+            GUI.Label(new Rect(x, ty + 26f, w, 18f), Loc.T("拦下 = 本关无原版敌人（无尽，F3 退出）；可遥控 = 原生敌人也能指挥"));
 
-            // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
-            float hy = ty + 26f;
+            // ---- 一键释放遥控（v1.6.0）：受控小队全部按默认逻辑交还原版 AI ----
+            if (GUI.Button(new Rect(x, ty + 46f, w, 26f), Loc.T("一键释放遥控（全部交还原版 AI）")))
+                Plugin.ReleaseRemoteControl();
+
+            // ---- 说明与按键（关菜单后生效）：拖动/框选 + 4 行操作说明 ----
+            GUI.Label(new Rect(x, cy + countH + 54f, w, 18f),
+                Loc.T("拖动 = 平移相机｜Alt + 拖动 = 框选（多支部队会分到点击格与相邻格）"));
+
+            float hy = cy + countH;
             GUI.Label(new Rect(x, hy, w, 18f), MarqueeSelect.SingleButtonMode()
                 ? Loc.T("单键：点单位 = 选中｜双击 = 整队｜有选中时点地块 = 前进")
                 : Loc.T("双键：左键点单位 = 选中｜双击 = 整队｜右键点地块 = 前进"));
@@ -193,7 +223,6 @@ namespace BadNorthNewMode
             GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("船上也能选（落地自动去集结点）｜F2 清场 · F3 强制胜利"));
         }
 
-        /// <summary>接管开关按钮：显示当前状态，点击写回 cfg（与兵种 / 数量按钮同一套做法）。</summary>
         static void DrawToggle(Rect r, ConfigEntry<bool> entry, string onLabel, string offLabel)
         {
             if (entry == null) return;
@@ -211,7 +240,6 @@ namespace BadNorthNewMode
             GUI.color = old;
         }
 
-        /// <summary>语言按钮：当前语言高亮；点击写回 cfg。</summary>
         static void DrawLangButton(Rect r, string label, bool active, string mode)
         {
             Color old = GUI.color;
@@ -229,7 +257,6 @@ namespace BadNorthNewMode
             Util.Log("[NewMode] Language = " + mode);
         }
 
-        /// <summary>选中兵种：写回 cfg（自动保存），下次投放生效。</summary>
         static void SelectUnit(VikingReference unit)
         {
             if (unit == null || ModConfig.EnemyName == null) return;
@@ -240,7 +267,6 @@ namespace BadNorthNewMode
             Util.Log(Loc.F("[NewMode] 已选择兵种：{0}", unit.name));
         }
 
-        /// <summary>设定装载数量：点多少就装多少（超出最大船容量才会被裁）。</summary>
         static void SelectCount(int value)
         {
             if (ModConfig.SquadSize == null || ModConfig.SquadSize.Value == value) return;

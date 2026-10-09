@@ -60,7 +60,6 @@ namespace BadNorthNewMode
             return newGroup;
         }
 
-        /// <summary>立刻发射当前编队（`FlotillaDelay = 0` 时用）。</summary>
         internal static void FlushNow()
         {
             if (_instance != null) _instance.Launch();
