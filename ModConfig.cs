@@ -9,14 +9,23 @@ namespace BadNorthNewMode
         // ============ General ============
         public static ConfigEntry<KeyboardShortcut> Hotkey;
         public static ConfigEntry<KeyboardShortcut> CleanupHotkey;
+        public static ConfigEntry<KeyboardShortcut> ForceWinHotkey;
         public static ConfigEntry<bool> ShowHud;
         public static ConfigEntry<string> EnemyName;
         public static ConfigEntry<int> SquadSize;
         public static ConfigEntry<bool> AllowCrossIslandUnits;
 
+        /// <summary>菜单打开时盖住"原版点击"（v1.5.6，见 PROJECT_SPEC §6 T2）。</summary>
+        public static ConfigEntry<bool> MenuBlocksWorldClicks;
+
+        // ============ Native（v1.5.6 原版波次与原生单位）============
+        public static ConfigEntry<bool> BlockVanillaWaves;
+        public static ConfigEntry<bool> RemoteNativeUnits;
+
         // ============ Remote（v1.4.0 遥控非原生单位）============
         public static ConfigEntry<bool> RemoteControl;
         public static ConfigEntry<bool> RemoteMoveRequiresModifier;
+        public static ConfigEntry<string> RemoteOrderButton;
         public static ConfigEntry<int> RemoteMarqueePixels;
         public static ConfigEntry<int> RemoteGrabRadius;
         public static ConfigEntry<float> RemoteClickRadius;
@@ -53,6 +62,7 @@ namespace BadNorthNewMode
         {
             Loc.Bind(cfg);                 // 先绑语言项；本文件的说明文案保持简中，不随语言切换
             BindGeneral(cfg);
+            BindNative(cfg);
             BindRemote(cfg);
             BindLanding(cfg);
             BindDiag(cfg);
@@ -66,9 +76,16 @@ namespace BadNorthNewMode
                 "进/出投放模式的按键。默认 F1。进入后点击水面投放敌舰，右键或 Esc 取消。");
             ShowHud = cfg.Bind("General", "ShowHud", true,
                 "左上角显示模式状态与上一次投放结果（纯 GUI 文本，不需要任何资源）。");
+            MenuBlocksWorldClicks = cfg.Bind("General", "MenuBlocksWorldClicks", true,
+                "菜单打开时，在菜单矩形上盖一层不可见的 UI 拦截面：让游戏自己的点击（选中/移动我方小队）不再被菜单上的点击顺带触发。\n" +
+                "原理 = 原版点击走 EventSystem 射线，被这层挡下后手势接收器收不到按下事件；IMGUI 菜单本身不属于 EventSystem，所以只有这样才能拦住。\n" +
+                "false = 回到旧行为（点菜单时游戏仍会收到这次点击，可能选中压在菜单下的小队）。");
             CleanupHotkey = cfg.Bind("General", "CleanupHotkey", new KeyboardShortcut(KeyCode.F2, new KeyCode[0]),
                 "一键清场：销毁本 mod 投放过的所有船/单位（调试用）。\n" +
                 "销毁是安全的——Agent.OnDestroy 会自行从 faction.agents 摘除，不会留脏数据卡结算。默认 F2。");
+            ForceWinHotkey = cfg.Bind("General", "ForceWinHotkey", new KeyboardShortcut(KeyCode.F3, new KeyCode[0]),
+                "强制胜利：直接走**原版胜利流程**（结算屏 / 成就 / 存档 / checkpoint 全部正常，不是伪造状态）。\n" +
+                "用途 = 接管模式（BlockVanillaWaves 或自己投放的敌人）打完后原版判定不一定能满足，用这个收尾。默认 F3。");
             EnemyName = cfg.Bind("General", "EnemyName", "Viking_Sword",
                 "投放的敌人种类（本阶段只做一种：最基础的普通小兵 = 剑兵 Viking_Sword）。\n" +
                 "取值来自 island.levelNode.enemies / 全局引用字典的名字，例如：\n" +
@@ -131,6 +148,18 @@ namespace BadNorthNewMode
                 "true=自动把滞留敌人移下船；false=只打印诊断、保持原样（用于对照排查）。");
         }
 
+        static void BindNative(ConfigFile cfg)
+        {
+            BlockVanillaWaves = cfg.Bind("Native", "BlockVanillaWaves", false,
+                "接管本关敌人生成：进岛后**阻止原版波次发射**（waveStartTime 置无穷）并把最后一波标记为'已发射/已生成'，\n" +
+                "于是本关只会出现你自己投放的敌人（原版波次一个都不来）。\n" +
+                "副作用：原版进度条会显示得有点怪（这是接管模式，属预期）；打完用 F3 强制胜利收尾最省事。默认关。");
+            RemoteNativeUnits = cfg.Bind("Native", "RemoteNativeUnits", false,
+                "让**原版上岛的敌人**也能被遥控（选中 / 框选 / 点地块前进）：\n" +
+                "开启后它们与投放单位一样进候选集，被接管期间不再自行攻击我方（brain.order 被换成我们的行军指令）。\n" +
+                "与 BlockVanillaWaves 同时开启时没有意义（那时根本没有原生单位）。默认关——原版单位不归你管是原设计。");
+        }
+
         static void BindRemote(ConfigFile cfg)
         {
             RemoteControl = cfg.Bind("Remote", "RemoteControl", true,
@@ -140,6 +169,13 @@ namespace BadNorthNewMode
                 "想跳过等待可直接按住 **Shift / R** 点地块立即下令；**按住 R 再点** = 全选 + 直接前进。\n" +
                 "普通点击会**等 2 帧**确认原版没把这次点击当成\"选/移我方小队\"（也没在框选）才执行 → 一次点击绝不会同时指挥我方与遥控单位。\n" +
                 "注意：遥控只接管行军，它们**仍是我方的敌人**。");
+            RemoteOrderButton = cfg.Bind("Remote", "RemoteOrderButton", "Auto",
+                "遥控的鼠标操作方式（v1.5.6 起**自动跟随游戏的单/双键设置**，即设置里的光标模式）：\n" +
+                "Auto / Right（默认）= 对齐原版：\n" +
+                "    双键模式：左键点我们的单位 = 选整队（不用按 Shift）、右键点地块 = 前进；\n" +
+                "    单键 / 触摸模式：一个键按当前有没有选中决定——没选中时点我们的单位 = 选整队，有选中时点地块 = 前进（与原版同一套映射）。\n" +
+                "Left = v1.5.4 的旧手感：左键点地块即前进（内部等 2 帧确认原版没接管，手感略慢），且不随单/双键适配。\n" +
+                "两种模式都有：Shift + 点 = 并入/移出选择；R = 全选；Alt + 拖动 = 框选。");
             RemoteMoveRequiresModifier = cfg.Bind("Remote", "RemoteMoveRequiresModifier", false,
                 "下令是否必须按住 Shift / R：\n" +
                 "false（默认）= 有选中时**普通点击地块**也能下令（更顺手），代价是每次下令多等 2 帧（约 33ms）用于确认原版是否接管这次点击；\n" +

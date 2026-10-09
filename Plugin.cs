@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.4";
+        public const string VERSION = "1.5.6";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -50,9 +50,11 @@ namespace BadNorthNewMode
         void Update()
         {
             LogFileSwitch.Tick();                       // 重试删日志残留（≤30s，见 LogFileSwitch）
+            ClickShield.Sync(IngameMenu.IsOpen, IngameMenu.MenuRect);   // 菜单开=盖住原版点击（见 §6 T2）；用上一帧矩形
             if (ModConfig.Hotkey == null) return;
 
             TrySubscribeGameClick();
+            RemoteCursor.TrySubscribe();                // v1.5.6：点击路由（左键点单位即选中、右键点地块即前进）
 
             if (ModConfig.Hotkey.Value.IsDown())
             {
@@ -64,6 +66,7 @@ namespace BadNorthNewMode
 
             MarqueeSelect.Tick(gm);                        // 菜单开着时内部自动取消
             RemoteGroup.Tick();                            // 组维护与投放/遥控模式无关
+            LevelTools.Tick(gm);                           // F3 强制胜利 + 拦下原版波次（v1.5.6）
 
             if (IngameMenu.IsOpen) { _pendingMoveFrame = 0; HandleDropMode(gm); return; }   // 开菜单：丢弃挂起的下令
             HandleRemoteMode(gm);                          // v1.4.0：菜单关闭时 = 遥控模式
@@ -113,10 +116,11 @@ namespace BadNorthNewMode
                 DoDrop(gm, screenPos, Loc.T("轮询兜底"));
         }
 
-        /// <summary>遥控模式（菜单关闭时）：Shift + 点单位选整队；有选中时**普通点地块 = 前进**；不改阵营（见 PROJECT_SPEC §5）。</summary>
+        /// <summary>遥控模式（菜单关闭时）。v1.5.6：点击路由交给 RemoteCursor（可用时）——本方法只负责旧路径兜底。</summary>
         void HandleRemoteMode(IslandGameplayManager gm)
         {
             PlacementMarker.Get().Hide();
+            if (RemoteCursor.Available) return;            // 按下即定归属，这里不再处理点击（见 RemoteCursor）
 
             // 按下瞬间记下"原版此刻是否正选着我方小队"：OneButton 模式下原版点地块会「移动我方小队 + 取消选择」，
             // 松开/事后都已查不出来 → 必须在按下那一帧留证（见 §5/T22）。
@@ -176,7 +180,13 @@ namespace BadNorthNewMode
             ExecuteMove(gm, pos);
         }
 
-        /// <summary>把"已选中"的单位派到该屏幕坐标对应的地块（立即路径与延迟路径共用）。</summary>
+        internal static void RemoteOrderAt(Vector2 screenPos)
+        {
+            if (Instance == null) return;
+            Instance.ExecuteMove(Singleton<IslandGameplayManager>.instance, screenPos);
+        }
+
+        /// <summary>下达前进（右键路由 / 立即下令 / 延迟路径共用）；还在船上的只记"登陆后集结点"（见 §5）。</summary>
         void ExecuteMove(IslandGameplayManager gm, Vector2 screenPos)
         {
             string why;
@@ -201,10 +211,36 @@ namespace BadNorthNewMode
             string msg;
             if (pending != null && pending.Count > 0)
             {
-                string capMsg;
-                RemoteGroup.Capture(pending, center, out capMsg);
-                RemoteGroup.MoveTo(spot, out msg);
-                msg = capMsg + " → " + msg;
+                List<ForeignUnit> ready = new List<ForeignUnit>();
+                List<ForeignUnit> aboard = new List<ForeignUnit>();
+                for (int i = 0; i < pending.Count; i++)
+                {
+                    ForeignUnit f = pending[i];
+                    if (f == null) continue;
+                    if (ForeignUnit.Commandable(f.agent)) ready.Add(f);
+                    else if (ForeignUnit.Selectable(f.agent)) aboard.Add(f);   // 还在船上 → 只记集结点
+                }
+
+                msg = null;
+                if (ready.Count > 0)
+                {
+                    string capMsg;
+                    RemoteGroup.Capture(ready, center, out capMsg);
+                    msg = capMsg;
+                }
+                if (aboard.Count > 0)
+                {
+                    string rallyMsg;
+                    RemoteGroup.RequestRally(aboard, spot, out rallyMsg);
+                    msg = string.IsNullOrEmpty(msg) ? rallyMsg : (msg + " → " + rallyMsg);
+                }
+                if (RemoteGroup.GroupCount > 0)
+                {
+                    string moveMsg;
+                    RemoteGroup.MoveTo(spot, out moveMsg);
+                    msg = string.IsNullOrEmpty(msg) ? moveMsg : (msg + " → " + moveMsg);
+                }
+                if (string.IsNullOrEmpty(msg)) msg = Loc.T("没有可下令的单位");
             }
             else
             {
@@ -414,6 +450,8 @@ namespace BadNorthNewMode
         void OnDestroy()
         {
             MarqueeSelect.ClearSlowMo();          // 卸载时释放减速，避免 TimeManager 里留残账
+            ClickShield.Destroy();
+            RemoteCursor.ForceRelease();
         }
 
     }

@@ -4,16 +4,19 @@ A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and
 
 ## Controls
 
-- `F1`: toggle the drop menu; inside it, left-click a unit type and a count, and switch 中文/English at the top.
-- In the menu: left-click a unit type → left-click beachhead land to drop; `Esc` or right-click closes the menu.
+- `F1`: toggle the drop menu (left-click a unit type and a count, switch 中文/English at the top). Inside the menu, left-click beachhead land to drop; `Esc` or right-click closes it.
 - `F2`: clean up — destroys every ship and unit dropped by this mod.
-- After closing the menu you can remote-control dropped units:
-  - Hold `Shift` and left- or right-click a unit: select the whole squad it belongs to; click the same squad again to deselect.
-  - With a squad selected, left- or right-click a tile: the selected units regroup and advance; each unit type forms its own squad, and large groups spread onto neighbouring tiles.
-  - `R`: select all remote-controllable units (time slows while you have a selection); hold `Shift` or `R` while clicking a tile to order at once.
-  - Clicking the sea or any invalid spot clears the selection (same as vanilla).
-  - Hold `Alt` and drag: box select.
-- Your own squads keep the mouse buttons as vanilla: no order is sent when your own squad takes the click.
+- `F3`: force win — runs the vanilla victory flow (results screen, achievements and save all proceed normally).
+- Remote control (after closing the menu) — the mouse scheme follows the game's own cursor setting:
+  - Two-button setting: left-click a unit = select its whole squad; right-click a tile = regroup and advance.
+  - One-button / touch setting: one button does both, exactly like vanilla — with nothing selected it selects our unit, and with a selection it advances when you click a tile.
+  - Hold `Shift` and click: add that squad to / remove it from the selection.
+  - `R`: select all controllable units (time slows while you have a selection).
+  - Hold `Alt` and drag: box select. You can also drag starting on a unit.
+  - You may select units while they are still aboard a ship: click a tile to set the rally point they walk to right after landing.
+  - Clicking the sea or any invalid tile clears the selection (same as vanilla).
+- Your own squads keep the mouse buttons as vanilla.
+- Options (`BepInEx/config/badnorth.newmode.cfg`): `[Remote] RemoteOrderButton` (`Right` = the scheme above, `Left` = the old v1.5.4 feel), `[Native] BlockVanillaWaves` (no vanilla waves this battle), `[Native] RemoteNativeUnits` (also remote-control the vanilla enemies).
 
 ## Links & License
 
@@ -28,16 +31,19 @@ BepInEx 模组：给《Bad North》加“投放敌舰 + 遥控敌方单位”两
 
 ## 操作
 
-- `F1`：开关投放菜单；菜单里左键点兵种、点数量，顶部可切 中文/English。
-- 菜单内：左键点滩头陆地投放；`Esc` 或右键关闭菜单。
-- `F2`：清场，销毁本模组投放的所有船与单位。
-- 关闭菜单后，可遥控已投放的单位：
-  - 按住 `Shift` + 左键或右键点单位：选中它所在的整队；再点同一队取消。
-  - 有选中时，左键或右键点地块：选中的单位集结前进；不同兵种各成一队，人多时占用相邻格。
-  - `R`：全选所有可遥控单位（选中时放慢时间）；按住 `Shift` 或 `R` 点地块 = 立即下令。
-  - 点海面等无效位置 = 取消选中（与原版一致）。
+- `F1`：开关投放菜单（左键点兵种与数量，顶部切 中文/English）；菜单内点滩头陆地投放，右键或 `Esc` 关闭。
+- `F2`：清场，销毁本模组投放的船与单位。
+- `F3`：强制胜利，走原版结算。
+- 遥控（关闭菜单后，**鼠标方案跟随游戏的单/双键设置**）：
+  - 双键设置：左键点单位 = 选整队；右键点地块 = 前进。
+  - 单键/触摸设置：一个键兼两用（没选中时点单位 = 选整队，有选中时点地块 = 前进），与原版一致。
+  - 按住 `Shift` + 点：并入或移出该队。
+  - `R`：全选（有选中时放慢时间）。
   - 按住 `Alt` 拖动：框选。
-- 我方小队仍按原版操作；原版接管这次点击时不下令。
+  - 船上也能选：点地块定下登陆后的集结点，落地后自动前往。
+  - 点海面 = 取消选中。
+- 我方小队仍按原版操作。
+- 选项见 `badnorth.newmode.cfg`。
 
 ## 链接与许可
 

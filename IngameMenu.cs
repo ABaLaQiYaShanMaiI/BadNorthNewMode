@@ -10,6 +10,9 @@ namespace BadNorthNewMode
         internal static bool IsOpen;
         internal static string Hover = "";
 
+        /// <summary>菜单屏幕矩形（IMGUI 坐标：左上原点）——v1.5.6 的点击拦截面（ClickShield）按它摆位。</summary>
+        internal static Rect MenuRect { get { return _rect; } }
+
         static string _hud = "";
         static float _hudUntil;
         static Rect _rect;
@@ -21,7 +24,8 @@ namespace BadNorthNewMode
             IsOpen = !IsOpen;
             Hover = "";
             PlacementMarker.Get().Hide();
-            Say(IsOpen ? Loc.T("投放菜单：左键点兵种选择，再点滩头陆地投放（F1 关闭 / F2 强制清场）") : Loc.T("已关闭投放菜单"));
+            if (!IsOpen) ClickShield.Hide();
+            Say(IsOpen ? Loc.T("投放菜单：左键点兵种选择，再点滩头陆地投放（F1 关闭 / F2 清场 / F3 强制胜利）") : Loc.T("已关闭投放菜单"));
             Util.Log("[NewMode] " + _hud);
         }
 
@@ -30,6 +34,7 @@ namespace BadNorthNewMode
             IsOpen = false;
             Hover = "";
             PlacementMarker.Get().Hide();
+            ClickShield.Hide();
         }
 
         internal static void Say(string msg)
@@ -55,9 +60,10 @@ namespace BadNorthNewMode
         {
             if (!Util.V(ModConfig.ShowHud, true)) return;
 
-            int foreign = ForeignUnit.All.Count;
+            int foreign = ForeignUnit.Count(false);
+            int nativeCount = ForeignUnit.Count(true);
             int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
-            bool active = (foreign > 0) || RemoteGroup.Any;                // 有非原生单位/遥控小队 → 常显状态
+            bool active = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;   // 有单位/遥控小队 → 常显状态
             if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
 
             string text = IsOpen
@@ -69,9 +75,16 @@ namespace BadNorthNewMode
                 text += Loc.F("\n遥控小队：{0}（共 {1}）",
                     RemoteGroup.DescribeAll(), RemoteGroup.TotalCount);
 
+            if (RemoteGroup.HasRally)
+                text += Loc.F("\n待登陆集结：{0} 人 / {1} 处（落地后自动前往）",
+                    RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount);
+
             if (foreign > 0)
-                text += Loc.F("\n非原生单位 {0}（可选 {1}{2}）", foreign, ForeignUnit.UsableCount(),
+                text += Loc.F("\n非原生单位 {0}（可选 {1}{2}）", foreign, ForeignUnit.SelectableCount(false),
                     (selected > 0) ? (Loc.T(", 已选中 ") + selected) : "");
+
+            if (nativeCount > 0)
+                text += Loc.F("\n原生单位 {0}（可选 {1}，可遥控）", nativeCount, ForeignUnit.SelectableCount(true));
 
             if (MarqueeSelect.Dragging)
                 text += Loc.F("\n框选中…（按兵种自动分队，每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40));
@@ -163,9 +176,11 @@ namespace BadNorthNewMode
 
             // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
             float hy = cy + countH;
-            GUI.Label(new Rect(x, hy, w, 18f), Loc.T("Shift + 点左右键点单位 = 选整队"));
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("有选中时点左右键点地块 = 前进｜R = 全选"));
-            GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("Alt + 拖动 = 框选｜F1 关闭菜单 · F2 强制清场"));
+            GUI.Label(new Rect(x, hy, w, 18f), MarqueeSelect.SingleButtonMode()
+                ? Loc.T("单键：点单位 = 选整队｜有选中时点地块 = 前进")
+                : Loc.T("双键：左键点单位 = 选整队｜右键点地块 = 前进"));
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("Shift + 左键 = 并入｜R = 全选｜Alt + 拖动 = 框选"));
+            GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("船上也能选（登陆后自动去集结点）｜F1 关闭 · F2 清场 · F3 强制胜利"));
         }
 
         /// <summary>语言按钮：当前语言高亮；点击写回 cfg。</summary>

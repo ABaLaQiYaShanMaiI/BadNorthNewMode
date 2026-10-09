@@ -18,11 +18,55 @@ namespace BadNorthNewMode
         }
 
         static readonly List<Group> _groups = new List<Group>();
+
+        sealed class Rally
+        {
+            internal NavSpot spot;
+            internal readonly List<ForeignUnit> members = new List<ForeignUnit>();
+        }
+
+        static readonly List<Rally> _rallies = new List<Rally>();
         static Island _island;
 
-        internal static bool Any { get { return _groups.Count > 0; } }
+        internal static bool Any { get { return _groups.Count > 0 || _rallies.Count > 0; } }
+        internal static bool HasRally { get { return _rallies.Count > 0; } }
+        internal static int RallyCount { get { return _rallies.Count; } }
         internal static int GroupCount { get { return _groups.Count; } }
         internal static Group At(int i) { return (i >= 0 && i < _groups.Count) ? _groups[i] : null; }
+
+        internal static NavSpot RallySpot(int i)
+        {
+            return (i >= 0 && i < _rallies.Count) ? _rallies[i].spot : null;
+        }
+
+        internal static int RallyMemberCount()
+        {
+            int n = 0;
+            for (int i = 0; i < _rallies.Count; i++) n += _rallies[i].members.Count;
+            return n;
+        }
+
+        /// <summary>把"还在船上"的选中单位挂到集结点：等它们踩上岛再自动成组前进（见 §5）。</summary>
+        internal static void RequestRally(List<ForeignUnit> aboard, NavSpot spot, out string message)
+        {
+            message = null;
+            if (aboard == null || aboard.Count == 0 || spot == null) return;
+
+            for (int r = _rallies.Count - 1; r >= 0; r--)          // 新命令覆盖旧意图
+            {
+                Rally old = _rallies[r];
+                for (int i = old.members.Count - 1; i >= 0; i--)
+                    if (aboard.Contains(old.members[i])) old.members.RemoveAt(i);
+                if (old.members.Count == 0) _rallies.RemoveAt(r);
+            }
+
+            Rally rally = new Rally();
+            rally.spot = spot;
+            for (int i = 0; i < aboard.Count; i++) rally.members.Add(aboard[i]);
+            _rallies.Add(rally);
+
+            message = Loc.F("船上已选中 {0} 人：登陆后自动前往集结点", aboard.Count);
+        }
 
         internal static int TotalCount
         {
@@ -74,7 +118,7 @@ namespace BadNorthNewMode
             for (int i = 0; i < picked.Count; i++)
             {
                 ForeignUnit f = picked[i];
-                if (f == null || f.agent == null) continue;
+                if (f == null || !ForeignUnit.Commandable(f.agent)) continue;      // 船上的不进队（走集结点通道）
 
                 List<ForeignUnit> bucket;
                 if (!buckets.TryGetValue(f.unitType, out bucket))
@@ -127,7 +171,7 @@ namespace BadNorthNewMode
             CaptureIsland();
             for (int i = 0; i < _groups.Count; i++) Reslot(_groups[i]);
 
-            message = Loc.F("已接管 {0}{1}（左键点地块前进；再点/再框同兵种可并入）", joined,
+            message = Loc.F("已接管 {0}{1}（点地块 = 前进；再点/再框同兵种可并入）", joined,
                 (skipped > 0) ? Loc.F("；另有 {0} 个超过每队上限 {1}，保持原逻辑", skipped, cap) : "");
             return true;
         }
@@ -159,6 +203,7 @@ namespace BadNorthNewMode
         static bool Add(Group g, Agent a)
         {
             if (a == null || a.brain == null) return false;
+            if (!ForeignUnit.Commandable(a)) return false;      // 船上不抢 order（否则 Pirate 卡住不下船）
 
             GroupOrder o = a.GetComponent<GroupOrder>();
             if (o == null) o = a.gameObject.AddComponent<GroupOrder>();
@@ -179,7 +224,7 @@ namespace BadNorthNewMode
         internal static bool MoveTo(NavSpot target, out string message)
         {
             if (target == null) { message = Loc.T("那里不是可站立的陆地地块"); return false; }
-            if (_groups.Count == 0) { message = Loc.T("还没有遥控小队：左键从单位上拖动即可框选"); return false; }
+            if (_groups.Count == 0) { message = Loc.T("还没有遥控小队：先用左键点一个单位选中整队"); return false; }
 
             List<Group> targets = new List<Group>();
             for (int i = 0; i < _groups.Count; i++)
@@ -224,12 +269,14 @@ namespace BadNorthNewMode
             return null;
         }
 
-        /// <summary>每帧维护：剔除阵亡成员、被抢 order 时重新接管、换岛 / 结算时清场。</summary>
+        /// <summary>每帧维护：船上单位的集结点认领、剔除阵亡成员、被抢 order 时重新接管、换岛 / 结算时清场。</summary>
         internal static void Tick()
         {
-            if (_groups.Count == 0) return;
+            if (_groups.Count == 0 && _rallies.Count == 0) return;
 
             Island cur = null;
+            TickRallies(ref cur);
+
             for (int gi = _groups.Count - 1; gi >= 0; gi--)
             {
                 Group g = _groups[gi];
@@ -261,9 +308,47 @@ namespace BadNorthNewMode
                 if (rosterChanged) Reslot(g);
             }
 
-            if (_groups.Count == 0) { _island = null; IngameMenu.Say(Loc.T("遥控小队已全部阵亡 / 消失")); return; }
-            if (cur != null && !object.ReferenceEquals(cur, _island)) { ClearAll(Loc.T("换岛：已清空遥控小队")); return; }
+            if (_groups.Count == 0 && _rallies.Count == 0) { _island = null; IngameMenu.Say(Loc.T("遥控小队已全部阵亡 / 消失")); return; }
+            if (cur != null && _island != null && !object.ReferenceEquals(cur, _island)) { ClearAll(Loc.T("换岛：已清空遥控小队")); return; }
             if (cur != null && cur.state != Island.State.Playing) { ClearAll(Loc.T("战局结束：已清空遥控小队")); return; }
+        }
+
+        /// <summary>船上单位的集结点：等到踩上岛（`navPos.island`）才认领成组并前进；船上期间不碰 order。</summary>
+        static void TickRallies(ref Island cur)
+        {
+            for (int r = _rallies.Count - 1; r >= 0; r--)
+            {
+                Rally rally = _rallies[r];
+                bool waiting = false;
+                List<ForeignUnit> landed = null;
+
+                for (int i = rally.members.Count - 1; i >= 0; i--)
+                {
+                    ForeignUnit f = rally.members[i];
+                    Agent a = (f != null) ? f.agent : null;
+                    if (a == null || !ForeignUnit.Selectable(a)) { rally.members.RemoveAt(i); continue; }
+
+                    cur = a.faction.island;
+                    if (!ForeignUnit.Commandable(a)) { waiting = true; continue; }     // 还在船上 → 下一帧再看
+
+                    if (landed == null) landed = new List<ForeignUnit>();
+                    landed.Add(f);
+                    rally.members.RemoveAt(i);
+                }
+
+                if (landed != null)
+                {
+                    string capMsg;
+                    Capture(landed, new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), out capMsg);
+
+                    string moveMsg;
+                    MoveTo(rally.spot, out moveMsg);
+                    IngameMenu.Say(Loc.F("登陆单位已就位 → {0}", moveMsg));
+                    Util.Log(Loc.T("[NewMode][遥控] ") + capMsg + " → " + moveMsg);
+                }
+
+                if (!waiting || rally.members.Count == 0) _rallies.RemoveAt(r);
+            }
         }
 
         /// <summary>清场（F2 / 换岛 / 结算）：还原接管前的 order 并销毁组件。T9：不提供"战斗中释放回原 AI"。</summary>
@@ -293,6 +378,7 @@ namespace BadNorthNewMode
                 }
             }
             _groups.Clear();
+            _rallies.Clear();
             _island = null;
             if (!string.IsNullOrEmpty(reason)) IngameMenu.Say(reason);
         }

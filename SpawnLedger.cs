@@ -71,6 +71,7 @@ namespace BadNorthNewMode
             if (leaving)
             {
                 int n = DestroyAll();
+                ForeignUnit.ForgetNative();                    // 离开战局：原版单位交还原版，撤掉我们的登记（v1.5.6）
                 if (n > 0)
                     Util.Log(Loc.F("[NewMode][清理] 离开战局：已清除本 mod 投放的 {0} 组残留（对齐原版 IIslandWipe）", n));
                 return;

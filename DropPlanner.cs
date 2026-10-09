@@ -261,7 +261,7 @@ namespace BadNorthNewMode
             for (int i = 0; i < all.Length; i++)
             {
                 Landing l = all[i];
-                if (l != null && l.placed) list.Add(l);
+                if (l != null && l.placed && !LevelTools.IsBlocked(l)) list.Add(l);
             }
             return list;
         }

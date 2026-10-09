@@ -7,7 +7,7 @@
     <!-- 不生成 [assembly: TargetFramework] 特性：该特性类型在游戏 mscorlib 2.0 里不存在，
          虽属无害（CLR 只在反射时才解析特性），但关掉能让 tools/check-api.ps1 的闸门完全干净。 -->
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <Version>1.5.4</Version>
+    <Version>1.5.6</Version>
     <!-- 版本号与仓库提交版本(vX.Y.Z)保持一致：本工程 = 仓库版本，不再用独立的 0.2.x 内部编号。 -->
     <!-- 游戏目录优先级：命令行 -p:BadNorthDir=xxx > 环境变量 > 本默认值。所有引用一律以它为准，勿写绝对路径。 -->
     <BadNorthDir Condition="'$(BadNorthDir)' == ''">D:\Steam\steamapps\common\BadNorth</BadNorthDir>
@@ -43,6 +43,11 @@
     <!-- 仅用于 UnityEngine.EventSystems.EventSystem（判断指针是否在 UI 上） -->
     <Reference Include="UnityEngine.UI">
       <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- 仅用于 Canvas / RenderMode（v1.5.6 菜单点击拦截面 ClickShield 的覆盖层画布） -->
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(BadNorthDir)\BadNorth_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <!-- 仅用于 GUI.Label 的极简 HUD -->

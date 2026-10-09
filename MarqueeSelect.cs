@@ -74,6 +74,9 @@ namespace BadNorthNewMode
                 if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode][遥控] 你选中了我方小队 → 已清空遥控选择"));
             }
 
+            bool routed = RemoteCursor.Available;          // v1.5.6：点击路由交给 RemoteCursor（按下即定归属，无 2 帧等待）
+            bool single = routed && SingleButtonMode();    // 单键/触摸：空点由路由按"有没有选中"决定，不在这里补清空
+
             if (Input.GetMouseButtonDown(0))
             {
                 _held = true;
@@ -82,19 +85,23 @@ namespace BadNorthNewMode
                 _pressUnit = NearestForeignUnitWorld(_start);                 // 主路径：世界距离（与投放同一套 NavSpotCast）
                 if (_pressUnit == null) _pressUnit = NearestForeignUnit(_start);   // 兜底：屏幕半径
                 _grab = FreeMarqueeKeyHeld() || (_pressUnit != null);   // ① 按住 FreeMarqueeKey ② 从单位上起拖
-                _clickUsedForSelect = (ShiftHeld() && (_pressUnit != null)) || FreeMarqueeKeyHeld();   // 选队/框选起手的那一次按下不下令
+                _clickUsedForSelect = FreeMarqueeKeyHeld() || (!routed && ShiftHeld() && (_pressUnit != null));
                 if (_grab) DetachCamera(gm);     // 按下的瞬间就接管相机：这一次拖动不平移，避免"先平移一点再被接管"
+
+                // 空点（不在我们的单位上、也不在我方小队上）→ 清掉遥控选择（照抄原版 DeselectUnit + 同名音效）
+                if (routed && !single && !_grab && !FreeMarqueeKeyHeld() && !VanillaSelected && !OverVanillaSquad(_start))
+                    ClearPendingWithSound();
             }
 
-            // Shift + 右键点单位 = 也选整队（右键无拖动路径，按下即判定）
-            if (Input.GetMouseButtonDown(1) && ShiftHeld())
+            // 接管模式下右键专用于下令，所以只有非接管模式才需要"Shift + 右键点单位 = 选整队"（右键无拖动路径，按下即判定）
+            if (!routed && Input.GetMouseButtonDown(1) && ShiftHeld())
             {
                 ForeignUnit hit = NearestForeignUnitWorld(Input.mousePosition);
                 if (hit == null) hit = NearestForeignUnit(Input.mousePosition);
                 if (hit != null && hit.agent != null)
                 {
                     _clickUsedForSelect = true;                  // 这一次按下用于选队，不做前进
-                    ClickSelectSquad(hit);
+                    ClickSelectSquad(hit, true);
                 }
             }
 
@@ -129,15 +136,15 @@ namespace BadNorthNewMode
                 AttachCamera(gm);
 
                 if (wasDrag) ApplySelection();                              // 拖动 = 框选（可选）
-                else if (pressUnit != null && pressUnit.agent != null && ShiftHeld())
-                    ClickSelectSquad(pressUnit);                            // Shift + 左键点单位 = 选中它所在的整队（v1.4.7）
+                else if (!routed && pressUnit != null && pressUnit.agent != null && ShiftHeld())
+                    ClickSelectSquad(pressUnit, true);                       // 非接管模式：Shift + 左键点单位 = 选整队
             }
 
             UpdateSlowMo(_dragging || HasPending);             // 框选中 / 已有选中 → 减速（更易框住移动中的敌人）
         }
 
-        /// <summary>Shift + 点击：选中该单位所在的**整队**（同一次投送的 squad，通常一船 4 个）；再点同一队 = 取消。</summary>
-        static void ClickSelectSquad(ForeignUnit unit)
+        /// <summary>点选整队：append=false → **替换**（当前正好只选了这一队 → 再点 = 取消）；append=true（Shift）→ 并入 / 移出该队。</summary>
+        static void ClickSelectSquad(ForeignUnit unit, bool append)
         {
             List<ForeignUnit> squad = SquadOf(unit);
             if (squad.Count == 0) return;
@@ -151,7 +158,13 @@ namespace BadNorthNewMode
             for (int i = 0; i < squad.Count; i++)
                 if (!_pending.Contains(squad[i])) { all = false; break; }
 
-            if (all)
+            if (!append)
+            {
+                bool solo = all && _pending.Count == squad.Count;      // 正好只选了这一队 → 再点 = 取消
+                _pending.Clear();
+                if (!solo) for (int i = 0; i < squad.Count; i++) _pending.Add(squad[i]);
+            }
+            else if (all)
             {
                 for (int i = 0; i < squad.Count; i++) _pending.Remove(squad[i]);
             }
@@ -163,7 +176,7 @@ namespace BadNorthNewMode
 
             string msg = (_pending.Count == 0)
                 ? Loc.T("已清空选择")
-                : Loc.F("已选中 {0}（再 Shift 点同一队 = 取消；左/右键点地块 = 集结前进）", DescribePending());
+                : Loc.F("已选中 {0}（点地块 = 集结前进；再点同一队 = 取消）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
@@ -226,7 +239,7 @@ namespace BadNorthNewMode
             _pendingCenter = _screenRect.center;
             string msg = (_pending.Count == 0)
                 ? Loc.T("框里没有非原生单位")
-                : Loc.F("已选中 {0} 个非原生单位（左键点地块 = 成队并前进）", _pending.Count);
+                : Loc.F("已选中 {0} 个单位（点地块 = 成队并前进）", _pending.Count);
             IngameMenu.Say(msg);
             Util.Log(Loc.F("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}；最近 {6}）",
                 msg, _screenRect.width, _screenRect.height, ForeignUnit.All.Count, ForeignUnit.UsableCount(), picked.Count,
@@ -338,7 +351,7 @@ namespace BadNorthNewMode
             return res;
         }
 
-        /// <summary>候选来源：标记注册表 ∪ 在册 squad 成员（缺标记**自愈**补上）——装配没跑到也能选中。</summary>
+        /// <summary>候选来源：标记注册表 ∪ 在册 squad 成员（缺标记**自愈**补上）∪（可选）原版上岛单位——装配没跑到也能选中。</summary>
         static void EnsureCandidates()
         {
             ForeignUnit.Prune();
@@ -353,6 +366,53 @@ namespace BadNorthNewMode
                 VikingAgent va = a.GetComponent<VikingAgent>();
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
+
+            // v1.5.6：把"原版上岛的敌人"也登记进来（`[Native] RemoteNativeUnits`）——它们与投放单位同为 vikings 阵营
+            if (!Util.V(ModConfig.RemoteNativeUnits, false)) return;
+
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (gm != null) ? gm.island : null;
+            Faction vik = (island != null) ? island.vikings : null;
+            if (vik == null || vik.agents == null) return;
+
+            for (int i = 0; i < vik.agents.Count; i++)
+            {
+                Agent a = vik.agents[i];
+                if (a == null || a.GetComponent<ForeignUnit>() != null) continue;
+                if (!ForeignUnit.Commandable(a)) continue;                  // 船上/未生成的跳过（原生单位不给"预令"）
+
+                VikingAgent va = a.GetComponent<VikingAgent>();
+                ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name, true);
+            }
+        }
+
+        /// <summary>指针下的可选单位（世界距离主路径 + 屏幕半径兜底）。</summary>
+        internal static ForeignUnit PickAt(Vector2 screenPos)
+        {
+            ForeignUnit f = NearestForeignUnitWorld(screenPos);
+            if (f == null) f = NearestForeignUnit(screenPos);
+            return f;
+        }
+
+        internal static void SelectSquadAt(ForeignUnit unit, bool append)
+        {
+            ClickSelectSquad(unit, append);
+        }
+
+        /// <summary>原版此刻指针下有没有我方小队（决定右键归谁；同 `Navigator.SelectPC`）。</summary>
+        internal static bool OverVanillaSquad(Vector2 screenPos)
+        {
+            SquadSelector ss = Singleton<SquadSelector>.instance;
+            if (ss == null) return false;
+            return !object.ReferenceEquals(ss.GetSquadFromRaycast(screenPos), null);
+        }
+
+        /// <summary>清掉"已选中"并播原版取消音（同 `Navigator.DeselectUnit`，见 §5/T23）。</summary>
+        internal static void ClearPendingWithSound()
+        {
+            if (!HasPending) return;
+            ClearPending();
+            FabricWrapper.PostEvent("UI/InGame/UnitDeselect");
         }
 
         /// <summary>按下点附近最近的非原生单位（决定"单击选择"的目标；也决定拖动是否算框选）。</summary>
@@ -446,8 +506,8 @@ namespace BadNorthNewMode
             }
 
             string msg = (_pending.Count == 0)
-                ? Loc.T("可选的非原生单位为 0（可能都还在船上或已阵亡）")
-                : Loc.F("已全选 {0}（按住 R / Shift 点地块 = 前进）", DescribePending());
+                ? Loc.T("没有可选单位（可能都还没生成或已阵亡）")
+                : Loc.F("已全选 {0}（右键点地块 = 前进）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
@@ -516,10 +576,27 @@ namespace BadNorthNewMode
             return dx * dx + dy * dy;
         }
 
-        /// <summary>可被框选/标记：还活着、已生成、且已踩在岛上（下船完成）。</summary>
+        /// <summary>原版的单/双键设置（`Navigator.OnButtonUp` 正是按它分派的：双键=左选右走；单键=没选中→选、有选中→走）。</summary>
+        internal static UserSettings.CursorBehaviour CursorBehaviour()
+        {
+            UserSettings us = Profile.userSettings;
+            return object.ReferenceEquals(us, null) ? UserSettings.CursorBehaviour.TwoButton : us.cursorBehaviour;
+        }
+
+        /// <summary>单键 / 触摸：一个键按"当前有没有选中"承担选中与位移两件事（照抄原版映射，v1.5.6）。</summary>
+        internal static bool SingleButtonMode()
+        {
+            return CursorBehaviour() != UserSettings.CursorBehaviour.TwoButton;
+        }
+
+        internal static bool HasSelection()
+        {
+            return HasPending || RemoteGroup.Any;
+        }
+        /// <summary>可被框选/标记/点选：还活着、已生成——**含仍在船上**（v1.5.6 起可以在船上就选好）。</summary>
         static bool Usable(Agent a)
         {
-            return a != null && a.spawned.active && a.aliveState.active && a.navPos.island;
+            return ForeignUnit.Selectable(a);
         }
 
         static void Cancel(IslandGameplayManager gm)
@@ -675,18 +752,28 @@ namespace BadNorthNewMode
             Camera cam = Cam();
             if (cam == null) return;
 
-            if (_pending != null && _pending.Count > 0)                  // 待成队/已选中：亮青十字
+            if (_pending != null && _pending.Count > 0)                  // 待成队/已选中：亮青十字（船上=琥珀色）
             {
                 for (int i = 0; i < _pending.Count; i++)
                 {
                     ForeignUnit f = _pending[i];
                     Agent a = (f != null) ? f.agent : null;
                     if (!Usable(a)) continue;
-                    DrawCross(cam, a.wPos, new Color(0.4f, 1f, 1f, 0.9f), 9f);
+
+                    Color c = ForeignUnit.Commandable(a)
+                        ? new Color(0.4f, 1f, 1f, 0.9f)
+                        : new Color(1f, 0.85f, 0.2f, 0.9f);             // 船上：只记了集结点，还没法移动
+                    DrawCross(cam, a.wPos, c, 9f);
                 }
             }
 
             if (RemoteGroup.Any || HasPending) DrawHoverCursor(cam);      // 原版同款：选中后鼠标下的地块亮起
+
+            for (int ri = 0; ri < RemoteGroup.RallyCount; ri++)           // 船上单位的"登陆后集结点"
+            {
+                NavSpot rs = RemoteGroup.RallySpot(ri);
+                if (rs != null) DrawRing(cam, rs.navPos.wPos, new Color(1f, 0.85f, 0.2f, 0.65f), 22f);
+            }
 
             if (!RemoteGroup.Any) return;
 
