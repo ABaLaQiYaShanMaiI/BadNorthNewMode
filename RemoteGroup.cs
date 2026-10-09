@@ -211,7 +211,6 @@ namespace BadNorthNewMode
 
             o.Init(a.brain.order, a.brain.orderMono);    // 记下接管前的 order（清场时还原，避免残留失效引用）
             o.SetTarget(g.target);
-            o.SuppressHouseBurning();                    // 受控期间不许烧房子（orderDist 语义冲突 → 会隔岛扔火炬）
 
             a.brain.order = o;                           // WantsControl()=true → PickNewOrder 不会再换掉它
             a.brain.orderMono = o;
@@ -373,7 +372,6 @@ namespace BadNorthNewMode
                         a.brain.order = o.PrevOrder;
                         a.brain.orderMono = o.PrevMono;
                     }
-                    o.RestoreHouseBurning();          // 交还"能烧房子"的行为
                     UnityEngine.Object.Destroy(o);
                 }
             }

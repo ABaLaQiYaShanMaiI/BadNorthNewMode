@@ -12,6 +12,8 @@ namespace BadNorthNewMode
         bool _pushed;
         bool _intentOrder;          // 按下时定"选 or 走"（单键模式靠按钮分不出来）
         int _pushFrame;
+        ForeignUnit _lastUnit;      // 双击检测：同一个单位 + 0.35s 内再点 = 选整队
+        float _lastClickAt;
 
         /// <summary>点击路由是否可用；false → 回退到 v1.5.4 的点击逻辑。</summary>
         internal static bool Available { get { return _instance != null; } }
@@ -26,65 +28,31 @@ namespace BadNorthNewMode
             return _instance;
         }
 
-        /// <summary>反射订阅 pointerRationalizer.onButtonDown（事件类型同 onClick：System.Core 3.5 的 Action`2，见 §4 坑表）。</summary>
-        internal static void TrySubscribe()
+        /// <summary>启用点击路由（不再反射订阅 onButtonDown —— 该事件在实机上取不到，见 §4）；cfg 选 Left 则走 v1.5.4 旧逻辑。</summary>
+        internal static void Ensure()
         {
             if (_instance != null || _unavailable) return;
 
             if (string.Equals(Util.V(ModConfig.RemoteOrderButton, "Auto"), "Left", System.StringComparison.OrdinalIgnoreCase))
             {
-                _unavailable = true;                     // Left = v1.5.4 旧手感 → 不接管点击
+                _unavailable = true;
                 return;
             }
 
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            if (gm == null || gm.pointerRationalizer == null) return;
-
-            try
-            {
-                const System.Reflection.BindingFlags flags =
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-
-                RemoteCursor rc = Get();
-                PointerRationalizer pr = gm.pointerRationalizer;
-                System.Reflection.EventInfo ev = pr.GetType().GetEvent("onButtonDown", flags);
-                System.Reflection.MethodInfo mi = typeof(RemoteCursor).GetMethod("OnPointerDownEvent", flags);
-
-                // MemberInfo 的 op_Equality 是 .NET 4.0 才有的（见 §4 坑表）
-                if (object.ReferenceEquals(ev, null) || object.ReferenceEquals(mi, null))
-                {
-                    Fail(Loc.T("找不到 onButtonDown 事件 → 回到旧点击逻辑（要按住 Shift 选队、下令延迟 2 帧）"));
-                    return;
-                }
-
-                System.Delegate d = System.Delegate.CreateDelegate(ev.EventHandlerType, rc, mi);
-                ev.AddEventHandler(pr, d);
-                Util.Log(Loc.T("[NewMode] 已订阅 pointerRationalizer.onButtonDown：左键点单位即选中整队、右键点地块即前进。"));
-            }
-            catch (System.Exception e)
-            {
-                Fail(Loc.F("订阅 onButtonDown 失败：{0}", e.Message));
-            }
-        }
-
-        static void Fail(string why)
-        {
-            _unavailable = true;
-            if (_instance != null) { UnityEngine.Object.Destroy(_instance.gameObject); _instance = null; }
-            Util.Warn("[NewMode] " + why);
+            Get();
+            Util.Log(Loc.T("[NewMode] 点击路由已启用：左键选整队、右键前进（自动跟随单/双键设置）。"));
         }
 
         /// <summary>按下瞬间定归属与意图（"选/走"由单双键设置决定）；只有归我们才压栈顶。</summary>
-        void OnPointerDownEvent(PointerEventData.InputButton button, Vector2 screenPos)
+        void TryCaptureOnPress()
         {
             try
             {
-                if (_pushed) return;
                 if (!Util.V(ModConfig.RemoteControl, true)) return;
                 if (IngameMenu.IsOpen) return;                          // 投放模式：点击归投放
 
-                string why;
-                if (!Plugin.InBattle(Singleton<IslandGameplayManager>.instance, out why)) return;
+                Vector2 screenPos = Input.mousePosition;
+                if (!Plugin.InBattle(Singleton<IslandGameplayManager>.instance, out _)) return;
 
                 ForeignUnit over = MarqueeSelect.PickAt(screenPos);
 
@@ -98,12 +66,12 @@ namespace BadNorthNewMode
                     return;
                 }
 
-                if (button == PointerEventData.InputButton.Left)
+                if (Input.GetMouseButtonDown(0))
                 {
                     if (over == null) return;                           // 不点在可选单位上 → 归原版
                     Push(false);
                 }
-                else if (button == PointerEventData.InputButton.Right)
+                else if (Input.GetMouseButtonDown(1))
                 {
                     if (MarqueeSelect.VanillaSelected) return;           // 原版管着我方小队 → 归原版
                     Push(true);
@@ -112,7 +80,6 @@ namespace BadNorthNewMode
             catch (System.Exception e)
             {
                 Util.Warn(Loc.F("[NewMode] 点击路由异常：{0}", e));
-                Fail(Loc.T("点击路由不可用 → 回到旧点击逻辑（要按住 Shift 选队、下令延迟 2 帧）"));
             }
         }
 
@@ -154,10 +121,13 @@ namespace BadNorthNewMode
             return (gm != null) ? gm.pointerRationalizer : null;
         }
 
-        /// <summary>兜底交还：真松开了却没收到 onClick（变拖动 / 丢事件）才还。</summary>
         void Update()
         {
-            if (!_pushed) return;
+            if (!_pushed)
+            {
+                if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) TryCaptureOnPress();
+                return;
+            }
 
             PointerRationalizer pr = Pointer();
             bool dragging = (pr != null) && pr.state == PointerRationalizer.State.Dragging;
@@ -184,7 +154,21 @@ namespace BadNorthNewMode
                 if (order) { Plugin.RemoteOrderAt(screenPos); return; }
 
                 ForeignUnit unit = MarqueeSelect.PickAt(screenPos);
-                if (unit != null) MarqueeSelect.SelectSquadAt(unit, MarqueeSelect.ShiftHeld());
+                if (unit == null) return;
+
+                bool squad = false;                                  // 双击同一个单位 = 选整队（v1.5.7）
+                if (object.ReferenceEquals(unit, _lastUnit) && (Time.unscaledTime - _lastClickAt) <= 0.35f)
+                {
+                    squad = true;
+                    _lastUnit = null;
+                }
+                else
+                {
+                    _lastUnit = unit;
+                    _lastClickAt = Time.unscaledTime;
+                }
+
+                MarqueeSelect.SelectUnitAt(unit, MarqueeSelect.ShiftHeld(), squad);
             }
             catch (System.Exception e)
             {

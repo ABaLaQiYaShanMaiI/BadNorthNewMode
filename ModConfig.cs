@@ -18,7 +18,7 @@ namespace BadNorthNewMode
         /// <summary>菜单打开时盖住"原版点击"（v1.5.6，见 PROJECT_SPEC §6 T2）。</summary>
         public static ConfigEntry<bool> MenuBlocksWorldClicks;
 
-        // ============ Native（v1.5.6 原版波次与原生单位）============
+        // ============ Native（拦下原版波次 / 控制原版单位）============
         public static ConfigEntry<bool> BlockVanillaWaves;
         public static ConfigEntry<bool> RemoteNativeUnits;
 
@@ -151,24 +151,27 @@ namespace BadNorthNewMode
         static void BindNative(ConfigFile cfg)
         {
             BlockVanillaWaves = cfg.Bind("Native", "BlockVanillaWaves", false,
-                "接管本关敌人生成：进岛后**阻止原版波次发射**（waveStartTime 置无穷）并把最后一波标记为'已发射/已生成'，\n" +
-                "于是本关只会出现你自己投放的敌人（原版波次一个都不来）。\n" +
-                "副作用：原版进度条会显示得有点怪（这是接管模式，属预期）；打完用 F3 强制胜利收尾最省事。默认关。");
-            RemoteNativeUnits = cfg.Bind("Native", "RemoteNativeUnits", false,
-                "让**原版上岛的敌人**也能被遥控（选中 / 框选 / 点地块前进）：\n" +
-                "开启后它们与投放单位一样进候选集，被接管期间不再自行攻击我方（brain.order 被换成我们的行军指令）。\n" +
-                "与 BlockVanillaWaves 同时开启时没有意义（那时根本没有原生单位）。默认关——原版单位不归你管是原设计。");
+                "**无尽自定义模式**：进岛后彻底拦下原版波次（每帧重写 waveStartTime —— 原版协程会在最后一刻按排序赋它，只拦一次会被覆盖），\n" +
+                "于是本关只会出现你自己投放的单位，且这些永不发射的登陆点不再占滩头（投放更宽松）。\n" +
+                "⚠️ 本关**不会自然结束**：清光自己投放的单位也不会判胜（留给你思考布局的时间）—— 退出请按 F3 强制胜利。\n" +
+                "关掉开关会把原版波次的计时还回去（原版敌人会立刻补发）。默认关。");
+            RemoteNativeUnits = cfg.Bind("Native", "RemoteNativeUnits", true,
+                "**控制敌我**：让**原版上岛的敌人**也能被选中 / 框选 / 点地块前进。\n" +
+                "开启后它们与投放单位共用同一套操作（与原版单位同为 vikings 阵营，只是补一个标记）。\n" +
+                "被遥控期间它们不再自行作战；F2 清场与离开战局**不会销毁**它们（只撤我们的登记）。\n" +
+                "与 BlockVanillaWaves 同时开启时没有意义（那时根本没有原版单位）。默认开。");
         }
 
         static void BindRemote(ConfigFile cfg)
         {
             RemoteControl = cfg.Bind("Remote", "RemoteControl", true,
-                "遥控非原生单位（v1.5.4：按 Shift 选队，**选中后普通点击即可下令**）：\n" +
-                "**Shift + 左键或右键点**一个非原生单位 = 选中它所在的**整队**（再点同一队 = 取消）；按 **R** = 全选所有可选单位。\n" +
-                "有选中时，**左键或右键点地块** = 选中的单位集结到那里：按兵种各成一个小队，多兵种/人多时就地分到**相邻格**（占完为止）。\n" +
-                "想跳过等待可直接按住 **Shift / R** 点地块立即下令；**按住 R 再点** = 全选 + 直接前进。\n" +
-                "普通点击会**等 2 帧**确认原版没把这次点击当成\"选/移我方小队\"（也没在框选）才执行 → 一次点击绝不会同时指挥我方与遥控单位。\n" +
-                "注意：遥控只接管行军，它们**仍是我方的敌人**。");
+                "遥控投放的单位（鼠标方案自动跟随游戏的单/双键设置，见 RemoteOrderButton）：\n" +
+                "双键：左键点单位 = 选中它**自己**（精确）；**双击** = 选中它所在**整队**；右键点地块 = 前进。\n" +
+                "单键 / 触摸：没选中时点单位 = 选中；有选中时点地块 = 前进（与原版同一套映射）。\n" +
+                "Shift + 点 = 并入 / 移出；R = 全选；Alt + 拖动 = 框选；点海面 = 取消选中。\n" +
+                "有选中时点地块 = 按兵种各成一个小队前进，多兵种 / 人多时就地分到**相邻格**。\n" +
+                "还在船上也能选：点地块先记住\"登陆后的集结点\"，落地后自动前往。\n" +
+                "注意：遥控只接管行军，它们**仍是我方的敌人**（会照常烧房子等，属于敌方行为）。");
             RemoteOrderButton = cfg.Bind("Remote", "RemoteOrderButton", "Auto",
                 "遥控的鼠标操作方式（v1.5.6 起**自动跟随游戏的单/双键设置**，即设置里的光标模式）：\n" +
                 "Auto / Right（默认）= 对齐原版：\n" +

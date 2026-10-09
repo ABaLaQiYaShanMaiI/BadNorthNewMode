@@ -10,7 +10,7 @@ namespace BadNorthNewMode
         internal Agent agent;
         internal string unitType;      // VikingReference.name，成组键
         internal string displayName;   // 简中名（提示用）
-        internal bool native;          // true = 原版上岛的敌人（不是我们投放的）
+        internal bool native;          // true = 原版上岛的敌人（`[Native] RemoteNativeUnits` 开启后才登记）
 
         static readonly List<ForeignUnit> _all = new List<ForeignUnit>();
         internal static List<ForeignUnit> All { get { return _all; } }
@@ -56,17 +56,7 @@ namespace BadNorthNewMode
             }
         }
 
-        internal static int Count(bool native)
-        {
-            int n = 0;
-            for (int i = 0; i < _all.Count; i++)
-            {
-                ForeignUnit f = _all[i];
-                if (f != null && f.native == native) n++;
-            }
-            return n;
-        }
-
+        /// <summary>可选（含船上）数量；native = 只数原生 / 只数非原生。</summary>
         internal static int SelectableCount(bool native)
         {
             int n = 0;
@@ -90,7 +80,7 @@ namespace BadNorthNewMode
             return n;
         }
 
-        /// <summary>清场用：只销毁**我们投放的**单位（原生单位交给原版）；它们在 `runContainer` 下、不在我们的 Wave 树里（见 §4）。</summary>
+        /// <summary>清场用：只销毁**我们投放的**单位（原生单位交给原版）；见 §4 坑表。</summary>
         internal static int DestroyAll()
         {
             int n = 0;
@@ -98,7 +88,8 @@ namespace BadNorthNewMode
             {
                 ForeignUnit f = _all[i];
                 if (f == null) { _all.RemoveAt(i); continue; }
-                if (f.native) continue;                       // 原生单位交给原版自己收尾
+                if (f.native) continue;
+
                 Agent a = f.agent;
                 if (a != null) { UnityEngine.Object.Destroy(a.gameObject); n++; }
                 _all.RemoveAt(i);
@@ -106,7 +97,7 @@ namespace BadNorthNewMode
             return n;
         }
 
-        /// <summary>清场/换岛时把原生单位的登记也一并撤掉（不销毁对象）。</summary>
+        /// <summary>换岛 / 离开战局时撤掉原生单位的登记（不销毁对象）。</summary>
         internal static void ForgetNative()
         {
             for (int i = _all.Count - 1; i >= 0; i--)

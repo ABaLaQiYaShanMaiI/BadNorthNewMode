@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.5.6";
+        public const string VERSION = "1.5.7";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -27,6 +27,7 @@ namespace BadNorthNewMode
         bool _pressOrdered;                // 本次按下是否已下过令（避免"按下立即下令 + 松开又挂起"）
         bool _pressVanillaSelected;        // **按下那一帧**原版是否正选着我方小队（OneButton 模式下原版会"移动并取消选择"，松开时已查不出来）
         bool _pendingVanillaBusy;          // 挂起的这次点击当时原版正管着我方小队 → 整次点击归原版
+        float _nextCandidateScan;          // 候选刷新节流（原生单位落地后尽快可选中）
 
         void Awake()
         {
@@ -54,7 +55,14 @@ namespace BadNorthNewMode
             if (ModConfig.Hotkey == null) return;
 
             TrySubscribeGameClick();
-            RemoteCursor.TrySubscribe();                // v1.5.6：点击路由（左键点单位即选中、右键点地块即前进）
+            RemoteCursor.Ensure();                      // v1.5.6：点击路由（左键点单位即选中、右键点地块即前进）
+
+            // 候选定时刷新：原生单位一落地就能被选中 / 计入 HUD（否则要等玩家先点一下别处才登记，见 §5）
+            if (Time.unscaledTime >= _nextCandidateScan)
+            {
+                _nextCandidateScan = Time.unscaledTime + 0.25f;
+                MarqueeSelect.EnsureCandidates();
+            }
 
             if (ModConfig.Hotkey.Value.IsDown())
             {
@@ -207,6 +215,12 @@ namespace BadNorthNewMode
             // 有待成队 → 先按兵种分队（多兵种就地分到相邻格），再一起前进；没有待成队 → 直接命令已有小队
             Vector2 center;
             List<ForeignUnit> pending = MarqueeSelect.TakePending(out center);
+
+            if ((pending == null || pending.Count == 0) && RemoteGroup.GroupCount == 0)
+            {
+                IngameMenu.Say(Loc.T("没有选中任何单位：先点一个单位选中它"));
+                return;
+            }
 
             string msg;
             if (pending != null && pending.Count > 0)

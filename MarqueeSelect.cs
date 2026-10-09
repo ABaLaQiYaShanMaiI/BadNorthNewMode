@@ -101,7 +101,7 @@ namespace BadNorthNewMode
                 if (hit != null && hit.agent != null)
                 {
                     _clickUsedForSelect = true;                  // 这一次按下用于选队，不做前进
-                    ClickSelectSquad(hit, true);
+                    ClickSelect(hit, true, false);
                 }
             }
 
@@ -137,17 +137,18 @@ namespace BadNorthNewMode
 
                 if (wasDrag) ApplySelection();                              // 拖动 = 框选（可选）
                 else if (!routed && pressUnit != null && pressUnit.agent != null && ShiftHeld())
-                    ClickSelectSquad(pressUnit, true);                       // 非接管模式：Shift + 左键点单位 = 选整队
+                    ClickSelect(pressUnit, true, false);                     // 非接管模式：Shift + 左键点单位 = 并入该单位
             }
 
             UpdateSlowMo(_dragging || HasPending);             // 框选中 / 已有选中 → 减速（更易框住移动中的敌人）
         }
 
-        /// <summary>点选整队：append=false → **替换**（当前正好只选了这一队 → 再点 = 取消）；append=true（Shift）→ 并入 / 移出该队。</summary>
-        static void ClickSelectSquad(ForeignUnit unit, bool append)
+        /// <summary>点选：默认只选**一个单位**（精确）；wholeSquad（双击）= 选中它所在整队。append（Shift）= 并入 / 移出。</summary>
+        static void ClickSelect(ForeignUnit unit, bool append, bool wholeSquad)
         {
-            List<ForeignUnit> squad = SquadOf(unit);
-            if (squad.Count == 0) return;
+            List<ForeignUnit> pick = wholeSquad ? SquadOf(unit) : new List<ForeignUnit>();
+            if (!wholeSquad && unit != null) pick.Add(unit);
+            if (pick.Count == 0) return;
 
             ClearVanillaSelection();                     // 选中遥控单位前，取消我方小队的选择（保持"当前只选中一方"）
 
@@ -155,28 +156,28 @@ namespace BadNorthNewMode
             _pendingCenter = Input.mousePosition;
 
             bool all = true;
-            for (int i = 0; i < squad.Count; i++)
-                if (!_pending.Contains(squad[i])) { all = false; break; }
+            for (int i = 0; i < pick.Count; i++)
+                if (!_pending.Contains(pick[i])) { all = false; break; }
 
             if (!append)
             {
-                bool solo = all && _pending.Count == squad.Count;      // 正好只选了这一队 → 再点 = 取消
+                bool solo = all && _pending.Count == pick.Count;      // 正好只选了这些 → 再点 = 取消
                 _pending.Clear();
-                if (!solo) for (int i = 0; i < squad.Count; i++) _pending.Add(squad[i]);
+                if (!solo) for (int i = 0; i < pick.Count; i++) _pending.Add(pick[i]);
             }
             else if (all)
             {
-                for (int i = 0; i < squad.Count; i++) _pending.Remove(squad[i]);
+                for (int i = 0; i < pick.Count; i++) _pending.Remove(pick[i]);
             }
             else
             {
-                for (int i = 0; i < squad.Count; i++)
-                    if (!_pending.Contains(squad[i])) _pending.Add(squad[i]);
+                for (int i = 0; i < pick.Count; i++)
+                    if (!_pending.Contains(pick[i])) _pending.Add(pick[i]);
             }
 
             string msg = (_pending.Count == 0)
                 ? Loc.T("已清空选择")
-                : Loc.F("已选中 {0}（点地块 = 集结前进；再点同一队 = 取消）", DescribePending());
+                : Loc.F("已选中 {0}（点地块 = 前进；双击单位 = 选整队）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
@@ -351,8 +352,8 @@ namespace BadNorthNewMode
             return res;
         }
 
-        /// <summary>候选来源：标记注册表 ∪ 在册 squad 成员（缺标记**自愈**补上）∪（可选）原版上岛单位——装配没跑到也能选中。</summary>
-        static void EnsureCandidates()
+        /// <summary>候选来源：标记注册表 ∪ 在册 squad 成员（缺标记**自愈**补上）∪（可选）原生单位（原版上岛的敌人）。</summary>
+        internal static void EnsureCandidates()
         {
             ForeignUnit.Prune();
 
@@ -367,8 +368,8 @@ namespace BadNorthNewMode
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
 
-            // v1.5.6：把"原版上岛的敌人"也登记进来（`[Native] RemoteNativeUnits`）——它们与投放单位同为 vikings 阵营
-            if (!Util.V(ModConfig.RemoteNativeUnits, false)) return;
+            // 控制敌我：原版上岛的敌人也登记进来（`[Native] RemoteNativeUnits`）——它们与我们投放的单位同为 vikings 阵营
+            if (!Util.V(ModConfig.RemoteNativeUnits, true)) return;
 
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
             Island island = (gm != null) ? gm.island : null;
@@ -379,7 +380,7 @@ namespace BadNorthNewMode
             {
                 Agent a = vik.agents[i];
                 if (a == null || a.GetComponent<ForeignUnit>() != null) continue;
-                if (!ForeignUnit.Commandable(a)) continue;                  // 船上/未生成的跳过（原生单位不给"预令"）
+                if (!ForeignUnit.Commandable(a)) continue;                  // 船上 / 未生成的跳过（原生单位不给"预令"）
 
                 VikingAgent va = a.GetComponent<VikingAgent>();
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name, true);
@@ -394,9 +395,10 @@ namespace BadNorthNewMode
             return f;
         }
 
-        internal static void SelectSquadAt(ForeignUnit unit, bool append)
+        /// <summary>点选入口（RemoteCursor 的点击回调）；wholeSquad = 双击。</summary>
+        internal static void SelectUnitAt(ForeignUnit unit, bool append, bool wholeSquad)
         {
-            ClickSelectSquad(unit, append);
+            ClickSelect(unit, append, wholeSquad);
         }
 
         /// <summary>原版此刻指针下有没有我方小队（决定右键归谁；同 `Navigator.SelectPC`）。</summary>

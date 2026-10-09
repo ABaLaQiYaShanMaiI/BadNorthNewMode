@@ -16,6 +16,7 @@ namespace BadNorthNewMode
 
         static SpawnLedger _instance;
         readonly List<Item> _items = new List<Item>();
+        Transform _seenContainer;      // 投放时那一次的 island.runContainer（重玩关卡会换新的 → 据此清场，见 §4）
         bool _subscribedLevelEnd;
 
         internal static SpawnLedger Get()
@@ -55,7 +56,7 @@ namespace BadNorthNewMode
         void Update()
         {
             TrySubscribeLevelEnd();
-            if (_items.Count == 0) return;
+            if (_items.Count == 0) { _seenContainer = null; return; }
 
             if (ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown())
             {
@@ -68,10 +69,28 @@ namespace BadNorthNewMode
 
             // 原版语义补刀：离开战局 / 岛屿未就绪 / Raid 失效 → 我们的对象也一起走
             bool leaving = (island == null) || (island.state != Island.State.Playing) || (island.raid == null);
+
+            // 重玩关卡：`ReplayIslandRoutine` 只销毁 runContainer、**不碰 raid.landingContainer**，
+            // 我们的船不会被 vanilla 打扫 → 用"runContainer 换新"判断这局是重开的（见 §4 坑表）
+            if (!leaving)
+            {
+                Transform rc = island.runContainer;
+                if (_seenContainer == null) _seenContainer = rc;
+                else if (!object.ReferenceEquals(rc, _seenContainer))
+                {
+                    int nr = DestroyAll();
+                    ForeignUnit.ForgetNative();
+                    _seenContainer = rc;
+                    Util.Log(Loc.F("[NewMode][清理] 重开战局：已清空上一局的 {0} 组投放对象", nr));
+                    return;
+                }
+            }
+
             if (leaving)
             {
                 int n = DestroyAll();
-                ForeignUnit.ForgetNative();                    // 离开战局：原版单位交还原版，撤掉我们的登记（v1.5.6）
+                ForeignUnit.ForgetNative();                    // 离开战局：原版单位交还原版，撤掉我们的登记
+                _seenContainer = null;
                 if (n > 0)
                     Util.Log(Loc.F("[NewMode][清理] 离开战局：已清除本 mod 投放的 {0} 组残留（对齐原版 IIslandWipe）", n));
                 return;

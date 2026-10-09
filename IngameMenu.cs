@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BepInEx.Configuration;
 using UnityEngine;
 using Voxels.TowerDefense;
 
@@ -60,8 +61,8 @@ namespace BadNorthNewMode
         {
             if (!Util.V(ModConfig.ShowHud, true)) return;
 
-            int foreign = ForeignUnit.Count(false);
-            int nativeCount = ForeignUnit.Count(true);
+            int foreign = ForeignUnit.SelectableCount(false);
+            int nativeCount = ForeignUnit.SelectableCount(true);
             int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
             bool active = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;   // 有单位/遥控小队 → 常显状态
             if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
@@ -80,11 +81,14 @@ namespace BadNorthNewMode
                     RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount);
 
             if (foreign > 0)
-                text += Loc.F("\n非原生单位 {0}（可选 {1}{2}）", foreign, ForeignUnit.SelectableCount(false),
+                text += Loc.F("\n非原生单位 {0}{1}", foreign,
                     (selected > 0) ? (Loc.T(", 已选中 ") + selected) : "");
 
             if (nativeCount > 0)
-                text += Loc.F("\n原生单位 {0}（可选 {1}，可遥控）", nativeCount, ForeignUnit.SelectableCount(true));
+                text += Loc.F("\n原生单位 {0}（可遥控）", nativeCount);
+
+            if (LevelTools.CustomMode)
+                text += Loc.T("\n无尽自定义模式：本关不会自然结束 —— 按 F3 强制胜利退出");
 
             if (MarqueeSelect.Dragging)
                 text += Loc.F("\n框选中…（按兵种自动分队，每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40));
@@ -108,7 +112,7 @@ namespace BadNorthNewMode
             float rowH = 26f;
             float headH = 72f;                                   // 语言行 + 标题 + 当前
             float rows = Mathf.Max(1, n);
-            float countH = 48f;                                  // "数量" + 按钮行
+            float countH = 48f + 26f;                            // "数量" + 按钮行 + 接管开关行（v1.5.7）
             _rect = new Rect(8f, 82f, 420f, headH + rows * rowH + countH + 74f);
 
             GUI.color = new Color(0f, 0f, 0f, 0.82f);
@@ -174,13 +178,37 @@ namespace BadNorthNewMode
                 GUI.color = old;
             }
 
+            // ---- 接管开关（写回 cfg，立即生效）----
+            float ty = cy + countH;
+            float tw = (w - 8f) * 0.5f;
+            DrawToggle(new Rect(x, ty, tw, 24f), ModConfig.BlockVanillaWaves, Loc.T("原版波次：拦下"), Loc.T("原版波次：正常"));
+            DrawToggle(new Rect(x + tw + 8f, ty, tw, 24f), ModConfig.RemoteNativeUnits, Loc.T("原生单位：可遥控"), Loc.T("原生单位：不可"));
+
             // ---- 操作按键（关菜单后生效）：只留按键；为压窄菜单，按键分 3 行 ----
-            float hy = cy + countH;
+            float hy = ty + 26f;
             GUI.Label(new Rect(x, hy, w, 18f), MarqueeSelect.SingleButtonMode()
-                ? Loc.T("单键：点单位 = 选整队｜有选中时点地块 = 前进")
-                : Loc.T("双键：左键点单位 = 选整队｜右键点地块 = 前进"));
-            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("Shift + 左键 = 并入｜R = 全选｜Alt + 拖动 = 框选"));
-            GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("船上也能选（登陆后自动去集结点）｜F1 关闭 · F2 清场 · F3 强制胜利"));
+                ? Loc.T("单键：点单位 = 选中｜双击 = 整队｜有选中时点地块 = 前进")
+                : Loc.T("双键：左键点单位 = 选中｜双击 = 整队｜右键点地块 = 前进"));
+            GUI.Label(new Rect(x, hy + 18f, w, 18f), Loc.T("Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选"));
+            GUI.Label(new Rect(x, hy + 36f, w, 18f), Loc.T("船上也能选（落地自动去集结点）｜F2 清场 · F3 强制胜利"));
+        }
+
+        /// <summary>接管开关按钮：显示当前状态，点击写回 cfg（与兵种 / 数量按钮同一套做法）。</summary>
+        static void DrawToggle(Rect r, ConfigEntry<bool> entry, string onLabel, string offLabel)
+        {
+            if (entry == null) return;
+
+            bool on = entry.Value;
+            Color old = GUI.color;
+            if (on) GUI.color = new Color(0.45f, 1f, 1f, 1f);
+            if (GUI.Button(r, on ? onLabel : offLabel))
+            {
+                entry.Value = !on;
+                string now = on ? offLabel : onLabel;
+                Say(Loc.F("已切换：{0}", now));
+                Util.Log("[NewMode] " + now);
+            }
+            GUI.color = old;
         }
 
         /// <summary>语言按钮：当前语言高亮；点击写回 cfg。</summary>
