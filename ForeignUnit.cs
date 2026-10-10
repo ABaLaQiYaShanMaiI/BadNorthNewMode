@@ -9,7 +9,6 @@ namespace BadNorthNewMode
     {
         internal Agent agent;
         internal string unitType;      // VikingReference.name，成组键
-        internal string displayName;   // 简中名（提示用）
         internal bool native;          // true = 原版上岛的敌人（`[Native] RemoteNativeUnits` 开启后才登记）
 
         static readonly List<ForeignUnit> _all = new List<ForeignUnit>();
@@ -29,7 +28,6 @@ namespace BadNorthNewMode
 
             f.agent = agent;
             f.unitType = type;
-            f.displayName = string.IsNullOrEmpty(type) ? Loc.T("非原生单位") : UnitNames.Of(type);
             f.native = native;
             if (!_all.Contains(f)) _all.Add(f);
         }
@@ -46,8 +44,7 @@ namespace BadNorthNewMode
             return Selectable(a) && a.navPos.island;
         }
 
-        /// <summary>剔除已销毁条目（框选 / 组刷新前调用；Unity 的 null 判定能识别已销毁对象）。</summary>
-        internal static void Prune()
+        internal static void Prune()          // 剔除已销毁条目（框选 / 组刷新前调用；Unity 的 null 判定能识别已销毁对象）
         {
             for (int i = _all.Count - 1; i >= 0; i--)
             {
@@ -96,8 +93,7 @@ namespace BadNorthNewMode
             return n;
         }
 
-        /// <summary>换岛 / 离开战局时撤掉原生单位的登记（不销毁对象）。</summary>
-        internal static void ForgetNative()
+        internal static void ForgetNative()   // 换岛 / 离开战局时撤掉原生单位的登记（不销毁对象）
         {
             for (int i = _all.Count - 1; i >= 0; i--)
             {

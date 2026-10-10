@@ -34,6 +34,7 @@ namespace BadNorthNewMode
         static readonly int[] Presets = { 1, 2, 3, 4, 6, 8, 10, 12 };
 
         static string _hud = "";
+        static readonly List<string> _hudLines = new List<string>();
         static float _hudUntil;
         static bool _hudMirror;                       // 原版通知条没接住时，才在 HUD 里重复一遍
         static Rect _rect;
@@ -56,7 +57,7 @@ namespace BadNorthNewMode
             Hover = "";
             PlacementMarker.Get().Hide();
             if (!IsOpen) { ClickShield.Hide(); _dragging = false; }
-            Say(IsOpen ? Loc.T("投放菜单已打开：点兵种 → 点滩头陆地投放") : Loc.T("已关闭投放菜单"));
+            Say(IsOpen ? Loc.T("投放模式：点兵种 → 点滩头陆地") : Loc.T("投放模式已关"));
             Util.Log("[NewMode] " + _hud);
         }
 
@@ -101,7 +102,6 @@ namespace BadNorthNewMode
         {
             return Contains(screenPos) || HudContains(screenPos);
         }
-
         /// <summary>屏幕坐标 → IMGUI 坐标。</summary>
         static Vector2 Gui(Vector2 screenPos)
         {
@@ -172,15 +172,16 @@ namespace BadNorthNewMode
             bool active = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;
             if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
 
-            List<string> lines = new List<string>();
+            List<string> lines = _hudLines;      // 复用同一个 List（HUD 每帧重画，不必每帧 new）
+            lines.Clear();
             lines.Add((IsOpen ? Loc.T("投放菜单") : "BadNorthNewMode") + " · v" + Plugin.VERSION);
             if (IsOpen && !string.IsNullOrEmpty(Hover)) lines.Add(Hover);
-            if (RemoteGroup.Any) lines.Add(Loc.F("遥控小队：{0}（共 {1}）", RemoteGroup.DescribeAll(), RemoteGroup.TotalCount));
-            if (RemoteGroup.HasRally) lines.Add(Loc.F("待登陆集结：{0} 人 / {1} 处（落地后自动前往）", RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount));
+            if (RemoteGroup.Any) lines.Add(Loc.F("遥控：{0}｜共 {1}", RemoteGroup.DescribeAll(), RemoteGroup.TotalCount));
+            if (RemoteGroup.HasRally) lines.Add(Loc.F("待登陆集结：{0} 人 / {1} 处", RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount));
             if (foreign > 0) lines.Add(Loc.F("非原生单位 {0}{1}", foreign, (selected > 0) ? (Loc.T(", 已选中 ") + selected) : ""));
-            if (nativeCount > 0) lines.Add(Loc.F("原生单位 {0}（可遥控）", nativeCount));
-            if (LevelTools.CustomMode) lines.Add(Loc.T("无尽自定义模式：本关不会自然结束 —— 按 F3 强制胜利退出"));
-            if (MarqueeSelect.Dragging) lines.Add(Loc.F("框选中…（按兵种自动分队，每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40)));
+            if (nativeCount > 0) lines.Add(Loc.F("原生单位 {0}｜可遥控", nativeCount));
+            if (LevelTools.CustomMode) lines.Add(Loc.T("无尽模式：本关不会自然结束，按 F3 退出"));
+            if (MarqueeSelect.Dragging) lines.Add(Loc.F("框选中…（每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40)));
             if (_hudMirror && !string.IsNullOrEmpty(_hud) && Time.time <= _hudUntil) lines.Add(_hud);
 
             float w = 0f;
@@ -237,7 +238,7 @@ namespace BadNorthNewMode
 
             if (n == 0)
             {
-                MenuSkin.DrawLine(new Rect(x, y, inner, RowH), Loc.T("（进入战局后才会列出可用兵种）"));
+                MenuSkin.DrawLine(new Rect(x, y, inner, RowH), Loc.T("（进战局后才有兵种）"));
                 _tip = "";
                 y += RowH;
             }
@@ -309,7 +310,7 @@ namespace BadNorthNewMode
             {
                 VanillaUI.Click();
                 Close();
-                Say(Loc.T("已关闭投放菜单"));
+                Say(Loc.T("投放模式已关"));
             }
             MenuSkin.DrawBtn(close, Loc.T("关闭"), false);
         }
@@ -365,7 +366,7 @@ namespace BadNorthNewMode
             DrawToggle(new Rect(x + tw + Gap, y, tw, BtnH), ModConfig.ControlNativeUnits, Loc.T("原生单位：可遥控"), Loc.T("原生单位：不可"));
 
             y += BtnH;
-            MenuSkin.DrawHint(new Rect(x, y, inner, LineH), Loc.T("拦下 = 本关无原版敌人（无尽，F3 退出）；可遥控 = 原生敌人也能指挥"));
+            MenuSkin.DrawHint(new Rect(x, y, inner, LineH), Loc.T("拦下 = 无原版敌人；可遥控 = 原生敌人也能指挥"));
             return y + LineH;
         }
 
@@ -378,7 +379,7 @@ namespace BadNorthNewMode
             Rect rel = new Rect(x, y, aw, BtnH);
             MenuSkin.Bg(rel, IsHover(rel), false);
             if (GUI.Button(rel, GUIContent.none, MenuSkin.HitCenter)) { VanillaUI.Click(); Plugin.ReleaseRemoteControl(); }
-            MenuSkin.DrawBtn(rel, Loc.T("一键释放遥控"), false);
+            MenuSkin.DrawBtn(rel, Loc.T("释放遥控"), false);
 
             Rect clr = new Rect(x + aw + Gap, y, aw, BtnH);
             MenuSkin.Bg(clr, IsHover(clr), false);
@@ -396,16 +397,25 @@ namespace BadNorthNewMode
                 MenuSkin.DrawHint(new Rect(x, y + i * HelpH, inner, HelpH), help[i]);
         }
 
+        static string[] _help;
+        static string _helpKey;
+
+        /// <summary>3 行按键说明（按语言与单/双键缓存；每帧会被量宽/绘制各调一次，别每次 new 数组）。</summary>
         static string[] HelpTexts()
         {
-            return new string[]
+            string key = (Loc.IsEnglish ? "en" : "zh") + (MarqueeSelect.SingleButtonMode() ? "1" : "2");
+            if (_help != null && string.Equals(_helpKey, key, System.StringComparison.Ordinal)) return _help;
+
+            _helpKey = key;
+            _help = new string[]
             {
                 MarqueeSelect.SingleButtonMode()
                     ? Loc.T("单键：点单位 = 选中｜双击 = 整队｜有选中时点地块 = 前进")
                     : Loc.T("双键：左键点单位 = 选中｜双击 = 整队｜右键点地块 = 前进"),
                 Loc.T("Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选"),
-                Loc.T("拖动 = 平移相机｜船上也能选（落地自动去集结点）｜F2 清场 · F3 强制胜利"),
+                Loc.T("拖动 = 平移相机｜船上也能选｜F2 清场 · F3 强制胜利"),
             };
+            return _help;
         }
 
         /// <summary>面板高度（必须与 DrawMenu 的推进顺序一一对应）。</summary>
@@ -427,8 +437,8 @@ namespace BadNorthNewMode
             int cc = (n > 4) ? 2 : 1;
             float w = 560f;                                  // 数量行（8 个预设）+ 两列兵种的下限
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("投放菜单") + "  v" + Plugin.VERSION, MenuSkin.Title) + 240f);
-            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("一键释放遥控"), MenuSkin.Btn) * 3f + 60f);
-            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("拦下 = 本关无原版敌人（无尽，F3 退出）；可遥控 = 原生敌人也能指挥"), MenuSkin.Hint));
+            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("释放遥控"), MenuSkin.Btn) * 3f + 60f);
+            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("拦下 = 无原版敌人；可遥控 = 原生敌人也能指挥"), MenuSkin.Hint));
 
             string[] help = HelpTexts();
             for (int i = 0; i < help.Length; i++) w = Mathf.Max(w, MenuSkin.Measure(help[i], MenuSkin.Hint));
@@ -534,7 +544,7 @@ namespace BadNorthNewMode
         {
             if (!Loc.SetLanguage(mode)) return;
 
-            Say(Loc.T("语言已切换（立即生效）"));
+            Say(Loc.T("已切换语言"));
             Util.Log("[NewMode] Language = " + mode);
         }
 
@@ -553,7 +563,7 @@ namespace BadNorthNewMode
             if (ModConfig.SquadSize == null || ModConfig.SquadSize.Value == value) return;
 
             ModConfig.SquadSize.Value = value;
-            Say(Loc.F("已设定数量：{0}（超出船容量会自动裁剪）", value));
+            Say(Loc.F("数量 {0}（超出船容量会裁剪）", value));
             Util.Log(Loc.F("[NewMode] 数量设定：{0}", value));
         }
 

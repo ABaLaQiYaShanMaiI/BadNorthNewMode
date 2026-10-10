@@ -133,7 +133,7 @@ namespace BadNorthNewMode
             int total = PendingCount();
             if (total == 0) { IngameMenu.Say(Loc.T("没有可清场的目标")); return; }
 
-            if (VanillaUI.Confirm(Loc.T("清场"), Loc.F("销毁本模组投放的 {0} 组对象（船与单位，不可撤销）？", total), DoCleanup)) return;
+            if (VanillaUI.Confirm(Loc.T("清场"), Loc.F("销毁投放的 {0} 组对象（不可撤销）？", total), DoCleanup)) return;
             DoCleanup();
         }
 

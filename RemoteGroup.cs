@@ -65,7 +65,7 @@ namespace BadNorthNewMode
             for (int i = 0; i < aboard.Count; i++) rally.members.Add(aboard[i]);
             _rallies.Add(rally);
 
-            message = Loc.F("船上已选中 {0} 人：登陆后自动前往集结点", aboard.Count);
+            message = Loc.F("已选中船上 {0} 人：登陆后前往集结点", aboard.Count);
         }
 
         internal static int TotalCount
@@ -125,7 +125,7 @@ namespace BadNorthNewMode
         internal static bool Capture(List<ForeignUnit> picked, Vector2 boxCenter, out string message)
         {
             message = null;
-            if (picked == null || picked.Count == 0) { message = Loc.T("没框到非原生单位"); return false; }
+            if (picked == null || picked.Count == 0) { message = Loc.T("框里没有可指挥的单位"); return false; }
 
             // ① 按兵种分桶（框里混了多种 → 各自组队）
             List<string> types = new List<string>();
@@ -145,7 +145,7 @@ namespace BadNorthNewMode
                 }
                 bucket.Add(f);
             }
-            if (types.Count == 0) { message = Loc.T("没框到可用的非原生单位"); return false; }
+            if (types.Count == 0) { message = Loc.T("框里没有可指挥的单位"); return false; }
 
             int cap = MaxPerGroup();
             int skipped = 0;
@@ -168,7 +168,7 @@ namespace BadNorthNewMode
                 {
                     g = new Group();
                     g.type = type;
-                    g.display = bucket[0].displayName;
+                    g.display = string.IsNullOrEmpty(type) ? Loc.T("非原生单位") : UnitNames.Of(type);   // 用当前语言现算（换语言后不会残留旧文）
                     _groups.Add(g);
                 }
                 g.selected = true;
@@ -187,8 +187,8 @@ namespace BadNorthNewMode
             CaptureIsland();
             for (int i = 0; i < _groups.Count; i++) Reslot(_groups[i]);
 
-            message = Loc.F("已接管 {0}{1}（点地块 = 前进；再点/再框同兵种可并入）", joined,
-                (skipped > 0) ? Loc.F("；另有 {0} 个超过每队上限 {1}，保持原逻辑", skipped, cap) : "");
+            message = Loc.F("已接管 {0}{1}，点地块前进", joined,
+                (skipped > 0) ? Loc.F("；{0} 个超出上限 {1}，未组队", skipped, cap) : "");
             return true;
         }
 
@@ -238,14 +238,14 @@ namespace BadNorthNewMode
         internal static bool MoveTo(NavSpot target, out string message)
         {
             if (target == null) { message = Loc.T("那里不是可站立的陆地地块"); return false; }
-            if (_groups.Count == 0) { message = Loc.T("还没有遥控小队：先用左键点一个单位选中整队"); return false; }
+            if (_groups.Count == 0) { message = Loc.T("还没有遥控小队：先点一个单位"); return false; }
 
             List<Group> targets = new List<Group>();
             for (int i = 0; i < _groups.Count; i++)
                 if (_groups[i].selected) targets.Add(_groups[i]);
 
             // 不再回退到"命令所有小队"：没有选中就什么都不动（未选中不得移动，见 §5）
-            if (targets.Count == 0) { message = Loc.T("没有选中单位：先点一个单位选中它"); return false; }
+            if (targets.Count == 0) { message = Loc.T("没选中单位：先点一个单位"); return false; }
 
             string who = null;
             for (int i = 0; i < targets.Count; i++)
@@ -267,7 +267,7 @@ namespace BadNorthNewMode
             }
 
             FabricWrapper.PostEvent("UI/InGame/UnitMove");     // 借用原版的移动反馈音
-            message = Loc.F("遥控小队前进：{0}", who);
+            message = Loc.F("前进：{0}", who);
             return true;
         }
 
@@ -411,7 +411,7 @@ namespace BadNorthNewMode
             }
 
             if (_groups.Count == 0 && _rallies.Count == 0) { _island = null; IngameMenu.Say(Loc.T("遥控小队已全部阵亡 / 消失")); return; }
-            if (cur != null && _island != null && !object.ReferenceEquals(cur, _island)) { ClearAll(Loc.T("换岛：已清空遥控小队")); return; }
+            if (cur != null && _island != null && !object.ReferenceEquals(cur, _island)) { ClearAll(Loc.T("换岛，已清空遥控小队")); return; }
             if (cur != null && cur.state != Island.State.Playing) { ClearAll(Loc.T("战局结束：已清空遥控小队")); return; }
         }
 

@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.6.2";
+        public const string VERSION = "1.6.3";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -106,7 +106,7 @@ namespace BadNorthNewMode
 
             // 悬停预览（点击本身由游戏事件负责）
             Vector2 screenPos = Input.mousePosition;
-            if (IngameMenu.Contains(screenPos) || SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos))
+            if (IngameMenu.AnyPanelContains(screenPos) || SquadBar.Contains(screenPos))   // 菜单 / 提示框 / 头像条上不做投放（点击归它们）
             {
                 PlacementMarker.Get().Hide();
                 IngameMenu.Hover = IngameMenu.Contains(screenPos) ? Loc.T("（指针在菜单上）") : "";
@@ -215,7 +215,7 @@ namespace BadNorthNewMode
             string why;
             if (VanillaUI.ModalShowing) return;                              // 确认框在前台：不下令
             if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
-            if (IngameMenu.Contains(screenPos) || SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos)) return;   // 面板 / 头像条 / 提示框内不做下令
+            if (IngameMenu.AnyPanelContains(screenPos) || SquadBar.Contains(screenPos)) return;   // 面板 / 提示框 / 头像条内不做下令
 
             NavSpot spot = MarqueeSelect.NavSpotAt(screenPos, gm.island);
             if (spot == null) { FailedTarget(Loc.T("那里不是可站立的陆地地块")); return; }   // 内部按"有没有选中"选音效
@@ -226,7 +226,7 @@ namespace BadNorthNewMode
             // 没有"本次选中"就什么都不做：哪怕册上已有遥控小队也不移动（未选中不得移动，见 §5）
             if (pending == null || pending.Count == 0)
             {
-                IngameMenu.Say(Loc.T("没有选中单位：先点一个单位选中它"));
+                IngameMenu.Say(Loc.T("没选中单位：先点一个单位"));
                 return;
             }
 
@@ -284,7 +284,7 @@ namespace BadNorthNewMode
             IngameMenu.Say(reason);
         }
 
-        /// <summary>一键释放遥控（F1 菜单）：受控小队全部还原接管前的 order，交还原版 AI（见 §5）。</summary>
+        /// <summary>释放遥控（F1 菜单）：受控小队全部还原接管前的 order，交还原版 AI（见 §5）。</summary>
         internal static void ReleaseRemoteControl()
         {
             int groups = RemoteGroup.GroupCount;
@@ -312,7 +312,7 @@ namespace BadNorthNewMode
             MarqueeSelect.ClearPending();
             RemoteGroup.Clear();                                     // 还原 order + 销毁我们挂的组件
 
-            string msg = Loc.F("已释放遥控：{0} 支小队 / {1} 个单位交还原版 AI", groups, units);
+            string msg = Loc.F("已释放遥控：{0} 支小队 / {1} 个单位", groups, units);
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
@@ -360,7 +360,7 @@ namespace BadNorthNewMode
             {
                 if (!IngameMenu.IsOpen) return;
                 if (button != PointerEventData.InputButton.Left) return;
-                if (IngameMenu.Contains(screenPos) || SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos))   // 面板 / 头像条 / 提示框内的左键不属于投放
+                if (IngameMenu.AnyPanelContains(screenPos) || SquadBar.Contains(screenPos))   // 面板 / 提示框 / 头像条内的左键不属于投放
                 {
                     if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode] 菜单内点击 → 忽略投放"));
                     return;
@@ -388,7 +388,7 @@ namespace BadNorthNewMode
             if (!TryGetLandPoint(gm.island, screenPos, out land, out diag))
             {
                 Util.Warn(Loc.F("[NewMode][点击] 地形未命中：{0}", diag));
-                IngameMenu.Say(Loc.F("这一点不是陆地地块：{0}", diag));
+                IngameMenu.Say(Loc.F("这里不是陆地地块：{0}", diag));
                 return;
             }
             Util.Log(Loc.F("[NewMode][点击] 命中地形：{0}，点 {1}，海拔 {2:F2}m",

@@ -80,7 +80,7 @@ namespace BadNorthNewMode
 
             if (Input.GetMouseButtonDown(0))
             {
-                if (SquadBar.Contains(Input.mousePosition) || IngameMenu.HudContains(Input.mousePosition)) return;   // 按在头像条 / 提示框上：这次点击归它们
+                if (IngameMenu.AnyPanelContains(Input.mousePosition) || SquadBar.Contains(Input.mousePosition)) return;   // 按在面板 / 头像条上：这次点击归它们
                 _held = true;
                 _dragging = false;
                 _start = Input.mousePosition;
@@ -262,8 +262,8 @@ namespace BadNorthNewMode
 
             _pendingCenter = _screenRect.center;
             string msg = (_pending.Count == 0)
-                ? Loc.T("框里没有非原生单位")
-                : Loc.F("已选中 {0} 个单位（点地块 = 成队并前进）", _pending.Count);
+                ? Loc.T("框里没有可指挥的单位")
+                : Loc.F("已选中 {0} 个单位，点地块前进", _pending.Count);
             IngameMenu.Say(msg);
             Util.Log(Loc.F("[NewMode][遥控] {0}（矩形 {1:F0}×{2:F0}；登记 {3}，可用 {4}，命中 {5}；最近 {6}）",
                 msg, _screenRect.width, _screenRect.height, ForeignUnit.All.Count, ForeignUnit.UsableCount(), picked.Count,
@@ -599,8 +599,8 @@ namespace BadNorthNewMode
             }
 
             string msg = (_pending.Count == 0)
-                ? Loc.T("没有可选单位（可能都还没生成或已阵亡）")
-                : Loc.F("已全选 {0}（右键点地块 = 前进）", DescribePending());
+                ? Loc.T("没有可选单位（未生成或已阵亡）")
+                : Loc.F("已全选 {0}，点地块前进", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }

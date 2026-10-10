@@ -20,15 +20,11 @@ namespace BadNorthNewMode
 
         // 兵种头像用的原版图标（按兵种大类挑；借不到就退回空框）
         internal const string IconInfantry = "Hero_Class_Infantry";
-        internal const string IconArchers = "Hero_Class_Archers";
-        internal const string IconPikemen = "Hero_Class_Pikemen";
-        internal const string IconMove = "Ability_Move";
         internal const string IconSwords = "UI_OutlineDistanceField_CrossedSwords";
 
         static readonly string[] Wanted =
         {
-            Fill, Edge, Dashed, Panel, Flair,
-            IconInfantry, IconArchers, IconPikemen, IconMove, IconSwords,
+            Fill, Edge, Dashed, Panel, Flair, IconInfantry, IconSwords,
         };
 
         static Sprite _btnSprite;
@@ -193,6 +189,12 @@ namespace BadNorthNewMode
             Core(r, tex, uv.x, uv.y, uv.width, uv.height, border, border, border, border, tint);
         }
 
+        // 九宫格绘制的四个切分坐标：复用静态数组（DrawSliced 每帧会调几十次，别每次 new 4 个数组）
+        static readonly float[] _xs = new float[4];
+        static readonly float[] _us = new float[4];
+        static readonly float[] _ys = new float[4];
+        static readonly float[] _vs = new float[4];
+
         static void Core(Rect r, Texture tex, float trX, float trY, float trW, float trH, float bl, float bb, float br, float bt, Color tint)
         {
             if (tex == null || trW <= 0f || trH <= 0f) return;
@@ -215,20 +217,23 @@ namespace BadNorthNewMode
             if (x2 < x1) { float m = (x0 + x3) * 0.5f; x1 = m; x2 = m; }
             if (y2 < y1) { float m = (y0 + y3) * 0.5f; y1 = m; y2 = m; }
 
-            float u0 = trX / tw, u1 = (trX + bl) / tw, u2 = (trX + trW - br) / tw, u3 = (trX + trW) / tw;
-            float v0 = trY / th, v1 = (trY + bb) / th, v2 = (trY + trH - bt) / th, v3 = (trY + trH) / th;
-
-            float[] xs = { x0, x1, x2, x3 };
-            float[] us = { u0, u1, u2, u3 };
-            float[] ys = { y0, y1, y2, y3 };
-            float[] vs = { v3, v2, v1, v0 };                                  // GUI y 向下 → v 反向
+            _xs[0] = x0; _xs[1] = x1; _xs[2] = x2; _xs[3] = x3;
+            _us[0] = trX / tw;
+            _us[1] = (trX + bl) / tw;
+            _us[2] = (trX + trW - br) / tw;
+            _us[3] = (trX + trW) / tw;
+            _ys[0] = y0; _ys[1] = y1; _ys[2] = y2; _ys[3] = y3;
+            _vs[0] = (trY + trH) / th;                                        // GUI y 向下 → v 反向
+            _vs[1] = (trY + trH - bt) / th;
+            _vs[2] = (trY + bb) / th;
+            _vs[3] = trY / th;
 
             for (int row = 0; row < 3; row++)
             {
                 for (int col = 0; col < 3; col++)
                 {
-                    Rect dst = new Rect(xs[col], ys[row], xs[col + 1] - xs[col], ys[row + 1] - ys[row]);
-                    Quad(dst, tex, us[col], us[col + 1], vs[row + 1], vs[row]);
+                    Rect dst = new Rect(_xs[col], _ys[row], _xs[col + 1] - _xs[col], _ys[row + 1] - _ys[row]);
+                    Quad(dst, tex, _us[col], _us[col + 1], _vs[row + 1], _vs[row]);
                 }
             }
 

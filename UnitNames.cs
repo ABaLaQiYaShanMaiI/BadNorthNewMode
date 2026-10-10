@@ -17,8 +17,7 @@ namespace BadNorthNewMode
             { "Viking_TankArcher",  "重装弓箭手" },
         };
 
-        /// <summary>英文显示名（v1.5.1 中英切换用；官方英文用词，和 Map 一一对应）。</summary>
-        static readonly Dictionary<string, string> MapEn = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+        static readonly Dictionary<string, string> MapEn = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)   // 英文显示名（官方用词）
         {
             { "Viking_Sword",       "Swordsman" },
             { "Viking_SwordShield", "Shield Swordsman" },
@@ -30,8 +29,7 @@ namespace BadNorthNewMode
             { "Viking_TankArcher",  "Brute Archer" },
         };
 
-        /// <summary>每兵种默认装载数（梯度：弱兵成群、巨人 1 个）；未收录返回 0 → 回退原版公式。</summary>
-        static readonly Dictionary<string, int> DefaultCounts = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
+        static readonly Dictionary<string, int> DefaultCounts = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)   // 每兵种默认装载数（梯度）；未收录回退原版公式
         {
             { "Viking_Sword",       12 },   // 最基础的剑兵 —— 成群
             { "Viking_SwordShield", 10 },   // 盾兵（能挡箭，比剑兵硬）

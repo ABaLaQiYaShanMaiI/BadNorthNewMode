@@ -35,8 +35,7 @@ namespace BadNorthNewMode
 
         static readonly List<string> _once = new List<string>();
 
-        /// <summary>同一 key 只打一次（悬停预览每帧都会走解析，防刷屏）。</summary>
-        internal static void LogOnce(string key, string message)
+        internal static void LogOnce(string key, string message)   // 同一 key 只打一次（悬停预览每帧都会走解析，防刷屏）
         {
             if (Plugin.Log == null || string.IsNullOrEmpty(key)) return;
             if (_once.Contains(key)) return;

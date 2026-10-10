@@ -305,11 +305,14 @@ namespace BadNorthNewMode
             GUI.Label(r, s, style);
         }
 
+        static readonly GUIContent _gc = new GUIContent();     // 复用（Measure 每帧会调几十次，别每次 new）
+
         /// <summary>文字宽度（仅 OnGUI 内可调用）。</summary>
         internal static float Measure(string text, GUIStyle style)
         {
             if (string.IsNullOrEmpty(text) || style == null) return 0f;
-            return style.CalcSize(new GUIContent(text)).x;
+            _gc.text = text;
+            return style.CalcSize(_gc).x;
         }
 
         /// <summary>插件卸载时释放运行时贴图。</summary>

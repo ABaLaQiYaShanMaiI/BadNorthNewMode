@@ -100,8 +100,8 @@ namespace BadNorthNewMode
             if (!ok)
             {
                 reason = (occWho == null)
-                    ? Loc.T("附近与全岛的滩头进近廊道都被地形/建筑挡住了——换个位置点")
-                    : Loc.F("附近的滩头都被船占着（最近一艘 {0} 离 {1:F1}m，本船需要 ≥{2:F1}m），全岛也没有空位",
+                    ? Loc.T("滩头进路被挡住，换个位置点")
+                    : Loc.F("滩头都被船占着（最近 {0} 离 {1:F1}m，需要 ≥{2:F1}m），全岛无空位",
                         occWho, Mathf.Sqrt(occDist), minimal);
                 return false;
             }
@@ -140,7 +140,7 @@ namespace BadNorthNewMode
         {
             float h = Mathf.Abs(landPoint.y - seaY);
             if (h <= maxH) { reason = null; return true; }
-            reason = Loc.F("这里是高地/悬崖（海拔 {0:F2}m，上限 {1:F2}m）——请点与海面齐平的滩头", h, maxH);
+            reason = Loc.F("这里是高地/悬崖（海拔 {0:F2}m，上限 {1:F2}m），请点与海面齐平的滩头", h, maxH);
             return false;
         }
 
@@ -174,7 +174,7 @@ namespace BadNorthNewMode
             }
 
             if (cand.Count > 0) return true;
-            reason = Loc.F("附近没有与海面齐平的滩头（最近 {0:F1}m，上限 {1:F1}m；或岸线余量不足）",
+            reason = Loc.F("附近没有齐平滩头（最近 {0:F1}m，上限 {1:F1}m）",
                 Mathf.Sqrt(nearSq), maxShore);
             return false;
         }

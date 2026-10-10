@@ -54,7 +54,7 @@ namespace BadNorthNewMode
 
                 Vector2 screenPos = Input.mousePosition;
                 if (!Plugin.InBattle(Singleton<IslandGameplayManager>.instance, out _)) return;
-                if (SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos)) return;   // 头像条 / 提示框上的点击归它们
+                if (IngameMenu.AnyPanelContains(screenPos) || SquadBar.Contains(screenPos)) return;   // 头像条 / 提示框 / 菜单上的点击归它们
 
                 ForeignUnit over = MarqueeSelect.PickAtTight(screenPos);
                 bool overVanilla = MarqueeSelect.OverVanillaSquad(screenPos);

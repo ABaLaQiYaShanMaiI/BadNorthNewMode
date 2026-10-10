@@ -14,6 +14,8 @@ namespace BadNorthNewMode
             internal readonly List<ForeignUnit> members = new List<ForeignUnit>();   // 同兵种的全部可选单位（跨船/跨次投放都算一队）
             internal Agent rep;        // 代表：状态查询 / 头像用
             internal Sprite portrait;  // 原版兵种头像（VikingReference.sprite2）
+            internal string countText; // "×N"（在 Scan 里生成一次，避免每帧拼字符串）
+            internal bool controlled;  // 这一类里是否已有受控小队（在 Scan 里算一次，避免每帧 O(N) 扫描）
         }
 
         const float SlotH = 60f;
@@ -27,6 +29,8 @@ namespace BadNorthNewMode
         static Rect _rect;
         static bool _laidOut;
         static float _nextScan;
+        static float _avoidY = float.MaxValue;     // 原版技能条上沿（0.2s 缓存的）
+        static float _nextAvoidScan;
 
         internal static bool Visible { get { return _slots.Count > 0; } }
 
@@ -85,6 +89,13 @@ namespace BadNorthNewMode
             SortByCount();
             int max = Mathf.Max(1, Util.V(ModConfig.SquadBarMax, 8));
             if (_slots.Count > max) _slots.RemoveRange(max, _slots.Count - max);
+
+            for (int i = 0; i < _slots.Count; i++)       // 每 0.3s 才算一次的"贵"信息（人数文本 / 是否受控）
+            {
+                Slot s = _slots[i];
+                s.countText = "×" + s.members.Count;
+                s.controlled = AnyControlled(s);
+            }
         }
 
         static Slot Find(string type)
@@ -122,7 +133,7 @@ namespace BadNorthNewMode
             {
                 Slot s = _slots[i];
                 float w = Pad + IconSize + 8f + MenuSkin.Measure(Label(s), MenuSkin.SlotName)
-                        + 8f + MenuSkin.Measure(CountText(s), MenuSkin.SlotNum) + Pad;
+                        + 8f + MenuSkin.Measure(s.countText, MenuSkin.SlotNum) + Pad;
                 if (total + w + (_widths.Count > 0 ? Gap : 0f) > Screen.width - 16f) break;
 
                 _widths.Add(w);
@@ -153,22 +164,22 @@ namespace BadNorthNewMode
                 }
                 else
                 {
-                    Color tint = AnyControlled(slot) ? new Color(0.52f, 0.30f, 0.02f, 1f) : new Color(0.16f, 0.13f, 0.09f, 0.9f);
+                    Color tint = slot.controlled ? new Color(0.52f, 0.30f, 0.02f, 1f) : new Color(0.16f, 0.13f, 0.09f, 0.9f);
                     Sprite fallback = VanillaSprites.Get(VanillaSprites.IconInfantry);
                     if (fallback == null) fallback = VanillaSprites.Get(VanillaSprites.IconSwords);
                     VanillaSprites.DrawIcon(new Rect(icon.x + 4f, icon.y + 4f, icon.width - 8f, icon.height - 8f), fallback, tint);
                 }
 
-                float numW = MenuSkin.Measure(CountText(slot), MenuSkin.SlotNum);
+                float numW = MenuSkin.Measure(slot.countText, MenuSkin.SlotNum);
                 float nameX = icon.xMax + 8f;
                 MenuSkin.DrawSlotName(new Rect(nameX, r.y, r.xMax - Pad - numW - 6f - nameX, r.height), Label(slot));
-                MenuSkin.DrawSlotNum(new Rect(r.xMax - Pad - numW, r.y, numW, r.height), CountText(slot));
+                MenuSkin.DrawSlotNum(new Rect(r.xMax - Pad - numW, r.y, numW, r.height), slot.countText);
 
                 cx += _widths[i] + Gap;
             }
 
             if (anyHover)
-                MenuSkin.DrawHint(new Rect(_rect.x, _rect.y - 20f, _rect.width, 18f), Loc.T("点击头像 = 选中整队（Shift 并入）"));
+                MenuSkin.DrawHint(new Rect(_rect.x, _rect.y - 20f, _rect.width, 18f), Loc.T("点头像 = 选中整队；Shift 并入"));
         }
 
         /// <summary>横向：`[UI] SquadBarAlign` = Left / Center（默认）/ Right。</summary>
@@ -199,9 +210,13 @@ namespace BadNorthNewMode
             return Mathf.Clamp(y, 8f, Mathf.Max(8f, Screen.height - SlotH - 8f));
         }
 
-        /// <summary>读原版技能条的屏幕矩形（选中我方小队时才激活）；读不到返回 MaxValue = 不避让。</summary>
+        /// <summary>读原版技能条的屏幕矩形（选中我方小队时才激活）；读不到返回 MaxValue = 不避让。**每 0.2s 才查一次**：这函数要遍历全部已加载对象，不能每帧调。</summary>
         static float VanillaBottomTop()
         {
+            if (Time.unscaledTime < _nextAvoidScan) return _avoidY;
+            _nextAvoidScan = Time.unscaledTime + 0.2f;
+            _avoidY = float.MaxValue;
+
             try
             {
                 Object[] all = Resources.FindObjectsOfTypeAll(typeof(ActiveAbilityButtonContainer));
@@ -216,21 +231,18 @@ namespace BadNorthNewMode
                     float h = rt.rect.height * rt.lossyScale.y;
                     if (h < 4f) continue;
 
-                    return Screen.height - (rt.position.y + h * 0.5f);         // 换成 IMGUI 的 y（向下）
+                    _avoidY = Screen.height - (rt.position.y + h * 0.5f);      // 换成 IMGUI 的 y（向下）
+                    break;
                 }
             }
             catch { }
-            return float.MaxValue;
+
+            return _avoidY;
         }
 
         static string Label(Slot s)
         {
             return UnitNames.Of(s.type);
-        }
-
-        static string CountText(Slot s)
-        {
-            return "×" + s.members.Count;
         }
 
         /// <summary>这一类兵里是否已有受控小队（头像格标色用）。</summary>
