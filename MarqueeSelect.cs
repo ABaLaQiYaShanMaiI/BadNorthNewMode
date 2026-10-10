@@ -153,10 +153,15 @@ namespace BadNorthNewMode
         {
             List<ForeignUnit> pick = wholeSquad ? SquadOf(unit) : new List<ForeignUnit>();
             if (!wholeSquad && unit != null) pick.Add(unit);
-            if (pick.Count == 0) return;
+            SelectMany(pick, append);
+        }
+
+        /// <summary>整组一起选（底部头像条点一下用）：默认替换（再点同一组 = 清空），按住 Shift = 并入 / 移出。列表会被复制，不会被改动。</summary>
+        internal static void SelectMany(List<ForeignUnit> pick, bool append)
+        {
+            if (pick == null || pick.Count == 0) return;
 
             ClearVanillaSelection();                     // 选中遥控单位前，取消我方小队的选择（保持"当前只选中一方"）
-
             if (_pending == null) _pending = new List<ForeignUnit>();
             _pendingCenter = Input.mousePosition;
 

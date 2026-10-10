@@ -2,59 +2,57 @@ using UnityEngine;
 
 namespace BadNorthNewMode
 {
-    /// <summary>菜单外观：**借原版贴图**（面板底 `UISprite` / 按键 `UI_Buttons_*`）+ 大地图底部那条棕色横幅的配色 + 原版艺术字（带描边）；借不到就回退自绘。见 §9。</summary>
+    /// <summary>菜单外观：**借原版贴图**（面板底 `UISprite` / 按键 `UI_Buttons_*`）+ 官网配色（沙底 / 蓝灰 / 淡黄键 / 黑字）+ 原版艺术字；借不到就回退自绘。见 §9。</summary>
     internal static class MenuSkin
     {
-        internal static GUIStyle Title, Section, Hint, Line, Value, RowName, Row, RowOn, Btn, BtnOn;
+        internal static GUIStyle Title, Section, Hint, Line, Row, RowOn, Btn, BtnOn;
         internal static GUIStyle HitLeft, HitCenter;                       // 只吃点击、不画字的按钮
+        internal static GUIStyle Num, NumOn, NumLeft;                     // 数字专用（Times New Roman，居中/左对齐）
+        internal static GUIStyle SlotName, SlotNum;                       // 头像条上的名称 / ×N（无内边距 → 绝不裁字）
 
-        static GUIStyle _titleOl, _sectionOl, _hintOl, _lineOl, _valueOl, _rowNameOl, _rowOl, _rowOnOl, _btnOl, _btnOnOl;
-
-        // 配色：坏北最标志的那套 —— 灰蓝底 + 黄键 + 黑字（面板上的说明文字用浅色 + 深描边，保证看得清）
-        internal static Color PanelColor = new Color(0.24f, 0.29f, 0.35f, 0.96f);   // 灰蓝 #3D4A59
-        internal static Color BarColor = new Color(0.31f, 0.37f, 0.44f, 0.98f);     // 标题栏稍亮
-        internal static Color BtnColor = new Color(0.96f, 0.78f, 0.42f, 1f);        // 按键黄 #F5C76B
-        internal static Color BtnHover = new Color(1f, 0.86f, 0.54f, 1f);           // 悬停更亮
-        internal static Color BtnOnColor = new Color(1f, 0.90f, 0.62f, 1f);         // 选中更亮
-        internal static Color Gold = new Color(1f, 0.84f, 0.55f, 1f);               // 面板上的强调（数值/分区标题）
-        internal static Color TextColor = new Color(0.95f, 0.93f, 0.89f, 1f);       // 面板上的浅字
-        internal static Color DimColor = new Color(0.80f, 0.80f, 0.79f, 1f);        // 面板上的次要字
-        internal static Color BtnText = new Color(0.12f, 0.10f, 0.07f, 1f);        // 黄色按键上的黑字
-        internal static Color OutlineColor = new Color(0.06f, 0.08f, 0.11f, 0.9f);  // 浅字的深描边
+        // 配色：照"仿坏北官网配色"（PDF 里量出来的：蓝灰 #89A1AD 封面 + 沙色 #D5D0C8 正文底 + 黑字 + 白卡片）
+        internal static Color PanelColor = new Color(0.835f, 0.816f, 0.784f, 0.96f);   // 沙 #D5D0C8
+        internal static Color BarColor = new Color(0.537f, 0.631f, 0.678f, 0.98f);     // 蓝灰 #89A1AD
+        internal static Color BtnColor = new Color(0.898f, 0.788f, 0.557f, 1f);        // 按键黄（已淡化）#E5C98E
+        internal static Color BtnHover = new Color(0.941f, 0.839f, 0.624f, 1f);        // 悬停略亮 #F0D69F
+        internal static Color BtnOnColor = new Color(0.824f, 0.702f, 0.459f, 1f);      // 开关"开"= 略深的黄 #D2B375
+        internal static Color Gold = new Color(0.306f, 0.455f, 0.533f, 1f);            // 面板上的强调（深蓝灰 #4E7488）
+        internal static Color TextColor = new Color(0.102f, 0.102f, 0.102f, 1f);       // 黑字 #1A1A1A
+        internal static Color DimColor = new Color(0.353f, 0.353f, 0.353f, 1f);        // 灰 #5A5A5A
+        internal static Color BtnText = new Color(0.102f, 0.102f, 0.102f, 1f);         // 黄键上的黑字
 
         const int PanelRadius = 8;
         const int BtnRadius = 6;
 
-        static Texture2D _panel, _bar, _row, _rowHover, _rowOn;
+        static Texture2D _panel, _bar, _row, _rowHover, _rowOn, _photo;
+        static Font _numFont;
+        static int _numFontSize = -1;
         static int _size = -1;
         static Font _font;
         static string _appliedColor;
         static string _appliedButton;
-        static bool _appliedOutline = true;
 
         internal static void Ensure()
         {
-            int size = Mathf.Clamp(Util.V(ModConfig.UiFontSize, 13), 9, 20);
+            int size = Mathf.Clamp(Util.V(ModConfig.UiFontSize, 12), 9, 20);
             Font font = VanillaUI.GameFont();
             string color = Util.V(ModConfig.UiPanelColor, null);
             string button = Util.V(ModConfig.UiButtonColor, null);
-            bool outline = Util.V(ModConfig.UiTextOutline, true);
 
-            if (Title != null && _size == size && _appliedOutline == outline && object.ReferenceEquals(_font, font) &&
+            if (Title != null && _size == size && object.ReferenceEquals(_font, font) &&
                 string.Equals(_appliedColor, color, System.StringComparison.Ordinal) &&
                 string.Equals(_appliedButton, button, System.StringComparison.Ordinal))
                 return;
 
-            Build(size, font, color, button, outline);
+            Build(size, font, color, button);
         }
 
-        static void Build(int size, Font font, string color, string button, bool outline)
+        static void Build(int size, Font font, string color, string button)
         {
             _size = size;
             _font = font;
             _appliedColor = color;
             _appliedButton = button;
-            _appliedOutline = outline;
 
             ApplyConfig(color, button);
 
@@ -63,13 +61,12 @@ namespace BadNorthNewMode
             _row = Round(18, BtnRadius, BtnColor, Light(BtnColor, 0.8f), 1f);
             _rowHover = Round(18, BtnRadius, BtnHover, Light(BtnHover, 0.85f), 1f);
             _rowOn = Round(18, BtnRadius, BtnOnColor, Light(BtnOnColor, 0.8f), 1f);
+            _photo = Round(18, BtnRadius, new Color(0.16f, 0.15f, 0.13f, 0.92f), new Color(0.36f, 0.33f, 0.28f, 1f), 1f);
 
             Title = Label(font, size + 1, FontStyle.Bold, TextColor, TextAnchor.MiddleLeft);
             Section = Label(font, size - 1, FontStyle.Bold, Gold, TextAnchor.MiddleLeft);
             Hint = Label(font, size - 1, FontStyle.Normal, DimColor, TextAnchor.UpperLeft);
             Line = Label(font, size, FontStyle.Normal, TextColor, TextAnchor.MiddleLeft);
-            Value = Label(font, size, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
-            RowName = Label(font, size - 1, FontStyle.Normal, new Color(0.14f, 0.11f, 0.07f, 0.8f), TextAnchor.MiddleRight);   // 黄键上的暗字
 
             Row = Padded(Label(font, size, FontStyle.Normal, BtnText, TextAnchor.MiddleLeft));
             RowOn = Padded(Label(font, size, FontStyle.Bold, BtnText, TextAnchor.MiddleLeft));
@@ -78,22 +75,57 @@ namespace BadNorthNewMode
             HitLeft = Padded(Label(font, size, FontStyle.Normal, new Color(0f, 0f, 0f, 0f), TextAnchor.MiddleLeft));
             HitCenter = Padded(Label(font, size, FontStyle.Normal, new Color(0f, 0f, 0f, 0f), TextAnchor.MiddleCenter));
 
-            _titleOl = outline ? Label(font, size + 1, FontStyle.Bold, OutlineColor, TextAnchor.MiddleLeft) : null;
-            _sectionOl = outline ? Label(font, size - 1, FontStyle.Bold, OutlineColor, TextAnchor.MiddleLeft) : null;
-            _hintOl = outline ? Label(font, size - 1, FontStyle.Normal, OutlineColor, TextAnchor.UpperLeft) : null;
-            _lineOl = outline ? Label(font, size, FontStyle.Normal, OutlineColor, TextAnchor.MiddleLeft) : null;
-            _valueOl = outline ? Label(font, size, FontStyle.Bold, OutlineColor, TextAnchor.MiddleCenter) : null;
-            _rowNameOl = outline ? Label(font, size - 1, FontStyle.Normal, OutlineColor, TextAnchor.MiddleRight) : null;
-            _rowOl = null;                       // 黄色按键上的黑字本来就够清楚，不需要描边
-            _rowOnOl = null;
-            _btnOl = null;
-            _btnOnOl = null;
+            Font num = NumberFont(size, font);    // 数字改用 Times New Roman（原版数字辨识度差，作者要求）
+            Num = Padded(Label(num, size, FontStyle.Bold, Gold, TextAnchor.MiddleCenter));
+            NumOn = Padded(Label(num, size, FontStyle.Bold, BtnText, TextAnchor.MiddleCenter));
+            NumLeft = Padded(Label(num, size, FontStyle.Bold, BtnText, TextAnchor.MiddleLeft));
+            SlotName = Label(font, size + 1, FontStyle.Bold, BtnText, TextAnchor.MiddleLeft);
+            SlotNum = Label(num, size + 1, FontStyle.Bold, BtnText, TextAnchor.MiddleRight);
         }
 
         static GUIStyle Padded(GUIStyle s)
         {
             s.padding = new RectOffset(9, 9, 2, 2);
             return s;
+        }
+
+        /// <summary>数字字体：Times New Roman（系统必有）；取不到就用界面字体。</summary>
+        static Font NumberFont(int size, Font fallback)
+        {
+            if (_numFont != null && _numFontSize == size) return _numFont;
+
+            _numFontSize = size;
+            _numFont = null;
+
+            try
+            {
+                string[] all = Font.GetOSInstalledFontNames();
+                string[] want = { "Times New Roman", "TimesNewRoman", "Times", "Nimbus Roman", "Liberation Serif" };
+
+                for (int n = 0; n < want.Length && _numFont == null; n++)
+                {
+                    for (int i = 0; i < all.Length; i++)
+                    {
+                        if (!string.Equals(all[i], want[n], System.StringComparison.OrdinalIgnoreCase)) continue;
+                        _numFont = Font.CreateDynamicFontFromOSFont(all[i], size);
+                        break;
+                    }
+                }
+
+                for (int i = 0; i < all.Length && _numFont == null; i++)       // 兜底：名字里带 Times 的
+                {
+                    if (all[i].IndexOf("Times", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    _numFont = Font.CreateDynamicFontFromOSFont(all[i], size);
+                }
+            }
+            catch { _numFont = null; }
+
+            if (_numFont == null)
+            {
+                Util.LogOnce("numfont", Loc.T("[NewMode] 找不到 Times New Roman → 数字沿用界面字体"));
+                return fallback;
+            }
+            return _numFont;
         }
 
         static void ApplyConfig(string panelHex, string btnHex)
@@ -174,18 +206,24 @@ namespace BadNorthNewMode
             GUI.color = old;
         }
 
-        /// <summary>一行 / 一个按钮的底：**黄键**（悬停更亮、当前项用原版虚线焦点框）。</summary>
+        /// <summary>一行 / 一个按钮的底：**黄键**；悬停更亮；当前项 = 蓝灰 + 原版虚线焦点框。</summary>
         internal static void Bg(Rect r, bool hover, bool selected)
         {
-            if (selected) { Slice(r, BtnOnColor, false, true, _rowOn, BtnRadius, VanillaSprites.Dashed, VanillaSprites.Edge); return; }
+            if (selected) { Slice(r, BarColor, false, true, _rowOn, BtnRadius, VanillaSprites.Dashed, VanillaSprites.Edge); return; }
             if (hover) { Slice(r, BtnHover, true, false, _rowHover, BtnRadius, VanillaSprites.Edge, VanillaSprites.Fill); return; }
             Slice(r, BtnColor, false, false, _row, BtnRadius, VanillaSprites.Fill, VanillaSprites.Edge);
+        }
+
+        /// <summary>头像格底（比按钮更暗，突出里面的头像）。</summary>
+        internal static void PhotoBg(Rect r)
+        {
+            Slice(r, new Color(0.16f, 0.15f, 0.13f, 0.92f), false, false, _photo, BtnRadius, VanillaSprites.Panel, VanillaSprites.Fill);
         }
 
         /// <summary>头像格底（同黄键底，用原版面板板件）。</summary>
         internal static void SlotBg(Rect r, bool hover, bool selected)
         {
-            if (selected) { Slice(r, BtnOnColor, false, true, _rowOn, BtnRadius, VanillaSprites.Dashed, VanillaSprites.Panel); return; }
+            if (selected) { Slice(r, BarColor, false, true, _rowOn, BtnRadius, VanillaSprites.Dashed, VanillaSprites.Panel); return; }
             if (hover) { Slice(r, BtnHover, true, false, _rowHover, BtnRadius, VanillaSprites.Edge, VanillaSprites.Panel); return; }
             Slice(r, BtnColor, false, false, _row, BtnRadius, VanillaSprites.Fill, VanillaSprites.Panel);
         }
@@ -235,27 +273,35 @@ namespace BadNorthNewMode
 
         // ---------- 文字：原版那种"亮字 + 深描边" ----------
 
-        internal static void DrawTitle(Rect r, string s) { Draw(r, s, Title, _titleOl); }
-        internal static void DrawSection(Rect r, string s) { Draw(r, s, Section, _sectionOl); }
-        internal static void DrawHint(Rect r, string s) { Draw(r, s, Hint, _hintOl); }
-        internal static void DrawLine(Rect r, string s) { Draw(r, s, Line, _lineOl); }
-        internal static void DrawValue(Rect r, string s) { Draw(r, s, Value, _valueOl); }
-        internal static void DrawRowName(Rect r, string s) { Draw(r, s, RowName, _rowNameOl); }
-        internal static void DrawRow(Rect r, string s, bool selected) { Draw(r, s, selected ? RowOn : Row, selected ? _rowOnOl : _rowOl); }
-        internal static void DrawBtn(Rect r, string s, bool on) { Draw(r, s, on ? BtnOn : Btn, on ? _btnOnOl : _btnOl); }
+        internal static void DrawTitle(Rect r, string s) { Draw(r, s, Title); }
+        internal static void DrawSection(Rect r, string s) { Draw(r, s, Section); }
+        internal static void DrawHint(Rect r, string s) { Draw(r, s, Hint); }
+        internal static void DrawLine(Rect r, string s) { Draw(r, s, Line); }
+        internal static void DrawRow(Rect r, string s, bool selected) { Draw(r, s, selected ? RowOn : Row); }
+        internal static void DrawBtn(Rect r, string s, bool on) { Draw(r, s, on ? BtnOn : Btn); }
 
-        static void Draw(Rect r, string s, GUIStyle style, GUIStyle outline)
+        /// <summary>数字（Times New Roman）：`left` = 头像条那种左对齐暗字，否则居中。</summary>
+        internal static void DrawNum(Rect r, string s, bool onButton, bool left)
+        {
+            Draw(r, s, left ? NumLeft : (onButton ? NumOn : Num));
+        }
+
+        /// <summary>数字（Times New Roman，右对齐）：头像条右上角的"×N"。</summary>
+        internal static void DrawSlotNum(Rect r, string s)
+        {
+            Draw(r, s, SlotNum);
+        }
+
+        /// <summary>头像条上的兵种名（无内边距，按实测宽度摆放，绝不裁字）。</summary>
+        internal static void DrawSlotName(Rect r, string s)
+        {
+            Draw(r, s, SlotName);
+        }
+
+        /// <summary>不再画描边（作者反馈：白边是看不清的主因，已整套去掉）。</summary>
+        static void Draw(Rect r, string s, GUIStyle style)
         {
             if (string.IsNullOrEmpty(s) || style == null) return;
-
-            if (outline != null)
-            {
-                GUI.Label(new Rect(r.x - 1f, r.y, r.width, r.height), s, outline);      // 四向描边（原版 UI 的文字是描边的）
-                GUI.Label(new Rect(r.x + 1f, r.y, r.width, r.height), s, outline);
-                GUI.Label(new Rect(r.x, r.y - 1f, r.width, r.height), s, outline);
-                GUI.Label(new Rect(r.x, r.y + 1f, r.width, r.height), s, outline);
-            }
-
             GUI.Label(r, s, style);
         }
 
@@ -269,12 +315,11 @@ namespace BadNorthNewMode
         /// <summary>插件卸载时释放运行时贴图。</summary>
         internal static void Destroy()
         {
-            Release(_panel); Release(_bar); Release(_row); Release(_rowHover); Release(_rowOn);
-            _panel = null; _bar = null; _row = null; _rowHover = null; _rowOn = null;
-            Title = null; Section = null; Hint = null; Line = null; Value = null; RowName = null;
+            Release(_panel); Release(_bar); Release(_row); Release(_rowHover); Release(_rowOn); Release(_photo);
+            _panel = null; _bar = null; _row = null; _rowHover = null; _rowOn = null; _photo = null;
+            Title = null; Section = null; Hint = null; Line = null;
             Row = null; RowOn = null; Btn = null; BtnOn = null; HitLeft = null; HitCenter = null;
-            _titleOl = null; _sectionOl = null; _hintOl = null; _lineOl = null; _valueOl = null;
-            _rowNameOl = null; _rowOl = null; _rowOnOl = null; _btnOl = null; _btnOnOl = null;
+            Num = null; NumOn = null; NumLeft = null; SlotName = null; SlotNum = null;
             _size = -1;
             _font = null;
         }

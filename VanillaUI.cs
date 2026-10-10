@@ -273,7 +273,7 @@ namespace BadNorthNewMode
             return false;
         }
 
-        /// <summary>原版任意 Text 用的字体（最后兜底，等于 v1.6.1 的行为）。</summary>
+        /// <summary>原版任意 Text 用的字体（最后兜底，等于旧版行为）。</summary>
         static Font AnyTextFont()
         {
             try

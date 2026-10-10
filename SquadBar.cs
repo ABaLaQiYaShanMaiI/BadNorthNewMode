@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Voxels.TowerDefense;
+using Voxels.TowerDefense.UI;
 
 namespace BadNorthNewMode
 {
@@ -9,24 +10,21 @@ namespace BadNorthNewMode
     {
         sealed class Slot
         {
-            internal Squad squad;      // 引擎小队（一次投放 / 一次登陆 = 一队）；可能为 null
             internal string type;
-            internal string icon;
-            internal int count;
-            internal Agent rep;        // 代表：状态查询用（选中 / 受控）
-            internal ForeignUnit fu;   // 代表：点击时交给 MarqueeSelect.SelectUnitAt
+            internal readonly List<ForeignUnit> members = new List<ForeignUnit>();   // 同兵种的全部可选单位（跨船/跨次投放都算一队）
+            internal Agent rep;        // 代表：状态查询 / 头像用
+            internal Sprite portrait;  // 原版兵种头像（VikingReference.sprite2）
         }
 
-        const float SlotH = 40f;
-        const float IconSize = 32f;
-        const float Pad = 6f;
-        const float Gap = 6f;
+        const float SlotH = 60f;
+        const float IconSize = 46f;
+        const float Pad = 10f;
+        const float Gap = 8f;
         const float Bottom = 12f;
 
         static readonly List<Slot> _slots = new List<Slot>();
         static readonly List<float> _widths = new List<float>();   // 上一帧的布局（点击判定与绘制共用）
         static Rect _rect;
-        static float _firstX;
         static bool _laidOut;
         static float _nextScan;
 
@@ -52,7 +50,7 @@ namespace BadNorthNewMode
             HandleClick();
         }
 
-        /// <summary>按**引擎小队**分组（一次投放 / 一次登陆 = 一队），人多的排前面。</summary>
+        /// <summary>按**兵种**分组（与遥控组同一套口径：同兵种的两船兵 = 一格）；人多的排前面。</summary>
         static void Scan(IslandGameplayManager gm)
         {
             _slots.Clear();
@@ -68,18 +66,20 @@ namespace BadNorthNewMode
                 Agent a = (f != null) ? f.agent : null;
                 if (a == null || !ForeignUnit.Selectable(a)) continue;
 
-                Slot slot = Find(a.squad, f.unitType);
+                Slot slot = Find(f.unitType);
                 if (slot == null)
                 {
                     slot = new Slot();
-                    slot.squad = a.squad;
                     slot.type = f.unitType;
-                    slot.icon = IconFor(f.unitType);
-                    slot.rep = a;
-                    slot.fu = f;
                     _slots.Add(slot);
                 }
-                slot.count++;
+
+                slot.members.Add(f);
+                if (slot.rep == null)
+                {
+                    slot.rep = a;
+                    slot.portrait = UnitPortraits.Of(a, f.unitType);   // 头像只在这里取（0.3s 一次）
+                }
             }
 
             SortByCount();
@@ -87,15 +87,12 @@ namespace BadNorthNewMode
             if (_slots.Count > max) _slots.RemoveRange(max, _slots.Count - max);
         }
 
-        static Slot Find(Squad squad, string type)
+        static Slot Find(string type)
         {
             for (int i = 0; i < _slots.Count; i++)
             {
                 Slot s = _slots[i];
-                bool hit = (squad != null)
-                    ? object.ReferenceEquals(s.squad, squad)
-                    : string.Equals(s.type, type, System.StringComparison.OrdinalIgnoreCase);
-                if (hit) return s;
+                if (string.Equals(s.type, type, System.StringComparison.OrdinalIgnoreCase)) return s;
             }
             return null;
         }
@@ -106,20 +103,9 @@ namespace BadNorthNewMode
             {
                 Slot v = _slots[i];
                 int j = i - 1;
-                while (j >= 0 && _slots[j].count < v.count) { _slots[j + 1] = _slots[j]; j--; }
+                while (j >= 0 && _slots[j].members.Count < v.members.Count) { _slots[j + 1] = _slots[j]; j--; }
                 _slots[j + 1] = v;
             }
-        }
-
-        /// <summary>兵种 → 借哪个原版图标（借不到就是空框，不影响功能）。</summary>
-        static string IconFor(string type)
-        {
-            if (string.IsNullOrEmpty(type)) return VanillaSprites.IconMove;
-            if (type.IndexOf("Archer", System.StringComparison.OrdinalIgnoreCase) >= 0) return VanillaSprites.IconArchers;
-            if (type.IndexOf("Twohanded", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
-                type.IndexOf("AxeThrower", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
-                type.IndexOf("Tank", System.StringComparison.OrdinalIgnoreCase) >= 0) return VanillaSprites.IconPikemen;
-            return VanillaSprites.IconInfantry;
         }
 
         internal static void Draw()
@@ -129,12 +115,14 @@ namespace BadNorthNewMode
             MenuSkin.Ensure();
             _laidOut = false;
 
-            // 量宽度（文字都是运行时值，中英自适应），放不下就少显示几格
+            // 量宽度：每格 = 头像 + 兵种名 + ×人数（名字与数字都实测 → 绝不裁字）
             _widths.Clear();
             float total = Pad * 2f;
             for (int i = 0; i < _slots.Count; i++)
             {
-                float w = IconSize + 6f + MenuSkin.Measure(Label(_slots[i]), MenuSkin.Line) + Pad * 2f;
+                Slot s = _slots[i];
+                float w = Pad + IconSize + 8f + MenuSkin.Measure(Label(s), MenuSkin.SlotName)
+                        + 8f + MenuSkin.Measure(CountText(s), MenuSkin.SlotNum) + Pad;
                 if (total + w + (_widths.Count > 0 ? Gap : 0f) > Screen.width - 16f) break;
 
                 _widths.Add(w);
@@ -142,8 +130,7 @@ namespace BadNorthNewMode
             }
             if (_widths.Count == 0) return;
 
-            _firstX = (Screen.width - total) * 0.5f;
-            _rect = new Rect(_firstX, Screen.height - SlotH - Bottom, total, SlotH);
+            _rect = new Rect(AlignX(total), BarY(), total, SlotH);
             _laidOut = true;
             MenuSkin.PanelBg(_rect);
 
@@ -152,20 +139,30 @@ namespace BadNorthNewMode
             for (int i = 0; i < _widths.Count; i++)
             {
                 Slot slot = _slots[i];
-                Rect r = new Rect(cx, _rect.y + 4f, _widths[i], SlotH - 8f);
+                Rect r = new Rect(cx, _rect.y + 5f, _widths[i], SlotH - 10f);
                 bool selected = MarqueeSelect.IsSelected(slot.rep);
                 bool hover = Hover(r);
                 anyHover |= hover;
                 MenuSkin.SlotBg(r, hover, selected);
 
-                Color tint = RemoteGroup.IsControlled(slot.rep) ? new Color(0.52f, 0.30f, 0.02f, 1f) : new Color(0.16f, 0.13f, 0.09f, 0.9f);
-                Sprite icon = VanillaSprites.Get(slot.icon);
-                if (icon == null) icon = VanillaSprites.Get(VanillaSprites.IconSwords);
-                if (icon == null) icon = VanillaSprites.Get(VanillaSprites.IconMove);
-                VanillaSprites.DrawIcon(new Rect(r.x + Pad, r.y + (r.height - IconSize) * 0.5f, IconSize, IconSize), icon, tint);
+                Rect icon = new Rect(r.x + Pad, r.y, IconSize, r.height);
+                MenuSkin.PhotoBg(icon);
+                if (slot.portrait != null)
+                {
+                    VanillaSprites.DrawPortrait(new Rect(icon.x + 2f, icon.y + 2f, icon.width - 4f, icon.height - 4f), slot.portrait, Color.white);
+                }
+                else
+                {
+                    Color tint = AnyControlled(slot) ? new Color(0.52f, 0.30f, 0.02f, 1f) : new Color(0.16f, 0.13f, 0.09f, 0.9f);
+                    Sprite fallback = VanillaSprites.Get(VanillaSprites.IconInfantry);
+                    if (fallback == null) fallback = VanillaSprites.Get(VanillaSprites.IconSwords);
+                    VanillaSprites.DrawIcon(new Rect(icon.x + 4f, icon.y + 4f, icon.width - 8f, icon.height - 8f), fallback, tint);
+                }
 
-                MenuSkin.DrawRow(new Rect(r.x + Pad + IconSize + 6f, r.y, r.width - IconSize - Pad * 2f - 6f, r.height),
-                    Label(slot), selected);
+                float numW = MenuSkin.Measure(CountText(slot), MenuSkin.SlotNum);
+                float nameX = icon.xMax + 8f;
+                MenuSkin.DrawSlotName(new Rect(nameX, r.y, r.xMax - Pad - numW - 6f - nameX, r.height), Label(slot));
+                MenuSkin.DrawSlotNum(new Rect(r.xMax - Pad - numW, r.y, numW, r.height), CountText(slot));
 
                 cx += _widths[i] + Gap;
             }
@@ -174,9 +171,77 @@ namespace BadNorthNewMode
                 MenuSkin.DrawHint(new Rect(_rect.x, _rect.y - 20f, _rect.width, 18f), Loc.T("点击头像 = 选中整队（Shift 并入）"));
         }
 
+        /// <summary>横向：`[UI] SquadBarAlign` = Left / Center（默认）/ Right。</summary>
+        static float AlignX(float total)
+        {
+            string a = Util.V(ModConfig.SquadBarAlign, null);
+            float x = (Screen.width - total) * 0.5f;                       // 默认居中
+            if (!string.IsNullOrEmpty(a))
+            {
+                if (a.StartsWith("L", System.StringComparison.OrdinalIgnoreCase)) x = 12f;
+                else if (a.StartsWith("R", System.StringComparison.OrdinalIgnoreCase)) x = Screen.width - total - 12f;
+            }
+            return Mathf.Clamp(x, 4f, Mathf.Max(4f, Screen.width - total - 4f));
+        }
+
+        /// <summary>纵向：`[UI] SquadBarBottom &lt; 0` = 自动（贴底，但**原版"选中我方小队"的技能条出现时自动抬到它上面**）；&gt;= 0 = 固定离底像素。</summary>
+        static float BarY()
+        {
+            int cfg = Util.V(ModConfig.SquadBarBottom, -1);
+            float y = (cfg >= 0) ? (Screen.height - SlotH - cfg) : (Screen.height - SlotH - Bottom);
+
+            if (cfg < 0)
+            {
+                float avoid = VanillaBottomTop();
+                if (avoid < float.MaxValue) y = Mathf.Min(y, avoid - SlotH - 6f);
+            }
+
+            return Mathf.Clamp(y, 8f, Mathf.Max(8f, Screen.height - SlotH - 8f));
+        }
+
+        /// <summary>读原版技能条的屏幕矩形（选中我方小队时才激活）；读不到返回 MaxValue = 不避让。</summary>
+        static float VanillaBottomTop()
+        {
+            try
+            {
+                Object[] all = Resources.FindObjectsOfTypeAll(typeof(ActiveAbilityButtonContainer));
+                for (int i = 0; i < all.Length; i++)
+                {
+                    ActiveAbilityButtonContainer c = all[i] as ActiveAbilityButtonContainer;
+                    if (c == null || !c.gameObject.activeInHierarchy) continue;
+
+                    RectTransform rt = c.transform as RectTransform;
+                    if (rt == null) continue;
+
+                    float h = rt.rect.height * rt.lossyScale.y;
+                    if (h < 4f) continue;
+
+                    return Screen.height - (rt.position.y + h * 0.5f);         // 换成 IMGUI 的 y（向下）
+                }
+            }
+            catch { }
+            return float.MaxValue;
+        }
+
         static string Label(Slot s)
         {
-            return UnitNames.Of(s.type) + " ×" + s.count;
+            return UnitNames.Of(s.type);
+        }
+
+        static string CountText(Slot s)
+        {
+            return "×" + s.members.Count;
+        }
+
+        /// <summary>这一类兵里是否已有受控小队（头像格标色用）。</summary>
+        static bool AnyControlled(Slot s)
+        {
+            for (int i = 0; i < s.members.Count; i++)
+            {
+                ForeignUnit f = s.members[i];
+                if (f != null && RemoteGroup.IsControlled(f.agent)) return true;
+            }
+            return false;
         }
 
         static bool Hover(Rect r)
@@ -198,12 +263,12 @@ namespace BadNorthNewMode
             for (int i = 0; i < _widths.Count; i++)
             {
                 Slot slot = _slots[i];
-                if (slot == null || slot.fu == null) continue;
+                if (slot == null || slot.members.Count == 0) continue;
                 if (!SlotRect(i).Contains(gui)) continue;
 
                 if (IngameMenu.IsOpen) IngameMenu.Close();     // 点头像 = 要指挥：先收起投放菜单
                 VanillaUI.Click();
-                MarqueeSelect.SelectUnitAt(slot.fu, MarqueeSelect.ShiftHeld(), true);
+                MarqueeSelect.SelectMany(slot.members, MarqueeSelect.ShiftHeld());
                 return;
             }
         }

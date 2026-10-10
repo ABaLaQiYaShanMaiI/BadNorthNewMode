@@ -257,6 +257,30 @@ namespace BadNorthNewMode
             GUI.color = old;
         }
 
+        /// <summary>头像格：按宽度铺满，**只取 sprite 上方一段**（头 / 上身）→ 小格子里也像"头像"（比整张全身像更清楚）。</summary>
+        internal static void DrawPortrait(Rect box, Sprite sp, Color tint)
+        {
+            if (sp == null) return;
+
+            Texture tex = sp.texture;
+            if (tex == null) return;
+
+            Rect tr = sp.textureRect;
+            if (tr.width <= 0f || tr.height <= 0f) return;
+
+            float scale = box.width / tr.width;        // 先按宽度铺满
+            float need = box.height / scale;           // 目标高度需要多少 sprite 像素
+            float h = Mathf.Min(need, tr.height);      // 不够高就整张画
+            float top = tr.y + tr.height;              // sprite 顶部（v 越大越靠上）
+            float bot = top - h;
+
+            Rect dst = new Rect(box.x, box.y, box.width, h * scale);
+            Color old = GUI.color;
+            GUI.color = tint;
+            Quad(dst, tex, tr.x / tex.width, (tr.x + tr.width) / tex.width, bot / tex.height, top / tex.height);
+            GUI.color = old;
+        }
+
         static void Quad(Rect dst, Texture tex, float ua, float ub, float va, float vb)
         {
             if (dst.width <= 0f || dst.height <= 0f) return;

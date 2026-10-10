@@ -18,22 +18,27 @@ namespace BadNorthNewMode
         /// <summary>菜单打开时盖住"原版点击"（v1.5.6，见 PROJECT_SPEC §6 T2）。</summary>
         public static ConfigEntry<bool> MenuBlocksWorldClicks;
 
-        // ============ UI（v1.6.1：借用原版 UI + 自绘面板外观）============
+        // ============ UI（借用原版 UI + 原版贴图/配色/字体）============
         public static ConfigEntry<bool> UseVanillaUI;
         public static ConfigEntry<bool> UseVanillaFont;
         public static ConfigEntry<bool> ConfirmDestructive;
         public static ConfigEntry<int> UiFontSize;
 
         public static ConfigEntry<string> UiPanelColor;    // 面板灰蓝；空 = 内置 #3D4A59
-        public static ConfigEntry<string> UiButtonColor;   // 按键黄；空 = 内置 #F5C76B
-        public static ConfigEntry<bool> UiTextOutline;     // 文字描边（原版 UI 那种亮字 + 深边）
+        public static ConfigEntry<string> UiButtonColor;   // 按键黄（已淡化）；空 = 内置 #E5C98E
 
-        /// <summary>UI 字体名（空 = 自动：原版语言字体 → 系统中文黑体）；v1.6.1。</summary>
+        /// <summary>UI 字体名（空 = 自动：原版语言字体 → 系统中文黑体）。</summary>
         public static ConfigEntry<string> UiFontName;
 
         public static ConfigEntry<bool> ShowSquadBar;
 
         public static ConfigEntry<int> SquadBarMax;
+
+        /// <summary>头像条的横向位置（Left / Center / Right）。</summary>
+        public static ConfigEntry<string> SquadBarAlign;
+
+        /// <summary>头像条的离底像素；-1 = 自动（会避开原版"我方小队技能条"）。</summary>
+        public static ConfigEntry<int> SquadBarBottom;
 
         // ============ Native（拦下原版波次 / 控制原生单位）============
         public static ConfigEntry<bool> BlockVanillaWaves;
@@ -129,7 +134,7 @@ namespace BadNorthNewMode
         static void BindUi(ConfigFile cfg)
         {
             UseVanillaUI = cfg.Bind("UI", "UseVanillaUI", true,
-                "借用**原版 UI**（v1.6.1）：\n" +
+                "借用**原版 UI**：\n" +
                 "① 提示消息改走原版通知条（游戏自己的羊皮纸提示 + 自带上/下音效），不再只是我们那块黑底文字；\n" +
                 "②「清场」「释放遥控」这类破坏性操作弹**原版确认框**（标题 + 正文 + 确定/取消，键盘与手柄都能点）。\n" +
                 "取不到原版对象时自动回退（提示回到 HUD 文本、确认框直接执行），只打一条日志，不会报错。默认开。");
@@ -137,29 +142,33 @@ namespace BadNorthNewMode
                 "菜单与 HUD 使用**游戏自带字体**（从原版 UI 借同一个 Font 对象）——中英文显示与游戏内一致，不需要任何字体文件。\n" +
                 "false = 用 IMGUI 默认字体（缺中文字形时可能显示为方块，仅排障用）。默认开。");
             UiFontSize = cfg.Bind("UI", "UiFontSize", 13,
-                "菜单 / HUD 字号（9~20）。英文比中文宽，12~14 比较舒服；改完立刻生效（游戏内会自动重建菜单外观）。");
+                "菜单 / HUD 字号（9~20）。默认 13（菜单会相应变高一点，看得更清）；嫌挡岛就调回 12。");
             UiFontName = cfg.Bind("UI", "FontName", "",
                 "界面字体名，留空 = 自动。自动顺序：① 原版**自己的艺术字**（按资源名找：`Body_Chinese_Simp` → `Body_Chinese` → `Body` → `Buttons`）\n" +
                 "② 原版语言字体表（`UserSettingsMenu.fontMap`）③ 系统里能画中文的字体（微软雅黑 / 思源黑体 / 黑体 …）④ 原版某个 Text 用的字体。\n" +
                 "要指定就填**系统已安装的字体名**（`Font.GetOSInstalledFontNames()` 里的名字，例如 `Microsoft YaHei UI`、`SimHei`）。\n" +
                 "日志里会打印 `[NewMode] UI 字体 = game:xxx / vanilla:xxx / os:xxx / cfg:xxx`，据此判断用的是哪一支。");
             UiPanelColor = cfg.Bind("UI", "PanelColor", "",
-                "面板/横幅的**底色**（坏北标志性的**灰蓝**）。格式 `RRGGBB` 或 `RRGGBBAA`，可带 `#`；留空 = 内置的 `3D4A59`\n" +
-                "（配套的标题栏色会按它自动提亮）。");
+                "面板/横幅的**底色**（照坏北官网配色：**沙色**）。格式 `RRGGBB` / `RRGGBBAA`，可带 `#`；留空 = 内置的 `D5D0C8`\n" +
+                "（标题栏用同系的**蓝灰** `89A1AD`，会自动跟着变）。");
             UiButtonColor = cfg.Bind("UI", "ButtonColor", "",
-                "按键/行的**底色**（坏北那种**黄键**，上面配黑字）。格式同上；留空 = 内置的 `F5C76B`\n" +
-                "（悬停色、当前项色会按它自动提亮）。想更艳就填 `FFD24A`，想柔和填 `E8C078`。");
-            UiTextOutline = cfg.Bind("UI", "TextOutline", true,
-                "**面板上浅色文字**的深色描边（原版 UI 的字是描边的）。黄键上的黑字本来够清楚，不参与描边。默认开；嫌糊就关。");
+                "按键/行的**底色**（坏北官网那种**淡黄键**，上面配黑字）。格式同上；留空 = 内置的 `E5C98E`\n" +
+                "（悬停略亮 `F0D69F`、开关\"开\"略深 `D2B375`；当前兵种是**蓝灰 + 原版虚线焦点框**）。想更艳填 `F2C15A`，更淡填 `EBD7AE`。");
             ConfirmDestructive = cfg.Bind("UI", "ConfirmDestructive", true,
                 "**破坏性操作前弹确认框**：`F2` 清场（销毁本模组投放的船与单位）与 F1 菜单里的「一键释放遥控」。\n" +
                 "false = 点一下立刻执行（自己反复调试时更顺手）。默认开。");
             ShowSquadBar = cfg.Bind("UI", "SquadBar", true,
-                "屏幕底部的**小队头像条**（v1.6.1 新功能）：把场上可选的小队按「一次投放 / 一次登陆」分队排成一行，\n" +
+                "屏幕底部的**小队头像条**（新功能）：把场上可选的小队按「一次投放 / 一次登陆」分队排成一行，\n" +
                 "**左键点一下 = 选中整队**（按住 Shift = 并入 / 移出），亮青 = 已选中、青色图标 = 已在受控小队里。\n" +
                 "在投放菜单里点它 = 先收起菜单再选中（省得先按 F1）。默认开。");
             SquadBarMax = cfg.Bind("UI", "SquadBarMax", 8,
                 "头像条最多显示几格（按人数从多到少取；屏幕放不下会自动再少显示几格）。");
+            SquadBarAlign = cfg.Bind("UI", "SquadBarAlign", "Center",
+                "头像条的**横向**位置：`Left` / `Center` / `Right`。默认居中；若你觉得和原版底部的 UI 挤在一起，就改 `Left` 或 `Right`。");
+            SquadBarBottom = cfg.Bind("UI", "SquadBarBottom", -1,
+                "头像条的**纵向**位置（离屏幕底部多少像素）：\n" +
+                "-1（默认）= 自动：平时贴底，但**你选中我方小队、原版底部弹出技能条时，会自动抬到技能条上方**；\n" +
+                ">= 0 = 固定离底像素（这时不再自动避让）。");
         }
 
         static void BindLanding(ConfigFile cfg)

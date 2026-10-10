@@ -17,13 +17,15 @@ namespace BadNorthNewMode
         // ---- 布局（IMGUI 坐标：左上原点；高度由 MenuHeight 统一算，改这里必须同步改那里）----
         const float Pad = 10f;
         const float Gap = 6f;
-        const float TitleH = 26f;
-        const float RowH = 24f;
+        const float TitleH = 28f;
+        const float RowH = 26f;
         const float RowGap = 3f;
-        const float BtnH = 24f;
-        const float LineH = 18f;
-        const float InfoH = 18f;
-        const float HelpH = 17f;
+        const float BtnH = 26f;
+        const float LineH = 19f;
+        const float InfoH = 19f;
+        const float HelpH = 18f;
+        const float ColGap = 8f;
+        const float IdxW = 22f;      // 序号（Times New Roman）宽
         const int CountMin = 1;
         const int CountMax = 24;
 
@@ -67,7 +69,7 @@ namespace BadNorthNewMode
             _dragging = false;
         }
 
-        /// <summary>状态提示：**短消息**走原版通知条（v1.6.1，自带音效与淡入淡出）；太长（通知条一行放不下）或原版不可用就留在 HUD 里。</summary>
+        /// <summary>状态提示：**短消息**走原版通知条（自带音效与淡入淡出）；太长（通知条一行放不下）或原版不可用就留在 HUD 里。</summary>
         internal static void Say(string msg)
         {
             _hud = msg;
@@ -82,7 +84,7 @@ namespace BadNorthNewMode
             return _rect.Contains(Gui(screenPos));
         }
 
-        /// <summary>提示框（HUD）矩形 —— v1.6.1 起也可拖动。</summary>
+        /// <summary>提示框（HUD）矩形 —— 也可拖动。</summary>
         internal static Rect HudRect { get { return _hudRect; } }
 
         /// <summary>上一帧提示框是否显示（ClickShield 与点击让位用）。</summary>
@@ -126,7 +128,7 @@ namespace BadNorthNewMode
                 else if (_dragging) _pos = m - _dragGrab;
             }
 
-            // 提示框：整块都能拖（作者要求，v1.6.1）
+            // 提示框：整块都能拖（作者要求）
             if (VanillaUI.ModalShowing) { _hudDrag = false; return; }
 
             if (Input.GetMouseButtonDown(0) && HudVisible && _hudRect.Contains(m))
@@ -229,7 +231,7 @@ namespace BadNorthNewMode
 
             DrawTitleBar(x, inner);
 
-            // ---- 兵种 ----
+            // ---- 兵种（>4 种时排两列：省竖向空间，尽量不挡岛）----
             MenuSkin.DrawSection(new Rect(x, y, inner, LineH), Loc.T("兵种"));
             y += LineH;
 
@@ -241,29 +243,46 @@ namespace BadNorthNewMode
             }
             else
             {
+                int cc = (n > 4) ? 2 : 1;
+                int rows = (n + cc - 1) / cc;
+                float cellW = (inner - ColGap * (cc - 1)) / cc;
                 string cur = Util.V(ModConfig.EnemyName, "");
                 VikingReference hover = null;
-                for (int i = 0; i < n; i++)
-                {
-                    VikingReference u = _units[i];
-                    if (u == null) continue;
+                float top = y;
 
-                    bool sel = !string.IsNullOrEmpty(cur) && string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
-                    Rect r = new Rect(x, y, inner, RowH - RowGap);
-                    bool hov = IsHover(r);
-                    MenuSkin.Bg(r, hov, sel);
-                    string label = Loc.F("{0}{1}. {2}", sel ? "▶ " : "  ", i + 1, UnitNames.Of(u.name));
-                    if (GUI.Button(r, GUIContent.none, MenuSkin.HitLeft))
+                for (int c = 0; c < cc; c++)
+                {
+                    for (int r = 0; r < rows; r++)
                     {
-                        VanillaUI.Click();
-                        SelectUnit(u);
+                        int i = c * rows + r;
+                        if (i >= n) continue;
+
+                        VikingReference u = _units[i];
+                        if (u == null) continue;
+
+                        bool sel = !string.IsNullOrEmpty(cur) && string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
+                        Rect cell = new Rect(x + c * (cellW + ColGap), top + r * RowH, cellW, RowH - RowGap);
+                        bool hov = IsHover(cell);
+                        MenuSkin.Bg(cell, hov, sel);
+
+                        float iconH = cell.height - 4f;
+                        Rect icon = new Rect(cell.x + 3f, cell.y + 2f, iconH, iconH);
+                        VanillaSprites.DrawIcon(icon, UnitPortraits.Of(u.name), Color.white);        // 原版兵种头像
+                        MenuSkin.DrawNum(new Rect(icon.xMax + 3f, cell.y, IdxW, cell.height), (i + 1) + ".", false, true);
+
+                        if (GUI.Button(cell, GUIContent.none, MenuSkin.HitLeft))
+                        {
+                            VanillaUI.Click();
+                            SelectUnit(u);
+                        }
+
+                        float tx = icon.xMax + 3f + IdxW;
+                        MenuSkin.DrawRow(new Rect(tx, cell.y, cell.xMax - tx - 2f, cell.height), UnitNames.Of(u.name), sel);
+                        if (hov) hover = u;
                     }
-                    MenuSkin.DrawRow(r, label, sel);
-                    MenuSkin.DrawRowName(new Rect(r.xMax - 200f, r.y, 196f, r.height), u.name);   // 行尾内部名
-                    if (hov) hover = u;
-                    y += RowH;
                 }
 
+                y = top + rows * RowH;
                 _tip = DescribeUnit((hover != null) ? hover : CurrentUnit());
             }
 
@@ -309,7 +328,7 @@ namespace BadNorthNewMode
             if (GUI.Button(minus, GUIContent.none, MenuSkin.HitCenter)) { VanillaUI.Click(); StepCount(-1); }
             MenuSkin.DrawBtn(minus, "-", false);
             cx += 32f;
-            MenuSkin.DrawValue(new Rect(cx, y, 42f, BtnH), (shown > 0) ? shown.ToString() : "-");
+            MenuSkin.DrawNum(new Rect(cx, y, 42f, BtnH), (shown > 0) ? shown.ToString() : "-", false, false);
             cx += 46f;
             Rect plus = new Rect(cx, y, 28f, BtnH);
             MenuSkin.Bg(plus, IsHover(plus), false);
@@ -329,7 +348,7 @@ namespace BadNorthNewMode
                     VanillaUI.Click();
                     SelectCount(v);
                 }
-                MenuSkin.DrawBtn(pr, text, on);
+                MenuSkin.DrawNum(pr, text, true, false);
             }
 
             y += BtnH;
@@ -350,7 +369,7 @@ namespace BadNorthNewMode
             return y + LineH;
         }
 
-        /// <summary>三个常用操作（v1.6.1 起清场/强制胜利也能从菜单点，不必记快捷键）。</summary>
+        /// <summary>三个常用操作（清场/强制胜利也能从菜单点，不必记快捷键）。</summary>
         static void DrawActions(float x, float inner, float y)
         {
             y += Pad;
@@ -392,8 +411,9 @@ namespace BadNorthNewMode
         /// <summary>面板高度（必须与 DrawMenu 的推进顺序一一对应）。</summary>
         static float MenuHeight(int n)
         {
-            float rows = Mathf.Max(1, n) * RowH;
-            return TitleH + Pad + LineH + rows
+            int cc = (n > 4) ? 2 : 1;
+            int rows = (n <= 0) ? 1 : (n + cc - 1) / cc;
+            return TitleH + Pad + LineH + rows * RowH
                  + Pad + BtnH + InfoH
                  + Pad + BtnH + LineH
                  + Pad + BtnH
@@ -404,7 +424,8 @@ namespace BadNorthNewMode
         /// <summary>面板宽度：按当前语言与兵种名实测后夹到屏幕内（中英都不写死宽度）。</summary>
         static float MenuWidth(int n)
         {
-            float w = 524f;                                  // 数量行（8 个预设）的下限
+            int cc = (n > 4) ? 2 : 1;
+            float w = 560f;                                  // 数量行（8 个预设）+ 两列兵种的下限
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("投放菜单") + "  v" + Plugin.VERSION, MenuSkin.Title) + 240f);
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("一键释放遥控"), MenuSkin.Btn) * 3f + 60f);
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("拦下 = 本关无原版敌人（无尽，F3 退出）；可遥控 = 原生敌人也能指挥"), MenuSkin.Hint));
@@ -412,19 +433,18 @@ namespace BadNorthNewMode
             string[] help = HelpTexts();
             for (int i = 0; i < help.Length; i++) w = Mathf.Max(w, MenuSkin.Measure(help[i], MenuSkin.Hint));
 
-            string cur = Util.V(ModConfig.EnemyName, "");
+            float cell = 0f;
             for (int i = 0; i < n; i++)
             {
                 VikingReference u = _units[i];
                 if (u == null) continue;
 
-                bool sel = !string.IsNullOrEmpty(cur) && string.Equals(u.name, cur, System.StringComparison.OrdinalIgnoreCase);
-                float row = MenuSkin.Measure(Loc.F("{0}{1}. {2}", sel ? "▶ " : "  ", i + 1, UnitNames.Of(u.name)), MenuSkin.Row)
-                          + MenuSkin.Measure(u.name, MenuSkin.RowName) + 40f;
-                w = Mathf.Max(w, row);
+                float need = 3f + 22f + 4f + IdxW + MenuSkin.Measure(UnitNames.Of(u.name), MenuSkin.Line) + 10f;
+                if (need > cell) cell = need;
             }
+            if (cell > 0f) w = Mathf.Max(w, cell * cc + ColGap * (cc - 1) + Pad * 2f + 8f);
 
-            return Mathf.Clamp(w + Pad * 2f + 8f, 420f, Mathf.Min(860f, Screen.width * 0.72f));
+            return Mathf.Clamp(w, 420f, Mathf.Min(860f, Screen.width * 0.72f));
         }
 
         /// <summary>信息行：默认人数 / 上限 / 该人数配哪艘船（悬停优先，没悬停就看已选兵种）。</summary>
@@ -442,8 +462,8 @@ namespace BadNorthNewMode
             if (want <= 0) want = def;
 
             Longship ship = UnitCatalog.PickShipForCount(island, u, Mathf.Max(1, want));
-            return Loc.F("默认 {0} 人 · 上限 {1} 人 · 船：{2}",
-                def, UnitCatalog.MaxSquadSize(island, u), (ship != null) ? ship.name : Loc.T("无"));
+            return Loc.F("默认 {0} 人 · 上限 {1} 人 · 船：{2}", def, UnitCatalog.MaxSquadSize(island, u), (ship != null) ? ship.name : Loc.T("无"))
+                 + "　" + u.name;
         }
 
         static VikingReference CurrentUnit()

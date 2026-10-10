@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.6.1";
+        public const string VERSION = "1.6.2";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -53,7 +53,7 @@ namespace BadNorthNewMode
         void Update()
         {
             LogFileSwitch.Tick();                       // 重试删日志残留（≤30s，见 LogFileSwitch）
-            IngameMenu.HandleDrag();                    // 菜单标题栏拖动（v1.6.1）
+            IngameMenu.HandleDrag();                    // 菜单标题栏 / 提示框拖动
             // 菜单 / 头像条上盖住原版点击（见 §6 T2），用上一帧矩形；原版确认框在前台时反而要让开（它自己会挡世界点击）
             bool modal = VanillaUI.ModalShowing;
             ClickShield.Sync(IngameMenu.IsOpen && !modal, IngameMenu.MenuRect,
@@ -80,7 +80,7 @@ namespace BadNorthNewMode
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
 
             MarqueeSelect.Tick(gm);                        // 菜单开着时内部自动取消
-            SquadBar.Tick(gm);                             // v1.6.1：底部小队头像条（分组 + 点击选中）
+            SquadBar.Tick(gm);                             // 底部小队头像条（分组 + 点击选中）
             RemoteGroup.Tick();                            // 组维护与投放/遥控模式无关
             LevelTools.Tick(gm);                           // F3 强制胜利 + 拦下原版波次（v1.5.6）
 
@@ -494,7 +494,7 @@ namespace BadNorthNewMode
         {
             IngameMenu.Draw();
             MarqueeSelect.DrawOverlay();
-            SquadBar.Draw();                      // v1.6.1：底部小队头像条
+            SquadBar.Draw();                      // 底部小队头像条
         }
 
         void OnDestroy()
@@ -502,7 +502,7 @@ namespace BadNorthNewMode
             MarqueeSelect.ClearSlowMo();          // 卸载时释放减速，避免 TimeManager 里留残账
             ClickShield.Destroy();
             RemoteCursor.ForceRelease();
-            MenuSkin.Destroy();                   // 释放菜单的运行时贴图（v1.6.1）
+            MenuSkin.Destroy();                   // 释放菜单的运行时贴图
         }
 
     }
