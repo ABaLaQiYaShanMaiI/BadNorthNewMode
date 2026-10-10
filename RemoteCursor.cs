@@ -50,9 +50,11 @@ namespace BadNorthNewMode
             {
                 if (!Util.V(ModConfig.RemoteControl, true)) return;
                 if (IngameMenu.IsOpen) return;                          // 投放模式：点击归投放
+                if (VanillaUI.ModalShowing) return;                     // 原版确认框在前台：点击全归它，别再选/走
 
                 Vector2 screenPos = Input.mousePosition;
                 if (!Plugin.InBattle(Singleton<IslandGameplayManager>.instance, out _)) return;
+                if (SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos)) return;   // 头像条 / 提示框上的点击归它们
 
                 ForeignUnit over = MarqueeSelect.PickAtTight(screenPos);
                 bool overVanilla = MarqueeSelect.OverVanillaSquad(screenPos);

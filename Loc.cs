@@ -37,6 +37,9 @@ namespace BadNorthNewMode
             }
         }
 
+        /// <summary>游戏当前语言码（I2 的 `mCurrentLanguage`，例如 `zh-CN`）；读不到返回 null。只读私有字段，不触发 I2 初始化。</summary>
+        internal static string LanguageCode { get { return GameLanguage(); } }
+
         internal static bool SetLanguage(string mode)
         {
             if (object.ReferenceEquals(Language, null)) return false;
@@ -123,30 +126,33 @@ namespace BadNorthNewMode
             { "；任意碰撞体命中 {0}", "; any collider hit {0}" },
             { "；射线仍未命中（mask={0}，vp={1:F3},{2:F3}）", "; the ray still missed (mask={0}, vp={1:F3},{2:F3})" },
             // ---- IngameMenu ----
-            { "投放菜单：左键点兵种选择，再点滩头陆地投放（F1 关闭 / F2 清场 / F3 强制胜利）", "Drop menu: left-click a unit type, then click beachhead land to drop (F1 close / F2 cleanup / F3 force win)" },
+            { "投放菜单已打开：点兵种 → 点滩头陆地投放", "Drop menu open: pick a unit type, then click beachhead land" },
             { "已关闭投放菜单", "Drop menu closed" },
-            { "BadNorthNewMode · 投放菜单（左键点兵种 → 再点滩头陆地投放；右键或 Esc 关闭）", "BadNorthNewMode · Drop menu (left-click a unit type -> click beachhead land; right-click or Esc to close)" },
-            { "\n遥控小队：{0}（共 {1}）", "\nRemote squads: {0} (total {1})" },
-            { "\n非原生单位 {0}{1}", "\nForeign units {0}{1}" },
+            { "投放菜单", "Drop menu" },
+            { "点击头像 = 选中整队（Shift 并入）", "Click a portrait to select that squad (Shift to merge)" },
+            { "[NewMode] 已借用原版按钮底：{0}（色 {1}）", "[NewMode] borrowed the vanilla button background: {0} (color {1})" },
+            { "[NewMode] 没借到原版按钮底（ButtonWidget/Image 都没有 sprite）→ 用自绘圆角", "[NewMode] no vanilla button background found (no ButtonWidget/Image with a sprite) -> using the drawn rounded rects" },
+            { "[NewMode] 原版贴图借用结果：{0}/{1} 张（缺的用自绘回退）", "[NewMode] vanilla sprite borrowing result: {0}/{1} (missing ones fall back to drawn shapes)" },
+            { "关闭", "Close" },
+            { "遥控小队：{0}（共 {1}）", "Remote squads: {0} (total {1})" },
+            { "非原生单位 {0}{1}", "Foreign units {0}{1}" },
             { ", 已选中 ", ", selected " },
-            { "\n框选中…（按兵种自动分队，每队上限 {0}）", "\nBox selecting... (auto-grouped by unit type, max {0} per squad)" },
-            { "\n待登陆集结：{0} 人 / {1} 处（落地后自动前往）", "\nBoarding rally: {0} unit(s) / {1} point(s) (they head there right after landing)" },
-            { "语言", "Language" },
+            { "框选中…（按兵种自动分队，每队上限 {0}）", "Box selecting... (auto-grouped by unit type, max {0} per squad)" },
+            { "待登陆集结：{0} 人 / {1} 处（落地后自动前往）", "Boarding rally: {0} unit(s) / {1} point(s) (they head there right after landing)" },
             { "语言已切换（立即生效）", "Language switched (applies immediately)" },
-            { "兵种（左键点选；括号内为 cfg 内部名）", "Unit type (left-click; cfg name in parentheses)" },
-            { "当前：", "Current: " },
+            { "兵种", "Unit type" },
             { "随机", "Random" },
             { "无", "none" },
             { "（进入战局后才会列出可用兵种）", "(unit types are listed once you are in a battle)" },
-            { "{0}{1}. {2}（{3}）", "{0}{1}. {2} ({3})" },
-            { "数量（左键点击）", "Count (left-click)" },
+            { "{0}{1}. {2}", "{0}{1}. {2}" },
+            { "默认 {0} 人 · 上限 {1} 人 · 船：{2}", "default {0} · max {1} · ship: {2}" },
+            { "数量", "Count" },
             { "单键：点单位 = 选中｜双击 = 整队｜有选中时点地块 = 前进", "One-button: click = select one | double-click = whole squad | with a selection, click a tile = advance" },
             { "双键：左键点单位 = 选中｜双击 = 整队｜右键点地块 = 前进", "Two-button: left-click = select one | double-click = whole squad | right-click a tile = advance" },
             { "Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选", "Shift + click = merge | R = select all | Alt+drag = box select" },
             { "（已取消选择）", " (selection cleared)" },
-            { "船上也能选（落地自动去集结点）｜F2 清场 · F3 强制胜利", "Aboard units can be selected too (they go to the rally point after landing) | F2 cleanup · F3 force win" },
-            { "\n无尽自定义模式：本关不会自然结束 —— 按 F3 强制胜利退出", "\nEndless custom mode: this battle never ends by itself -- press F3 to force the win and leave" },
-            { "\n原生单位 {0}（可遥控）", "\nNative units {0} (remote-controllable)" },
+            { "无尽自定义模式：本关不会自然结束 —— 按 F3 强制胜利退出", "Endless custom mode: this battle never ends by itself -- press F3 to force the win and leave" },
+            { "原生单位 {0}（可遥控）", "Native units {0} (remote-controllable)" },
             { "原版波次：拦下", "Vanilla waves: blocked" },
             { "原版波次：正常", "Vanilla waves: normal" },
             { "原生单位：可遥控", "Native units: controllable" },
@@ -154,8 +160,19 @@ namespace BadNorthNewMode
             { "已切换：{0}", "Toggled: {0}" },
             { "没有选中单位：先点一个单位选中它", "no unit selected: click a unit to select it first" },
             { "已取消选择", "selection cleared" },
-            { "一键释放遥控（全部交还原版 AI）", "Release remote control (all units back to vanilla AI)" },
-            { "拖动 = 平移相机｜Alt + 拖动 = 框选（多支部队会分到点击格与相邻格）", "Drag = pan camera | Alt + drag = box-select (extra squads take the clicked tile and its neighbours)" },
+            { "一键释放遥控", "Release remote control" },
+            { "释放遥控", "Release remote control" },
+            { "把 {0} 支小队 / {1} 个单位交还原版 AI？", "Hand {0} squad(s) / {1} unit(s) back to the vanilla AI?" },
+            { "清场（F2）", "Cleanup (F2)" },
+            { "强制胜利（F3）", "Force win (F3)" },
+            { "清场", "Cleanup" },
+            { "销毁本模组投放的 {0} 组对象（船与单位，不可撤销）？", "Destroy the {0} object group(s) dropped by this mod (ships and units, cannot be undone)?" },
+            { "没有可清场的目标", "nothing to clean up" },
+            { "已清场：销毁 {0} 组投放对象", "cleanup done: {0} dropped group(s) destroyed" },
+            { "[NewMode][清理] ", "[NewMode][cleanup] " },
+            { "[NewMode] 原版提示条不可用（{0}）→ 回退到 HUD 文本", "[NewMode] the vanilla notification bar is unavailable ({0}) -> falling back to HUD text" },
+            { "[NewMode] 原版确认框不可用（{0}）→ 直接执行", "[NewMode] the vanilla confirm dialog is unavailable ({0}) -> executing directly" },
+            { "拖动 = 平移相机｜船上也能选（落地自动去集结点）｜F2 清场 · F3 强制胜利", "Drag = pan camera | aboard units can be selected too (they head to the rally point after landing) | F2 cleanup · F3 force win" },
             { "已释放遥控：{0} 支小队 / {1} 个单位交还原版 AI", "remote control released: {0} squads / {1} units back to vanilla AI" },
             { "没有受控的遥控小队", "no remote squads under control" },
             { "已选择兵种：{0}", "Unit type selected: {0}" },
@@ -238,8 +255,6 @@ namespace BadNorthNewMode
 
             // ---- RemoteGroup ----
             { "、", ", " },
-            { "（", " (" },
-            { "）", ")" },
             { "没框到非原生单位", "no foreign units were boxed" },
             { "没框到可用的非原生单位", "no usable foreign units were boxed" },
             { "已接管 {0}{1}（点地块 = 前进；再点/再框同兵种可并入）", "Took control of {0}{1} (click a tile to advance; click/box the same unit type again to merge)" },
@@ -251,7 +266,6 @@ namespace BadNorthNewMode
             { "战局结束：已清空遥控小队", "battle ended: remote squads cleared" },
 
             // ---- SpawnLedger ----
-            { "[NewMode][清理] 手动清场：销毁 {0} 组投放对象", "[NewMode][cleanup] manual cleanup: destroyed {0} dropped object group(s)" },
             { "[NewMode][清理] 离开战局：已清除本 mod 投放的 {0} 组残留（对齐原版 IIslandWipe）", "[NewMode][cleanup] left the battle: cleared {0} remnant group(s) dropped by this mod (matching vanilla IIslandWipe)" },
             { "[NewMode] 已订阅原版战局结束事件 EndOfLevel.postProcess（用于自动清场）。", "[NewMode] subscribed to the vanilla end-of-battle event EndOfLevel.postProcess (for automatic cleanup)." },
             { "[NewMode][清理] 重开战局：已清空上一局的 {0} 组投放对象", "[NewMode][cleanup] battle restarted: cleared {0} dropped object group(s) from the previous attempt" },

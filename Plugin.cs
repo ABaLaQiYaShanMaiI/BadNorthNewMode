@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.6.0";
+        public const string VERSION = "1.6.1";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -53,7 +53,12 @@ namespace BadNorthNewMode
         void Update()
         {
             LogFileSwitch.Tick();                       // 重试删日志残留（≤30s，见 LogFileSwitch）
-            ClickShield.Sync(IngameMenu.IsOpen, IngameMenu.MenuRect);   // 菜单开=盖住原版点击（见 §6 T2）；用上一帧矩形
+            IngameMenu.HandleDrag();                    // 菜单标题栏拖动（v1.6.1）
+            // 菜单 / 头像条上盖住原版点击（见 §6 T2），用上一帧矩形；原版确认框在前台时反而要让开（它自己会挡世界点击）
+            bool modal = VanillaUI.ModalShowing;
+            ClickShield.Sync(IngameMenu.IsOpen && !modal, IngameMenu.MenuRect,
+                             SquadBar.Visible && !modal, SquadBar.BarRect,
+                             IngameMenu.HudVisible && !modal, IngameMenu.HudRect);
             if (ModConfig.Hotkey == null) return;
 
             TrySubscribeGameClick();
@@ -75,6 +80,7 @@ namespace BadNorthNewMode
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
 
             MarqueeSelect.Tick(gm);                        // 菜单开着时内部自动取消
+            SquadBar.Tick(gm);                             // v1.6.1：底部小队头像条（分组 + 点击选中）
             RemoteGroup.Tick();                            // 组维护与投放/遥控模式无关
             LevelTools.Tick(gm);                           // F3 强制胜利 + 拦下原版波次（v1.5.6）
 
@@ -84,6 +90,8 @@ namespace BadNorthNewMode
 
         void HandleDropMode(IslandGameplayManager gm)
         {
+            if (VanillaUI.ModalShowing) { PlacementMarker.Get().Hide(); return; }   // 确认框在前台：投放输入让位
+
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
             {
                 IngameMenu.Close();
@@ -98,7 +106,12 @@ namespace BadNorthNewMode
 
             // 悬停预览（点击本身由游戏事件负责）
             Vector2 screenPos = Input.mousePosition;
-            if (IngameMenu.Contains(screenPos)) { PlacementMarker.Get().Hide(); IngameMenu.Hover = Loc.T("（指针在菜单上）"); return; }
+            if (IngameMenu.Contains(screenPos) || SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos))
+            {
+                PlacementMarker.Get().Hide();
+                IngameMenu.Hover = IngameMenu.Contains(screenPos) ? Loc.T("（指针在菜单上）") : "";
+                return;
+            }
 
             Vector3 land;
             string diag;
@@ -129,7 +142,8 @@ namespace BadNorthNewMode
         void HandleRemoteMode(IslandGameplayManager gm)
         {
             PlacementMarker.Get().Hide();
-            if (RemoteCursor.Available) return;            // 按下即定归属，这里不再处理点击（见 RemoteCursor）
+            if (VanillaUI.ModalShowing) return;             // 原版确认框在前台：点击全归它（否则点确认会顺带指挥单位）
+            if (RemoteCursor.Available) return;             // 按下即定归属，这里不再处理点击（见 RemoteCursor）
 
             // 按下瞬间记下"原版此刻是否正选着我方小队"：OneButton 模式下原版点地块会「移动我方小队 + 取消选择」，
             // 松开/事后都已查不出来 → 必须在按下那一帧留证（见 §5/T22）。
@@ -178,7 +192,7 @@ namespace BadNorthNewMode
             Vector2 pos = _pendingMovePos;
             _pendingMoveFrame = 0;
 
-            if (MarqueeSelect.VanillaSelected || MarqueeSelect.Dragging || _pendingVanillaBusy)
+            if (MarqueeSelect.VanillaSelected || MarqueeSelect.Dragging || _pendingVanillaBusy || VanillaUI.ModalShowing)
             {
                 if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode][遥控] 原版接管了这次点击 → 放弃遥控下令"));
                 return;
@@ -199,8 +213,9 @@ namespace BadNorthNewMode
         void ExecuteMove(IslandGameplayManager gm, Vector2 screenPos)
         {
             string why;
+            if (VanillaUI.ModalShowing) return;                              // 确认框在前台：不下令
             if (!InBattle(gm, out why)) { IngameMenu.Say(why); return; }
-            if (IngameMenu.Contains(screenPos)) return;                      // 菜单区域内的点击不做下令
+            if (IngameMenu.Contains(screenPos) || SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos)) return;   // 面板 / 头像条 / 提示框内不做下令
 
             NavSpot spot = MarqueeSelect.NavSpotAt(screenPos, gm.island);
             if (spot == null) { FailedTarget(Loc.T("那里不是可站立的陆地地块")); return; }   // 内部按"有没有选中"选音效
@@ -269,9 +284,27 @@ namespace BadNorthNewMode
             IngameMenu.Say(reason);
         }
 
-        /// <summary>反射订阅 pointerRationalizer.onClick（System.Core 3.5 的 Action`2，见 §4 坑表）。</summary>
         /// <summary>一键释放遥控（F1 菜单）：受控小队全部还原接管前的 order，交还原版 AI（见 §5）。</summary>
         internal static void ReleaseRemoteControl()
+        {
+            int groups = RemoteGroup.GroupCount;
+            int units = RemoteGroup.TotalCount;
+
+            if (groups == 0 && units == 0)
+            {
+                VanillaUI.Error();
+                IngameMenu.Say(Loc.T("没有受控的遥控小队"));
+                return;
+            }
+
+            // 破坏性操作：先弹原版确认框（可关掉），未弹成/取消时按原样直接执行
+            if (VanillaUI.Confirm(Loc.T("释放遥控"),
+                    Loc.F("把 {0} 支小队 / {1} 个单位交还原版 AI？", groups, units), DoReleaseRemoteControl)) return;
+
+            DoReleaseRemoteControl();
+        }
+
+        static void DoReleaseRemoteControl()
         {
             int groups = RemoteGroup.GroupCount;
             int units = RemoteGroup.TotalCount;
@@ -279,17 +312,12 @@ namespace BadNorthNewMode
             MarqueeSelect.ClearPending();
             RemoteGroup.Clear();                                     // 还原 order + 销毁我们挂的组件
 
-            if (groups == 0 && units == 0)
-            {
-                IngameMenu.Say(Loc.T("没有受控的遥控小队"));
-                return;
-            }
-
             string msg = Loc.F("已释放遥控：{0} 支小队 / {1} 个单位交还原版 AI", groups, units);
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
         }
 
+        /// <summary>反射订阅 pointerRationalizer.onClick（System.Core 3.5 的 Action`2，见 §4 坑表）。</summary>
         void TrySubscribeGameClick()
         {
             if (_subscribed || _subscribeFailed) return;
@@ -332,7 +360,7 @@ namespace BadNorthNewMode
             {
                 if (!IngameMenu.IsOpen) return;
                 if (button != PointerEventData.InputButton.Left) return;
-                if (IngameMenu.Contains(screenPos))                            // 菜单内的左键属于选兵种，不做投放
+                if (IngameMenu.Contains(screenPos) || SquadBar.Contains(screenPos) || IngameMenu.HudContains(screenPos))   // 面板 / 头像条 / 提示框内的左键不属于投放
                 {
                     if (Util.V(ModConfig.VerboseLog, false)) Util.Log(Loc.T("[NewMode] 菜单内点击 → 忽略投放"));
                     return;
@@ -466,6 +494,7 @@ namespace BadNorthNewMode
         {
             IngameMenu.Draw();
             MarqueeSelect.DrawOverlay();
+            SquadBar.Draw();                      // v1.6.1：底部小队头像条
         }
 
         void OnDestroy()
@@ -473,6 +502,7 @@ namespace BadNorthNewMode
             MarqueeSelect.ClearSlowMo();          // 卸载时释放减速，避免 TimeManager 里留残账
             ClickShield.Destroy();
             RemoteCursor.ForceRelease();
+            MenuSkin.Destroy();                   // 释放菜单的运行时贴图（v1.6.1）
         }
 
     }

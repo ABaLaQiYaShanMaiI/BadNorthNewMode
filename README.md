@@ -1,10 +1,12 @@
-# Bad North - New Mode  v1.6.0
+# Bad North - New Mode  v1.6.1
 
 A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and remote-controlling enemy units.
 
 ## Controls
 
-- `F1`: toggle the drop menu (left-click a unit type and a count, switch 中文/English at the top). Inside the menu, left-click beachhead land to drop; `Esc` or right-click closes it.
+- `F1`: toggle the drop menu (left-click a unit type and a count, switch 中文/English at the top). Inside the menu, left-click beachhead land to drop; `Esc` or right-click closes it. The panel is rounded, uses the game's own font and can be dragged by its title bar; `-`/`+` fine-tune the count, and Cleanup / Force win are buttons too.
+- Messages appear in the game's own notification bar, and Cleanup / Release remote control ask first with the game's own confirm dialog (both can be turned off in the cfg `[UI]` section).
+- A **squad bar** sits at the bottom of the screen: every dropped / native squad you can command gets a portrait slot (icon + `type ×count`). **Left-click a portrait to select that whole squad**, `Shift`+click to merge, then click a tile to move it - no need to find the unit on the map. The UI uses Bad North's signature palette (**grey-blue panels, yellow buttons with black labels**) and borrows the game's own font, panel and button art. **Both the drop menu and the info box can be dragged** (positions are remembered).
 - `F2`: clean up — destroys every ship and unit dropped by this mod.
 - `F3`: force win — runs the vanilla victory flow (results screen, achievements and save all proceed normally).
 - Remote control (after closing the menu) — the mouse scheme follows the game's own cursor setting:
@@ -17,7 +19,7 @@ A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and
 - The `F1` menu has a one-click **Release remote control** button: every controlled squad goes back to vanilla AI.
 - Units line up on arrival (compact, exactly like your own squads) and hold position without twitching, and can burn houses like any viking.
 - Your own squads keep the mouse buttons as vanilla.
-- Options (`BepInEx/config/badnorth.newmode.cfg`), both toggleable from the `F1` menu: `[Native] ControlNativeUnits` (on by default) lets you select and command the vanilla-spawned enemies (the native units) as well; `[Native] BlockVanillaWaves` = endless custom mode (no vanilla waves, and the battle never ends by itself — press `F3` to leave); `[Remote] RemoteOrderButton` = `Auto` follows your cursor setting, `Left` restores the old v1.5.4 feel.
+- Options (`BepInEx/config/badnorth.newmode.cfg`), both toggleable from the `F1` menu: `[Native] ControlNativeUnits` (on by default) lets you select and command the vanilla-spawned enemies (the native units) as well; `[Native] BlockVanillaWaves` = endless custom mode (no vanilla waves, and the battle never ends by itself — press `F3` to leave); `[Remote] RemoteOrderButton` = `Auto` follows your cursor setting, `Left` restores the old v1.5.4 feel. `[UI]` = `UseVanillaUI` (game notification bar + confirm dialog), `UseVanillaFont` / `FontName` (game / system font; empty = the game's own art font), `UiFontSize`, `PanelColor` (grey-blue), `ButtonColor` (button yellow), `TextOutline`, `ConfirmDestructive`, `SquadBar` / `SquadBarMax` (the bottom portrait bar).
 
 ## Links & License
 
@@ -26,13 +28,15 @@ A BepInEx mod for Bad North that adds two ways to play: dropping enemy ships and
 
 ---
 
-# Bad North - New Mode v1.6.0（简体中文）
+# Bad North - New Mode v1.6.1（简体中文）
 
 BepInEx 模组：给《Bad North》加“投放敌舰 + 遥控敌方单位”。
 
 ## 操作
 
-- `F1`：开关投放菜单（左键点兵种与数量，顶部切 中文/English）；菜单内点滩头陆地投放，右键或 `Esc` 关闭。
+- `F1`：开关投放菜单（左键点兵种与数量，顶部切 中文/English）；菜单内点滩头陆地投放，右键或 `Esc` 关闭。菜单是圆角面板、用游戏自带字体，**拖标题栏可移动**；`-`/`+` 微调数量，清场 / 强制胜利也做成了按钮。
+- 提示改走**游戏自己的通知条**；清场 / 释放遥控前弹**游戏自己的确认框**（都可在 cfg 的 `[UI]` 段关掉）。
+- 屏幕底部有**小队头像条**：场上每一支可指挥的小队占一格（图标 + `兵种 ×人数`），**左键点一下 = 选中整队**、`Shift` + 点 = 并入/移出，再点地块即可前进——不用在地图上找单位。界面配色是**坏北标志的那套：灰蓝底 + 黄键 + 键上黑字**，字体/面板底/按键底都借自游戏本体（原版艺术字 `Body_Chinese_Simp`、`UISprite` 面板底）。**投放菜单与提示框都能拖动**，位置会记住。
 - `F2`：清场，销毁本模组投放的船与单位。
 - `F3`：强制胜利，走原版结算。
 - 遥控（关闭菜单后，**鼠标方案跟随游戏的单/双键设置**）：
@@ -45,7 +49,7 @@ BepInEx 模组：给《Bad North》加“投放敌舰 + 遥控敌方单位”。
 - `F1` 菜单里有一键**释放遥控**（全部小队交还原版 AI）。
 - 单位集结后站在目标格上排好队形、不抽动（人多也一样），能烧房子。
 - 我方小队仍按原版。
-- 选项见 `badnorth.newmode.cfg`：原版敌人也可遥控（默认开），F1 菜单里可切两个接管开关。
+- 选项见 `badnorth.newmode.cfg`：原版敌人也可遥控（默认开），F1 菜单里可切两个接管开关；`[UI]` 段可关掉原版提示条/确认框、换字体（`FontName`，留空 = 自动用原版艺术字）、改菜单字号、面板灰蓝（`PanelColor`）、按键黄（`ButtonColor`）、文字描边（`TextOutline`）、开关底部头像条。
 
 ## 链接与许可
 

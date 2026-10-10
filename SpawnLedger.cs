@@ -56,13 +56,11 @@ namespace BadNorthNewMode
         void Update()
         {
             TrySubscribeLevelEnd();
-            if (_items.Count == 0) { _seenContainer = null; return; }
 
-            if (ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown())
-            {
-                int n = DestroyAll();
-                Util.Log(Loc.F("[NewMode][清理] 手动清场：销毁 {0} 组投放对象", n));
-            }
+            if (ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown() && !VanillaUI.ModalShowing)
+                RequestCleanup();
+
+            if (_items.Count == 0) { _seenContainer = null; return; }
 
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
             Island island = (gm != null) ? gm.island : null;
@@ -124,6 +122,38 @@ namespace BadNorthNewMode
                     Agent a = s.agents[k];
                     if (a != null && !result.Contains(a)) result.Add(a);
                 }
+            }
+        }
+
+        /// <summary>F2 快捷键与菜单「清场」按钮共用：先弹原版确认框（可关掉），取消就什么都不做。</summary>
+        internal static void RequestCleanup()
+        {
+            if (VanillaUI.ModalShowing) return;
+
+            int total = PendingCount();
+            if (total == 0) { IngameMenu.Say(Loc.T("没有可清场的目标")); return; }
+
+            if (VanillaUI.Confirm(Loc.T("清场"), Loc.F("销毁本模组投放的 {0} 组对象（船与单位，不可撤销）？", total), DoCleanup)) return;
+            DoCleanup();
+        }
+
+        static int PendingCount()      // 待销毁的组数：我们的 Wave/squad 组 + 已登记的非原生单位
+        {
+            return ((_instance != null) ? _instance._items.Count : 0) + ForeignUnit.SelectableCount(false);
+        }
+
+        static void DoCleanup()
+        {
+            int n = Get().DestroyAll();
+            if (n > 0)
+            {
+                string msg = Loc.F("已清场：销毁 {0} 组投放对象", n);
+                IngameMenu.Say(msg);
+                Util.Log(Loc.T("[NewMode][清理] ") + msg);
+            }
+            else
+            {
+                IngameMenu.Say(Loc.T("没有可清场的目标"));
             }
         }
 

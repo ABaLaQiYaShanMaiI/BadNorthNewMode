@@ -95,6 +95,12 @@ namespace BadNorthNewMode
             DropPlanner.InvalidateOccupancy();
         }
 
+        /// <summary>菜单按钮入口（与 F3 共用同一实现）。</summary>
+        internal static void RequestForceWin()
+        {
+            TryForceWin(Singleton<IslandGameplayManager>.instance);
+        }
+
         /// <summary>F3：走原版胜利入口 `EndOfLevel.AllVikingsKilled()`（结算屏/成就/存档全由原版处理）。</summary>
         static void TryForceWin(IslandGameplayManager gm)
         {

@@ -78,6 +78,23 @@ namespace BadNorthNewMode
             }
         }
 
+        /// <summary>该单位是否已在某个受控小队里（头像条标记用）。</summary>
+        internal static bool IsControlled(Agent a)
+        {
+            if (a == null) return false;
+
+            for (int g = 0; g < _groups.Count; g++)
+            {
+                Group grp = _groups[g];
+                for (int i = 0; i < grp.orders.Count; i++)
+                {
+                    GroupOrder o = grp.orders[i];
+                    if (o != null && object.ReferenceEquals(o.agent, a)) return true;
+                }
+            }
+            return false;
+        }
+
         internal static string DescribeAll()
         {
             if (_groups.Count == 0) return Loc.T("无");

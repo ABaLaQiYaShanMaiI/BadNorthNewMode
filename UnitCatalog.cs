@@ -129,6 +129,17 @@ namespace BadNorthNewMode
             return Mathf.Clamp(want, 1, cap);
         }
 
+        /// <summary>菜单信息行：该兵种在"最大的船"上最多装几人（复用上面同一套容量算法）。</summary>
+        internal static int MaxSquadSize(Island island, VikingReference vr)
+        {
+            if (island == null || island.levelNode == null) return 0;
+            if (vr == null || vr.agent == null) return 0;
+
+            List<Longship> ships = island.levelNode.possibleShips;
+            if (ships == null || ships.Count == 0) return 0;
+            return ClampSquadSize(ships, vr, int.MaxValue);
+        }
+
         static Island _pickIsland;
         static string _pickName;
         static VikingReference _pickUnit;

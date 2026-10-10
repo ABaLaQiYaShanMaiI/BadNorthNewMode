@@ -61,6 +61,7 @@ namespace BadNorthNewMode
             if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) { _clickUsedForSelect = false; _pressWasDrag = false; }
             if (!Util.V(ModConfig.RemoteControl, true)) { Cancel(gm); return; }
             if (IngameMenu.IsOpen) { Cancel(gm); return; }
+            if (VanillaUI.ModalShowing) { Cancel(gm); return; }            // 原版确认框在前台：不框选也不拖相机
 
             string why;
             if (!Plugin.InBattle(gm, out why)) { Cancel(gm); return; }
@@ -79,6 +80,7 @@ namespace BadNorthNewMode
 
             if (Input.GetMouseButtonDown(0))
             {
+                if (SquadBar.Contains(Input.mousePosition) || IngameMenu.HudContains(Input.mousePosition)) return;   // 按在头像条 / 提示框上：这次点击归它们
                 _held = true;
                 _dragging = false;
                 _start = Input.mousePosition;
@@ -183,6 +185,19 @@ namespace BadNorthNewMode
                 : Loc.F("已选中 {0}（点地块 = 前进；双击单位 = 选整队）", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
+        }
+
+        /// <summary>该单位当前是否在"已选中"里（头像条高亮用）。</summary>
+        internal static bool IsSelected(Agent a)
+        {
+            if (a == null || _pending == null) return false;
+
+            for (int i = 0; i < _pending.Count; i++)
+            {
+                ForeignUnit f = _pending[i];
+                if (f != null && object.ReferenceEquals(f.agent, a)) return true;
+            }
+            return false;
         }
 
         /// <summary>取该单位所在**引擎小队**（同一次投送的 squad）里所有"可选"的非原生单位。</summary>
