@@ -3,3 +3,9 @@ obj/
 *.user
 *.bak_*
 .vs/
+
+# 本地文档：只在本地保存，不提交
+BADNORTHMP_COMPAT.md
+TOGETHER_MP_SPEC.md
+BADNORTHMOD_COMPAT_PLAN.md
+兼容旧灰复燃的战旗.md
