@@ -18,9 +18,27 @@ param(
     [switch]$Quiet,               # 再降一级：连汇总也不打
     [switch]$All,                 # 逐条打印每条消息
     [switch]$ShowFrames,          # 打印帧头十六进制（隐含 -All）
-    [string]$LogFile = ''         # 留空 = %TEMP%\mp-fake-peer-<时间戳>.log
+    [string]$LogFile = '',        # 留空 = %TEMP%\mp-fake-peer-<时间戳>.log
+    [Alias('h')][switch]$Help     # 打印用法后退出（run-fake-peer.bat -Help）
 )
 $ErrorActionPreference = 'Stop'
+
+if ($Help) {
+    Write-Host 'Together 假同伴工具（没有 Steam 好友时，用 TCP 直连验证联机让路）' -ForegroundColor Yellow
+    Write-Host '  默认（假客机）：游戏 F9 → 端口 25599 → 点【作为主机监听】 → 再运行本脚本（游戏 = 主机）'
+    Write-Host '  -AsHost（假主机）：先运行本脚本监听 → 游戏 F9 → IP 127.0.0.1 → 点【连接主机】（游戏 = 客机）'
+    Write-Host '参数：'
+    Write-Host '  -Port 25599        监听 / 连接端口（默认 25599，须与游戏 F9 里填的一致）'
+    Write-Host '  -Name "假好友"     握手时上报的名字（默认 FakeTestPeer）'
+    Write-Host '  -All               逐条打印每条消息（默认只报关键事件 + 每 10 秒汇总一行）'
+    Write-Host '  -ShowFrames        打印帧头十六进制（隐含 -All）'
+    Write-Host '  -Quiet             只报关键事件（连汇总也不打）'
+    Write-Host '  -Once              只尝试一次连接，然后退出'
+    Write-Host '  -IdleSeconds 60    跑满 60 秒自动退出（默认 0 = 一直等，Ctrl+C 结束）'
+    Write-Host '  -LogFile <路径>    日志文件（默认 %TEMP%\mp-fake-peer-<时间戳>.log）'
+    Write-Host '双击即用：run-fake-peer.bat（假同伴） / run-fake-host.bat（假主机）'
+    exit 0
+}
 
 if ([string]::IsNullOrEmpty($LogFile)) {
     $LogFile = Join-Path $env:TEMP ('mp-fake-peer-{0:yyyyMMdd_HHmmss}.log' -f (Get-Date))

@@ -133,7 +133,7 @@ Raid.IIslandFirstEnter:
 - **编队发射**（v1.3.0）：`FlotillaLauncher` 把 `FlotillaDelay`（默认 1s）窗口内的投放合并进**同一个 Wave** → 只播一条接近音乐、一次 `BeginWave`；`FlotillaSpread`（默认 2s）覆盖 Wave 出厂的时间散布；`FlotillaMaxShips`（默认 6）超出即开新编队；`FlotillaDelay = 0` 退回"各自立即出发"。
 - **船上敌人算威胁**（v1.3.0）：`ShipboardThreat`（原理见 §4 坑表）。
 - **暂停与时间基准**（v1.3.0）：`InBattle` 增加 `levelPauser.isPaused` 判定（暂停中不投放）；投放相关计时统一 `Time.time`（暂停冻结，与玩法一致）。
-- **船速跟随难度**（v1.3.0）：`FollowDifficultyShipSpeed`（默认开）→ `speedMult = ShipSpeedMultiplier × levelNode.diffiucltySettings.shipSpeedMultiplier`（原版语义；VeryHard 更快）。
+- **船速跟随难度**（v1.3.0）：`FollowDifficultyShipSpeed`（默认开）→ `speedMult = ShipSpeedMultiplier × levelNode.diffiucltySettings.shipSpeedMultiplier`（原版语义；VeryHard 更快）。**运行时调速（菜单里开关 + 拖动滑条，含在航船）设计定稿见 §10（待落实）** —— 船速在 `TryPlace` 时被烘焙进 `ShipTravel.duration`，故"在航船"必须改 `duration`（不是 `ship.speed`，更不是共享 `shipPrefab`）。
 - **跨岛兵种开关**（v1.3.0）：`AllowCrossIslandUnits`（默认开）；关掉后只从本关 `enemies` 取。
 - **占用表缓存**（v1.3.0）：已放置船位缓存，投放成功 / 清场 / 换岛时失效 → 悬停预览不再每帧遍历全岛 Landing。
 - **遥控非原生单位**（v1.4.0；**不改阵营**，只接管行军 —— 见 §4 相关事实与坑）：
@@ -258,6 +258,8 @@ Raid.IIslandFirstEnter:
 
 - **T49（v1.6.2 第二轮待实测）**：头像条整改 + 菜单放大 —— 兵种名与 `×人数` 不被裁；选中我方小队时条自动抬到原版技能条上方（或 `SquadBarBottom` 固定）；**同兵种两船兵只占一格**、`×N` 是总数、点一下整类一起选中。
 
+- **T50（v1.7 计划，未落实，落实依据 = §10）**：**船速运行时控制**（F1 菜单里「跟随难度」开关 + **可拖动滑条** + 「含在航船」开关 + 重置）——滑条对后续投放立即生效；「含在航船」为开时在航船立刻变速且**不跳位**。**判据**：见 §10.6 的 T-S1~T-S8；只影响本模组投放的船，原版波次与难度语义零改动；零 Harmony 补丁（仅在 `duration` 这一处做反射写，取不到字段自动降级为"只影响后续投放"）。
+
 ## 7. 命名与提交约定
 
 - 产物：`BadNorthNewMode.dll`；命名空间 `BadNorthNewMode`；GUID `badnorth.newmode`；部署到 `BepInEx\plugins`。
@@ -341,4 +343,135 @@ Raid.IIslandFirstEnter:
 3. **确认框与图标**：`ModalOverlay` 做清场 / 释放确认；兵种按钮用 `AddButton(term, action, Sprite icon)`（`IconButtonWidget`）+ 运行时可取的原版图标（`SpriteBank` / 原版控件）。
 
 **红线**：全程**不把任何游戏美术 / 音频资源打进 mod**（不做 AssetStudio 提取后分发）——只"运行时借用原版对象"，对公开仓库最安全，也天然跟随原版更新。
+
+---
+
+## 10. 船速运行时控制（设计定稿，待落实）
+
+> **状态**：**设计已定稿，本文档即为落实依据；代码未写**（需求原话：作者问"本项目能否设计开关拖动以控制船只速度"）。
+> 计划版本：v1.7（落实后并入 §6 的 T50 与 §8 版本对照）。**本节所有"原版事实"均已用 BepInEx 自带 `Mono.Cecil` 反查 `BadNorth_Data\Managed\Assembly-CSharp.dll` 验证**（与 `tools/check-api.ps1` 同一套工具、同一份口径）。
+
+### 10.1 目标（玩家看到的样子）
+
+F1 菜单「接管开关」那一行**下方**新增一行 **船速**：
+
+```
+船速   〔跟随难度 ●〕   ────────●──────   1.50×   〔含在航船 ●〕   [重置]
+```
+
+- **拖动滑条**（0.25× ~ 4×，步进 0.05；按住 `Shift` 精调 0.01；在滑条上滚轮 ±0.05）→ ① **对后续投放立即生效**（不必重启、不必手改 cfg）；② 「含在航船」为**开**时，**已经在航行的船立刻变速**（且**不跳位**）。
+- **「跟随难度」开关** = 直接绑已有的 `[Landing] FollowDifficultyShipSpeed`（复用菜单现成的 `DrawToggle`）。
+- **「含在航船」开关** = 新增 `[Landing] ApplySpeedToInFlight`（默认**开**）。
+- **「重置」** = 回 1.00×（不动难度倍率）。
+- 作用域：**只影响本模组投放的船**（登记册口径）；原版波次、难度语义、原版船一律不动。
+
+### 10.2 原版事实（IL 级依据 —— 决定了"改哪个字段才有效"）
+
+| 事实 | 依据（`Assembly-CSharp.dll`） |
+|---|---|
+| 有效航速 = `shipPrefab.speed × speedMultiplier × 随机档位` | `Landing.TryPlace`：`r = Random.value` → `r<0.1: 0.85 ｜ r≤0.7: 1.0 ｜ r≤0.9: 1.2 ｜ 否则 1.4`；`eff = ldarg.3(speedMultiplier) × r`；随后 `new ShipTravel(endPos, -dir, Landing.get_speed() * eff, Landing.get_speed(), island.fog.capsuleCollider)` |
+| **`duration = distance / speed`、`fleeDuration = distance / fleeSpeed`** | `Landing/ShipTravel::.ctor`：`distance = Vector3.Distance(startPos, endPos)`（`startPos` 先取 `endPos − dir×50`，raycast `fog.capsuleCollider` 命中就用命中点，未命中退 `endPos − dir×6`） |
+| **进港吃倍率、离岸不吃** | ctor 的第 3 个 speed 实参 = `get_speed() × eff`（→ `duration`）；第 4 个 = `get_speed()`（→ `fleeDuration`），**不含 speedMultiplier** |
+| 在航速度**每帧只由 `duration` 决定** | `Longship.UpdateIncoming`：`interpolator += Time.deltaTime / duration`（`IL_0059~IL_0066`），位置由 `UpdatePosition()` 按 `interpolator` 在 `startPos→endPos` 间插值 → **改 `duration` 就是改实时航速，且 `interpolator` 连续、不会跳位**（`timeRemaining`/`distanceRemaining` 等派生量自动跟着变） |
+| **投放后改 `ship.speed` 无效** | 全程序集扫描 `Longship::speed` 的引用点：只有 `Longship..ctor` 赋值、`Landing.get_speed()` 读取 → 而 `duration` 已在 `TryPlace` 时算好；`get_speed` 本身无其他消费者 |
+| **绝不能改 `shipPrefab.speed`** | `landing.shipPrefab` 是关卡**共享预制体**（`island.levelNode.possibleShips` 里的资源）→ 改了会连原版船 / 其它投放一起变 |
+| 改 `duration` 的**爆炸半径极小** | 全程序集扫描：`ShipTravel::duration` 只被 `ShipTravel..ctor` / `Landing.TryPlace` / `Longship.UpdateIncoming` / `Longship.get_timeRemaining` 引用；`fleeDuration` 只被 `ShipTravel..ctor` / `Longship.UpdateOutGoing` 引用 |
+| 字段可访问性（决定实现手段） | 类型：`Voxels.TowerDefense.RaidGeneration.Landing`（public `MonoBehaviour`）、其嵌套类 `Landing/ShipTravel`（**NestedPublic, Sealed**）；字段：`Landing.shipTravel` = **public**（编译期可访问）、`ShipTravel.duration` / `fleeDuration` / `distance` / `startPos` / `endPos` = **public + InitOnly（readonly）** → **只读还能编译期读，赋值必须走反射** |
+| 音乐 / 上岸节奏不受影响 | `Wave.get_launchDuration` 与 `Landing.startTime`（= `timeOffset`）在**波次开始时**就算好；调速只改船体位移 → 接近音乐与"波次排程"不会被打乱（这正是想要的） |
+| 与时间减速不冲突 | `RemoteSlowMo` 走 `TimeManager.RequestTimeScale`（`UpdateTimeScale` 取最小值写 `Time.timeScale`），与 `duration` 无关；框选慢放时船同比变慢，相对速度仍是滑条倍率 |
+
+### 10.3 实现设计
+
+**A. UI —— `IngameMenu` 新增一行（不新增面板）**
+
+- 新方法 `DrawSpeedRow(float x, float inner, float y)`，插在 `DrawTakeoverRow` 之后；`MenuHeight(n)` / `MenuWidth(n)` **必须同步**（本类首行注释已写明"改布局必须同步高度"）。
+- 滑条**自绘**（零资源、与 `MenuSkin` 同风格）：轨道 = `MenuSkin.Bg(Rect,false,false)` 拉一条窄矩形 + 已填充段用 `RowOn`；滑块 = 12px 方块（`Texture2D.whiteTexture` + `BtnOnColor`/`Gold`）。命中用 `GUI.Button(knobRect, GUIContent.none, MenuSkin.HitCenter)` + `Event.current.type == MouseDrag`，或直接 `GUI.HorizontalSlider` 后覆写 `GUI.skin.horizontalSlider*`（二者都可，自绘更贴现有皮肤）。
+- 拖动实现要点：**滑条不放标题栏** → 与 `HandleDrag()`（只在 `_titleRect.Contains(m)` 时接管面板拖动）天然不冲突；拖动期间**不要**调用 `IngameMenu.Say`（避免每帧刷原版通知条），只在**松手那一帧**播一次提示 + 日志。
+- 输入安全：菜单内点击已被 `HandleDropMode` / `OnWorldClick` / `RemoteOrderAt` 用 `AnyPanelContains()` 排除，且 `ClickShield` 用不可见 UI 盖住 `MenuRect` → **拖滑条不会误投放、也不会漏给原版**（无需新增拦截面）。
+
+**B. 数据通路 —— 新增 `ShipSpeedRuntime.cs`（约 120 行）**
+
+```csharp
+// 1) 后续投放：零改动。LandingInjector.TrySpawn 本来就每次现读 cfg（Util.V(ModConfig.ShipSpeedMultiplier,1f)
+//    × FollowDifficultyShipSpeed 时的难度倍率）→ 只改 ConfigEntry.Value 即可立刻对"下一艘"生效。
+
+// 2) 在航船：登记"本次投放用的基准倍率"，之后按比值缩放 duration
+internal static void Track(Landing landing, float baseMult0);      // 投放成功后调一次（紧挨 SpawnLedger.Track）
+internal static void ApplyToInFlight(float newBaseMult);            // 滑条变化 / 开关切换时调
+//   duration_new     = duration0  * (baseMult0 / newBaseMult)   ← 用比值 → TryPlace 内部那个随机档位(0.85/1.0/1.2/1.4)
+//                                                                 在比值里自动约掉，每艘船各自的抖动被保留
+//   fleeDuration_new = flee0      / newBaseMult                 ← 撤离本就不吃倍率 → 用绝对值，语义 = "滑条就是全船速"
+internal static void Forget(Island island);                          // 清场/换岛/结算时清登记
+```
+
+> 命名口径（防混）：`baseMult0` = 我们传给 `TryPlace` 的 `speedMultiplier`（= `ShipSpeedMultiplier × 难度倍率`），**不含** §10.2 里 `TryPlace` 内部的随机档位 `r`；`ApplyToInFlight` 里对 `newBaseMult` 取下限（≥0.05）防除零。
+
+- **反射防御**（风格照 `Plugin.TrySubscribeGameClick` 那套"取不到就降级 + 只 Warn 一次"，但更简单——字段是 public，只有赋值要反射）：
+  缓存 `FieldInfo durationFi = typeof(Landing.ShipTravel).GetField("duration", Instance|Public)`（`fleeDuration` 同理）；**取不到就 Warn 一次并降级为"只影响后续投放"**；每次写都 `try/catch`，失败只报一次、不崩、不静默错。
+- **写频率**：只在"滑条数值变化 / 开关切换"时写，**不是每帧** → 反射开销可忽略；拖动过程中可节流（≥50ms 或数值真的变了才写）。
+
+**C. 落盘策略（临时 vs 持久）**
+
+`ConfigEntry.Value` 赋值在 BepInEx 默认 `SaveOnConfigSet=true` 下会**写回 cfg 文件**。拖动中每帧写盘会抖 → 设计为：**拖动中只改内存 + `MarkDirty`**，松手后写一次；另给一个「保存到配置」按钮（或滑条下的"记住"开关）把"临时调速"和"持久化"分开，与作者"cfg 手动可控"的习惯一致。
+
+**D. 联机降级（Together /《旧灰复燃的战旗》）**
+
+客机侧世界由主机权威（`WorldSnapshot` + 客机侧 `Longship.Update` Patch）→ 改 `duration` 会被覆盖/无意义。
+⚠️ **注意**：本仓库当前源码里**没有**联机检测（`Compat.cs` 只存在于**本地、未提交**的兼容计划 `BADNORTHMOD_COMPAT_PLAN.md` §S4）。落实时二选一：① 若届时兼容计划已落地 → 直接复用它的 `Compat.TogetherOnline()`；② 否则在本节实现里做**同口径的最小只读反射**（`Together.Net.Session.Active`，只读、不调用方法，取不到按"未联机"处理并只 Warn 一次）。
+无论哪条路：**客机自动禁用「含在航船」**（开关置灰），HUD 提示"联机客机：只影响后续投放"；主机侧照常。
+
+**E. 生命周期清理**
+
+登记点与 `SpawnLedger.Track/TrackSquad` 同一处（`LandingInjector.TrySpawn`）；`SpawnLedger.DestroyAll()`（`F2` 清场 / 离开战局 / 换岛 / `EndOfLevel.postProcess`）里顺手 `Forget`，避免持有已销毁 `Landing` 的引用。
+
+**F. 文案与 cfg**
+
+- `Loc` 增中英词条 6~8 条（"船速"、"跟随难度"、"含在航船"、"重置"、"拖滑条调速"、提示与日志格式串）——**`tools/check-loc.ps1` 是构建闸门**，key（简中原文）与英文占位符 `{n}` 必须齐平。
+- `ModConfig` 新增 `[Landing] ApplySpeedToInFlight`（`bool`，默认 `true`，说明"调速是否立刻套用到已经在航行的船；关 = 只影响之后投放的船"）。
+
+### 10.4 改动清单（预计半天，含两次实机验证）
+
+| 文件 | 改动 | 规模 |
+|---|---|---|
+| `ShipSpeedRuntime.cs` | **新增**：登记 / 反射写 `duration`·`fleeDuration` / 降级 / 清理 | ~120 行 |
+| `IngameMenu.cs` | `DrawSpeedRow` + 滑条绘制与命中；`MenuHeight` / `MenuWidth` 同步；HUD 加一行"船速 ×1.50（在航 3 艘）"（可选） | ~70 行 |
+| `LandingInjector.cs` | 投放成功后一行 `ShipSpeedRuntime.Track(landing, baseMult0)`（把已算出的 `speedMult` 一起传进去） | 1~2 行 |
+| `SpawnLedger.cs` | `DestroyAll()` 里 `ShipSpeedRuntime.Forget(...)` | 1 行 |
+| `ModConfig.cs` | `BindLanding` 加 `ApplySpeedToInFlight` | ~3 行 |
+| `Loc.cs` | 6~8 条中英词条 | ~10 行 |
+| `PROJECT_SPEC.md` / `README.md` | 本节落实后改状态；`README` 的"Controls"补滑条一行 | — |
+
+### 10.5 边界与风险（落实时必须守住）
+
+1. **零 Harmony 补丁的原则不破**：全部改动 = 投放时多传一个倍率（本来就是我们的代码）+ 对 `ShipTravel.duration` 的一次反射写，**不 Patch 任何原版方法**（与 §2.2 一致）。
+2. **作用域只限本模组投放的船**：登记册口径（`SpawnLedger` 同源）；原版波次的船不受影响 → 不会变成"改难度"。
+3. **`shipPrefab` 绝对只读**：任何"改船速"的实现都不得写 `landing.shipPrefab.speed`（共享预制体，见 §10.2）。
+4. **反射属"非公开契约"**：`duration` 是 public 但 `InitOnly` → 写失败/字段改名时必须**降级为"只影响后续投放"并 Warn 一次**，绝不静默错、绝不每帧重试。
+5. **极端倍率与下船看门狗**：4× 时靠岸动画窗口变短、0.25× 时更慢；`DisembarkWatchdog`（`DisembarkGrace` 默认 3s，到岸后才计时）行为不变，但若实测出现"快船到岸抖动 / 慢船像卡住"，按 §10.6 的 S8 记录读数再决定是否让滑条联动手表阈值。
+6. **落盘语义要写清**：`ConfigEntry.Value` 会写回 cfg（BepInEx `SaveOnConfigSet`）→ 拖动中节流、松手落一次，并明确告知"这是持久设置"。
+7. **联机**：客机禁用"含在航船"（§10.3 D）。**联机检测本身在当前仓库尚不存在**（属本地兼容计划 `BADNORTHMOD_COMPAT_PLAN.md` §S4 的 `Compat.TogetherOnline()` = 只读反射 `Together.Net.Session.Active`）→ 落实时要么等它落地后复用、要么写同口径最小只读反射；检测失败一律按"未联机"处理（绝不误禁）。
+8. **未落实前不得对外宣称**：本节属计划，`README` / HUD / cfg 里**不应**出现尚未实现的滑条键（避免"文档先行"的假承诺）。
+
+### 10.6 验证清单（落实后并入 §6，编号 T-S1 ~ T-S8）
+
+| 项 | 判据 |
+|---|---|
+| **T-S1** | 拖滑条：数值实时变；日志恰一行 `[NewMode][船速] 1.00× → 1.50×（跟随难度 1.0×，在航 3 艘已套用）`；拖动过程中**不刷**通知条（只在松手播一次） |
+| **T-S2** | 拖完松手**不投放**：`VerboseLog` 下无"菜单内点击 → 忽略投放"以外的投放日志、场上不多船 |
+| **T-S3** | 拖滑条时面板**不移位**（`IngameMenu._pos` 不变）→ 证明没误触标题栏拖动 |
+| **T-S4** | 0.25× / 1.0× / 4× 各投一艘（`VerboseLog` 打印实际 `speedMult`），实测"点击 → 靠岸"时间比约为倍率的倒数 |
+| **T-S5** | 「含在航船」= 开：在航时改速度 → 船**立刻**加速/减速、**无位置跳变**（`interpolator` 连续）；= 关：在航船不受影响、只影响之后投放 |
+| **T-S6** | `F2` 清场 / 离开战局 / 换岛 / 重开一局后登记清空（无 `MissingReferenceException`），新关从滑条当前值起算 |
+| **T-S7** | 联机客机：「含在航船」自动禁用 + HUD 提示"只影响后续投放"；主机侧正常 |
+| **T-S8** | 极端倍率（0.25× / 4×）下观察 `DisembarkWatchdog`：无"到岸后不下船"误判；若 4× 出现靠岸抖动，记录 `DisembarkGrace` 读数后再决定是否联动 |
+
+### 10.7 备选方案（若反射不可接受）
+
+| 方案 | 做法 | 评价 |
+|---|---|---|
+| **α（推荐，见 10.3）** | 反射写 `ShipTravel.duration` / `fleeDuration` | 唯一能"在航船实时变速且不跳位"的做法；改动面小、可降级 |
+| **β（零反射 / 最低风险）** | 滑条**只影响后续投放**：`TrySpawn` 现读 cfg 已天然支持，UI 只需加一个滑条；「含在航船」开关**不提供** | 半天内可交付、零非公开契约；缺点是"已经在海上的船改不了" |
+| **γ（油门式实时操纵，即"鼠标拖动操纵杆连续控速"）** | 给在航 `Longship` 挂组件，每帧按滑块值改写 `interpolator` 推进（`interpolator += dt/duration × k`），实现"拖动即控速" | 能做出"拖到哪船多快"的手感，但**每帧改游戏状态**、与 Together 的 `Longship.Update` Patch 交互，必须额外做联机降级与冲突处理 → 工作量翻倍，**不推荐**（除非作者要的就是"操纵杆"而非"滑条"） |
+
+
 
