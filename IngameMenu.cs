@@ -53,6 +53,18 @@ namespace BadNorthNewMode
 
         internal static void Toggle()
         {
+            // v1.7.0：让路时不开菜单（联机中投放会冻结整局；整合包终岛无尽在接管波次）。
+            if (!IsOpen)
+            {
+                string why;
+                if (Compat.DropBlocked(Singleton<IslandGameplayManager>.instance, out why))
+                {
+                    Say(why);
+                    Util.Warn(Loc.F("[NewMode][兼容] 投放已让路：{0}", why));
+                    return;
+                }
+            }
+
             IsOpen = !IsOpen;
             Hover = "";
             PlacementMarker.Get().Hide();
@@ -170,11 +182,13 @@ namespace BadNorthNewMode
             int nativeCount = ForeignUnit.SelectableCount(true);
             int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
             bool active = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;
-            if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil) return;
+            string compat = Compat.StatusLine();                 // v1.7.0：整合包 / 联机状态行（没有就是 null）
+            if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil && string.IsNullOrEmpty(compat)) return;
 
             List<string> lines = _hudLines;      // 复用同一个 List（HUD 每帧重画，不必每帧 new）
             lines.Clear();
             lines.Add((IsOpen ? Loc.T("投放菜单") : "BadNorthNewMode") + " · v" + Plugin.VERSION);
+            if (!string.IsNullOrEmpty(compat)) lines.Add(compat);
             if (IsOpen && !string.IsNullOrEmpty(Hover)) lines.Add(Hover);
             if (RemoteGroup.Any) lines.Add(Loc.F("遥控：{0}｜共 {1}", RemoteGroup.DescribeAll(), RemoteGroup.TotalCount));
             if (RemoteGroup.HasRally) lines.Add(Loc.F("待登陆集结：{0} 人 / {1} 处", RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount));
@@ -362,7 +376,13 @@ namespace BadNorthNewMode
         {
             y += Pad;
             float tw = (inner - Gap) * 0.5f;
-            DrawToggle(new Rect(x, y, tw, BtnH), ModConfig.BlockVanillaWaves, Loc.T("原版波次：拦下"), Loc.T("原版波次：正常"));
+
+            // v1.7.0：整合包 / 联机正在接管波次时，"拦下原版波次"在**菜单侧**就直接拒绝
+            //（否则会与对方的波次调度叠加成"波次永远不来"，见兼容方案 §3.3 C4-B）。
+            string refuseWhy = null;
+            bool waveAllowed = !Compat.WaveBlockForbidden(out refuseWhy);
+            DrawToggle(new Rect(x, y, tw, BtnH), ModConfig.BlockVanillaWaves,
+                Loc.T("原版波次：拦下"), Loc.T("原版波次：正常"), waveAllowed, refuseWhy);
             DrawToggle(new Rect(x + tw + Gap, y, tw, BtnH), ModConfig.ControlNativeUnits, Loc.T("原生单位：可遥控"), Loc.T("原生单位：不可"));
 
             y += BtnH;
@@ -473,7 +493,7 @@ namespace BadNorthNewMode
 
             Longship ship = UnitCatalog.PickShipForCount(island, u, Mathf.Max(1, want));
             return Loc.F("默认 {0} 人 · 上限 {1} 人 · 船：{2}", def, UnitCatalog.MaxSquadSize(island, u), (ship != null) ? ship.name : Loc.T("无"))
-                 + "　" + u.name;
+                 + "　" + u.name + (UnitNames.IsKnownVanilla(u.name) ? "" : Loc.T("（外生）"));
         }
 
         static VikingReference CurrentUnit()
@@ -512,6 +532,12 @@ namespace BadNorthNewMode
 
         static void DrawToggle(Rect r, ConfigEntry<bool> entry, string onLabel, string offLabel)
         {
+            DrawToggle(r, entry, onLabel, offLabel, true, null);
+        }
+
+        /// <summary>开关按钮。v1.7.0：`allowOn=false` 时"点它置为开"会被拒绝并说明原因（拦波次与整合包/联机互斥）。</summary>
+        static void DrawToggle(Rect r, ConfigEntry<bool> entry, string onLabel, string offLabel, bool allowOn, string refuseWhy)
+        {
             if (entry == null) return;
 
             bool on = entry.Value;
@@ -519,11 +545,21 @@ namespace BadNorthNewMode
             if (GUI.Button(r, GUIContent.none, MenuSkin.HitCenter))
             {
                 VanillaUI.Click();
-                entry.Value = !on;
 
-                string now = on ? offLabel : onLabel;
-                Say(Loc.F("已切换：{0}", now));
-                Util.Log("[NewMode] " + now);
+                if (!on && !allowOn)
+                {
+                    string deny = Loc.F("不能开：{0}", refuseWhy);     // 原版通知条 + 日志各一份（cfg 值不变）
+                    Say(deny);
+                    Util.Warn("[NewMode][兼容] " + deny);
+                }
+                else
+                {
+                    entry.Value = !on;
+
+                    string now = on ? offLabel : onLabel;
+                    Say(Loc.F("已切换：{0}", now));
+                    Util.Log("[NewMode] " + now);
+                }
             }
             MenuSkin.DrawBtn(r, on ? onLabel : offLabel, on);
         }

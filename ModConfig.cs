@@ -32,6 +32,12 @@ namespace BadNorthNewMode
 
         public static ConfigEntry<bool> ShowSquadBar;
 
+        /// <summary>兵种显示名的补充/覆盖（`内部名=显示名;…`）。给"添加兵种的 mod"用：纯 UI，不影响投放逻辑。</summary>
+        public static ConfigEntry<string> UnitNameOverrides;
+
+        /// <summary>兵种菜单是否列出引用表里**所有** `VikingReference`（不限 `Viking_` 前缀）—— 为"加兵种的 mod"留的兼容口。</summary>
+        public static ConfigEntry<bool> ListAllVikingRefs;
+
         public static ConfigEntry<int> SquadBarMax;
 
         /// <summary>头像条的横向位置（Left / Center / Right）。</summary>
@@ -83,6 +89,25 @@ namespace BadNorthNewMode
         /// <summary>是否生成日志文件（默认 false：加载时摘掉 BepInEx 的磁盘日志监听器）。</summary>
         public static ConfigEntry<bool> LogToFile;
 
+        // ============ Compat（v1.7.0：《旧灰复燃的战旗》整合包 / Together 联机让路）============
+        /// <summary>总开关：检测到整合包或联机会话时自动让路（关掉 = 完全按旧行为，风险自负）。</summary>
+        public static ConfigEntry<bool> CompatAutoLetGo;
+
+        /// <summary>终岛上是否仍允许投放（默认 false = 让路：整合包的终岛无尽在接管波次）。</summary>
+        public static ConfigEntry<bool> CompatDropOnTerminal;
+
+        /// <summary>检测到接管波次的插件时，是否仍允许打开"拦下原版波次"（默认 false = 拒绝，避免波次永远不来）。</summary>
+        public static ConfigEntry<bool> CompatBlockWavesWithOthers;
+
+        /// <summary>强制胜利在整合包/联机环境下是否需要二次确认（默认 true）。</summary>
+        public static ConfigEntry<bool> CompatForceWinConfirm;
+
+        /// <summary>启动时打印一行环境自检（整合包 / 联机 / MMHOOK / 游戏本体）。</summary>
+        public static ConfigEntry<bool> CompatReport;
+
+        /// <summary>排障用：强制认为"没有整合包、没有联机"（让所有让路失效）。</summary>
+        public static ConfigEntry<bool> CompatForceOffline;
+
         public static void Bind(ConfigFile cfg)
         {
             Loc.Bind(cfg);                 // 先绑语言项；本文件的说明文案保持简中，不随语言切换
@@ -92,6 +117,7 @@ namespace BadNorthNewMode
             BindRemote(cfg);
             BindLanding(cfg);
             BindDiag(cfg);
+            BindCompat(cfg);
         }
 
         static void BindGeneral(ConfigFile cfg)
@@ -148,6 +174,14 @@ namespace BadNorthNewMode
             SquadBarBottom = cfg.Bind("UI", "SquadBarBottom", -1,
                 "头像条离屏幕底部的像素。-1（默认）= 自动：选中我方小队时抬到原版技能条上方；\n" +
                 ">= 0 = 固定像素（不再自动避让）。");
+            UnitNameOverrides = cfg.Bind("UI", "UnitNameOverrides", "",
+                "兵种显示名的补充/覆盖（给\"添加兵种的 mod\"用；**纯 UI，不影响能投放什么**）。\n" +
+                "格式：内部名=显示名，多个用分号分隔。例：Viking_Spearman=长矛兵;Viking_新兵=我的新兵\n" +
+                "内部名 = 菜单里把鼠标悬停在该兵种上时，信息行末尾显示的那串（例如 Viking_Spearman）。默认空。");
+            ListAllVikingRefs = cfg.Bind("UI", "ListAllVikingRefs", true,
+                "兵种菜单是否列出引用表里**所有** VikingReference（不再只认 `Viking_` 前缀）。\n" +
+                "为\"添加兵种的 mod\"留的兼容口：别的 mod 用别的命名也能被列出来。默认开。\n" +
+                "若菜单里因此出现奇怪的条目，关掉即回到旧行为（只列 Viking_ 前缀的）。");
         }
 
         static void BindLanding(ConfigFile cfg)
@@ -241,6 +275,33 @@ namespace BadNorthNewMode
                 "详细日志：打印点击命中的地形点/海拔、滩头点、距离、最终 shipPrefab 与失败原因。排查时开。");
             LogToFile = cfg.Bind("Diag", "LogToFile", false,
                 "是否生成 BepInEx\\LogOutput.log。默认 false（控制台窗口的日志不受影响）。");
+        }
+
+        /// <summary>v1.7.0：与《旧灰复燃的战旗》整合包（含 Together 联机）共存时的让路开关。</summary>
+        static void BindCompat(ConfigFile cfg)
+        {
+            CompatAutoLetGo = cfg.Bind("Compat", "AutoLetGo", true,
+                "检测到整合包 / Together 联机会话时自动让路（总开关）：\n" +
+                "· 联机中 → 不投放（投放会让主机判\"波次身份不足\"而冻结整局）；\n" +
+                "· 整合包终岛 → 不投放（终岛无尽由整合包接管）；\n" +
+                "· 接管波次的插件在场 → 拒绝\"拦下原版波次\"。\n" +
+                "false = 完全按旧行为（可能冻结联机 / 波次永远不来），风险自负。默认开。");
+            CompatDropOnTerminal = cfg.Bind("Compat", "DropOnTerminal", false,
+                "终岛（LevelNode.isEnd）上是否仍允许投放。\n" +
+                "false（默认）= 让路：整合包的终岛无尽正在接管波次，投放可能与之冲突。\n" +
+                "true = 照常投放（自担风险，建议只用来验证）。");
+            CompatBlockWavesWithOthers = cfg.Bind("Compat", "BlockWavesWithOthers", false,
+                "检测到\"正在接管波次的插件\"（终岛无尽 / 贤者时缓 / 入场运镜 / Together 在线）时，\n" +
+                "是否仍允许打开 Native.BlockVanillaWaves。\n" +
+                "false（默认）= 拒绝打开并说明原因，避免出现\"波次永远不来\"。");
+            CompatForceWinConfirm = cfg.Bind("Compat", "ForceWinConfirm", true,
+                "整合包 / 联机环境下，F3 强制胜利先弹原版确认框（结算口径可能与对方冲突）。\n" +
+                "false = 按下即结算。默认开。");
+            CompatReport = cfg.Bind("Compat", "Report", true,
+                "启动时打印一行环境自检（整合包几个插件 / Together 是否在线 / MMHOOK / 游戏本体是否被改造）。\n" +
+                "报障时这一行就够定位环境。默认开。");
+            CompatForceOffline = cfg.Bind("Compat", "ForceOffline", false,
+                "排障用：强制认为\"没有整合包、没有联机\"，让上面所有让路失效（回旧行为）。默认关。");
         }
     }
 }

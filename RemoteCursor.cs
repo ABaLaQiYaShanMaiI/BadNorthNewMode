@@ -49,6 +49,8 @@ namespace BadNorthNewMode
             try
             {
                 if (!Util.V(ModConfig.RemoteControl, true)) return;
+                string blockWhy;                                        // v1.7.0：联机中遥控整体让路（客机被姿态流覆盖 / 主机污染对方账本）
+                if (Compat.RemoteBlocked(out blockWhy)) { Compat.NoteRemoteRefused(blockWhy); return; }
                 if (IngameMenu.IsOpen) return;                          // 投放模式：点击归投放
                 if (VanillaUI.ModalShowing) return;                     // 原版确认框在前台：点击全归它，别再选/走
 

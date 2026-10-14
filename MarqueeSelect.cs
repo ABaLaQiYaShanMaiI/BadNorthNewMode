@@ -60,6 +60,8 @@ namespace BadNorthNewMode
             // 每次按下先清零、再由下面的分支置位——两个标记要**从按下保持到松开**（普通点击的延迟下令据此判断"这次点击属于选队/框选"）
             if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) { _clickUsedForSelect = false; _pressWasDrag = false; }
             if (!Util.V(ModConfig.RemoteControl, true)) { Cancel(gm); return; }
+            string blockWhy;                                   // v1.7.0：联机中遥控让路（含框选与减速）—— 见兼容方案 §3.4
+            if (Compat.RemoteBlocked(out blockWhy)) { Compat.NoteRemoteRefused(blockWhy); Cancel(gm); return; }
             if (IngameMenu.IsOpen) { Cancel(gm); return; }
             if (VanillaUI.ModalShowing) { Cancel(gm); return; }            // 原版确认框在前台：不框选也不拖相机
 

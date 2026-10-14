@@ -26,8 +26,24 @@ namespace BadNorthNewMode
         {
             if (ModConfig.ForceWinHotkey != null && ModConfig.ForceWinHotkey.Value.IsDown()) TryForceWin(gm);
 
-            if (Util.V(ModConfig.BlockVanillaWaves, false)) TryBlockWaves(gm);
-            else if (_island != null) ReleaseWaves();
+            // v1.7.0：与"正在接管波次的插件"（整合包终岛无尽 / 贤者时缓 / 入场运镜 / Together 在线）叠加会出现
+            // "波次永远不来" → 默认拒绝（cfg [Compat] BlockWavesWithOthers=true 可强制）。
+            if (Util.V(ModConfig.BlockVanillaWaves, false))
+            {
+                string why;
+                if (Compat.WaveBlockForbidden(out why))
+                {
+                    // 回写 cfg + 提示：只拦行为不回写，F1 菜单会一直显示"原版波次：拦下"（与实际状态不符）。
+                    Compat.RefuseWaveBlock(why);
+                    if (_island != null) ReleaseWaves();
+                    return;
+                }
+
+                TryBlockWaves(gm);                 // 放行：与往常一致
+                return;
+            }
+
+            if (_island != null) ReleaseWaves();
         }
 
         /// <summary>彻底拦下原版波次（见 §4）：必须**每帧重写** —— 原版 `IIslandFirstEnter` 是协程，创建 Wave 之后才按排序赋 `waveStartTime`（第 0 波 = 0，进岛即发），只拦一次会被它覆盖回去。</summary>
@@ -79,7 +95,13 @@ namespace BadNorthNewMode
             if (_announced) return;
             _announced = true;
             DropPlanner.InvalidateOccupancy();
-            IngameMenu.Say(Loc.F("自定义模式（无尽）：本关只有你投放的单位，不会自然结束 —— 按 F3 强制胜利退出（{0} 波原版波次已拦下）", waves.Length));
+
+            // v1.7.0-b2：整合包叠加**不拒绝**（作者的"无限试炼场"口径），只把风险并进同一条提示里说一次。
+            string say = Loc.F("自定义模式（无尽）：本关只有你投放的单位，不会自然结束 —— 按 F3 强制胜利退出（{0} 波原版波次已拦下）", waves.Length);
+            string risk = Compat.WaveBlockRiskNote();
+            if (!string.IsNullOrEmpty(risk)) { say += "　" + risk; Util.Warn(risk); }
+
+            IngameMenu.Say(say);
             Util.Log(Loc.F("[NewMode][接管] 已拦下原版波次：{0} 波不再发射（占位一并放行）。本关不会自然结束，退出请按 F3 强制胜利。", waves.Length));
         }
 
@@ -111,6 +133,25 @@ namespace BadNorthNewMode
             if (eol == null) { IngameMenu.Say(Loc.T("EndOfLevel 未就绪")); return; }
             if (eol.reason != EndOfLevel.Reason.None) { IngameMenu.Say(Loc.T("本关已经结束过了")); return; }
 
+            // v1.7.0：整合包 / 联机环境下先二次确认（对方的胜负改写可能与我们的结算口径对撞，见兼容方案 §3.3 C5）。
+            if (Compat.ForceWinConfirmNeeded)
+            {
+                EndOfLevel captured = eol;
+                if (!VanillaUI.Confirm(Loc.T("强制胜利确认"),
+                        Loc.T("整合包/联机环境：强制胜利会立刻走原版结算，确定继续？"),
+                        delegate { ForceWinNow(captured); }))
+                {
+                    ForceWinNow(captured);      // 确认框没弹出来（或 cfg 关掉了确认）→ 直接执行
+                }
+                return;
+            }
+
+            ForceWinNow(eol);
+        }
+
+        /// <summary>真正的结算动作（与确认流程分开，两条路径共用）。</summary>
+        static void ForceWinNow(EndOfLevel eol)
+        {
             eol.AllVikingsKilled();
             IngameMenu.Say(Loc.T("强制胜利：已走原版胜利流程"));
             Util.Log(Loc.T("[NewMode][接管] 强制胜利：EndOfLevel.AllVikingsKilled()（原版胜利流程）"));

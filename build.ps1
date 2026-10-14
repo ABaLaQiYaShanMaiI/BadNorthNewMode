@@ -17,6 +17,7 @@ param(
     [string]$BadNorthDir = $env:BadNorthDir,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
+    [string]$PackAssemblyCSharp = $env:BadNorthPackDll,
     [switch]$SkipDeploy
 )
 $ErrorActionPreference = 'Stop'
@@ -74,6 +75,23 @@ if (Test-Path $locCheck) {
     if ($LASTEXITCODE -ne 0) { throw "本地化校验失败（见上方 loc-check 输出）" }
 } else {
     Write-Host "[build] 未找到 tools\check-loc.ps1，跳过本地化校验" -ForegroundColor Yellow
+}
+
+# ---------- 3.6 整合包引用校验（v1.7.0：《旧灰复燃的战旗》替换了 Assembly-CSharp.dll）----------
+# 包版是原版的"就地编辑版"（MVID 相同、成员是超集）→ **同一份产物在两边都能跑**；
+# 这一层用来把"包升版时删/改了成员"提前拦在构建期，而不是玩家侧抛 MissingMethodException。
+# 路径来源：-PackAssemblyCSharp > 环境变量 BadNorthPackDll > 跳过（默认不传 = 与旧流程完全一致）。
+if (-not $PackAssemblyCSharp) { $PackAssemblyCSharp = $env:BadNorthPackDll }
+if ($PackAssemblyCSharp -and (Test-Path $PackAssemblyCSharp)) {
+    $packCheck = Join-Path $root 'tools\check-pack-compat.ps1'
+    if (Test-Path $packCheck) {
+        & $packCheck -Dll $builtDll -GameDir $BadNorthDir -PackDll $PackAssemblyCSharp
+        if ($LASTEXITCODE -ne 0) { throw "整合包引用兼容校验失败（见上方 pack-compat 输出）" }
+    } else {
+        Write-Host "[build] 未找到 tools\check-pack-compat.ps1，跳过整合包引用校验" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "[build] 未提供 -PackAssemblyCSharp（或 BadNorthPackDll），跳过整合包引用校验" -ForegroundColor Yellow
 }
 
 if ($SkipDeploy) {

@@ -22,16 +22,48 @@ namespace BadNorthNewMode
             Dictionary<string, UnityEngine.Object> dict = LevelStateObjectReferences.dict;
             if (dict != null)
             {
+                // v1.7.0-b2：默认**不限 `Viking_` 前缀** —— 别的兵种 mod 可能给单位起别的名字
+                //（判据改为"值确实是 VikingReference 且 agent 不为空"，`AddUnit` 里已保证后者）。
+                // 若菜单里因此出现奇怪条目，可把 cfg [UI] ListAllVikingRefs 关掉（回到"只认 Viking_ 前缀"）。
+                bool allPrefixes = Util.V(ModConfig.ListAllVikingRefs, true);
                 foreach (KeyValuePair<string, UnityEngine.Object> kv in dict)
                 {
                     if (string.IsNullOrEmpty(kv.Key)) continue;
-                    if (kv.Key.IndexOf("Viking_", System.StringComparison.Ordinal) != 0) continue;
+                    bool standardName = kv.Key.IndexOf("Viking_", System.StringComparison.Ordinal) == 0;
+                    if (!standardName && !allPrefixes) continue;
                     AddUnit(result, names, kv.Value as VikingReference);
                 }
             }
 
             SortByDifficulty(result);
+            LogCatalog(island, result);          // v1.7.0-b2：每座岛打一行"本关可选兵种"（外生兵种排查靠它）
             return result;
+        }
+
+        /// <summary>
+        /// 把"本关可选兵种"打一行日志：**名字 / 显示名 / 是否原版内置**（`*` = 别 mod 加的外生兵种）。
+        /// 加兵种的 mod 一多，这行就是唯一能一眼看出"哪些单位来自别处、内部名是什么"的地方
+        /// （内部名正是 `cfg [UI] UnitNameOverrides` 与 `EnemyName` 要填的值）。每座岛只打一次。
+        /// </summary>
+        static void LogCatalog(Island island, List<VikingReference> units)
+        {
+            if (units == null || units.Count == 0) return;
+
+            string islandName = (island != null && !string.IsNullOrEmpty(island.name)) ? island.name : "?";
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            for (int i = 0; i < units.Count; i++)
+            {
+                VikingReference u = units[i];
+                if (u == null) continue;
+                if (sb.Length > 0) sb.Append("，");
+                sb.Append(u.name).Append('=').Append(UnitNames.Of(u.name));
+                if (!UnitNames.IsKnownVanilla(u.name)) sb.Append('*');
+            }
+            if (sb.Length == 0) return;
+
+            Util.LogOnce("units:" + islandName + ":" + units.Count,
+                Loc.F("[NewMode][兵种] 本关可选 {0} 种（*=外生兵种，可用 cfg [UI] UnitNameOverrides 改显示名）：{1}",
+                    units.Count, sb.ToString()));
         }
 
         static void AddUnit(List<VikingReference> list, List<string> names, VikingReference vr)

@@ -134,6 +134,11 @@ namespace BadNorthNewMode
                 VikingAgent va = a.GetComponent<VikingAgent>();
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
+
+            // v1.7.0：投放后自检 —— 整合包的插件会在 Squad.CreateAgent 之后给敌人套盾/矛/特性（拦不了，但要让用户知道）。
+            string audit = Compat.AuditEnhancements(ship);
+            if (!string.IsNullOrEmpty(audit)) Util.Log(audit);
+
             if (Util.V(ModConfig.VerboseLog, false))
                 Util.Log(Loc.F("[NewMode] 已装配 {0} 个敌人（order→Pirate + 舰上威胁）", n));
             return n;
