@@ -272,7 +272,7 @@ namespace BadNorthNewMode
             // ---- UnitCatalog ----
             { "[NewMode] \"{0}\" 不在本关生成池，改用全局引用字典里的同一单位。", "[NewMode] \"{0}\" is not in this island's spawn pool; using the same unit from the global reference dictionary." },
             { "[NewMode] cfg EnemyName=\"{0}\" 既不在生成池也不在引用字典，退回随机。", "[NewMode] cfg EnemyName=\"{0}\" is neither in the spawn pool nor the reference dictionary; falling back to random." },
-            // ---- v1.7.0：与《旧灰复燃的战旗》整合包 / Together 联机共存（Compat.cs）----
+            // ---- v1.7.1：与《旧灰复燃的战旗》整合包 / Together 联机共存（Compat.cs）----
             { "有", "yes" },
             { "是", "yes" },
             { "否", "no" },
@@ -283,6 +283,14 @@ namespace BadNorthNewMode
             { "主机", "host" },
             { "客机", "client" },
             { "（外生）", " (mod unit)" },
+            { "注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上", "Note: units dropped during an online session are not broadcast to the other player (Together only syncs waves from its own manifest) - they cannot see these ships or enemies, yet damage and results still apply to them" },
+            { "靠岸速度 ×{0}（第 {1}/{2} 档）", "Shore speed x{0} (gear {1}/{2})" },
+            { "靠岸速度（原生 / 非原生船都生效，按住拖动切换档位）", "Shore speed (applies to native and mod-dropped ships; press and drag to change gear)" },
+            { "联机客机：靠岸速度由主机决定", "Online client: the host decides the shore speed" },
+            { "[NewMode][船速] {0} · 已套用 {1} 艘船（原生 + 非原生）", "[NewMode][ship speed] {0} - applied to {1} ship(s) (native + mod-dropped)" },
+            { "[NewMode][船速] 反射写入不可用（{0}）→ 靠岸速度调节已禁用（只 Warn 一次）", "[NewMode][ship speed] reflection write unavailable ({0}) -> shore-speed adjustment disabled (warned once)" },
+            { "字段缺失", "field missing" },
+            { "字段只读（写入被忽略）", "field is read-only (write ignored)" },
             { "兼容：整合包终岛无尽 · 本关投放已让路", "Compat: the pack's Endless Finale is active - dropping has stood down here" },
             { "兼容：检测到整合包（{0} 个插件）", "Compat: mod pack detected ({0} plugins)" },
             { "兼容：游戏本体已被整合包改造", "Compat: the game assembly itself was patched by the pack" },

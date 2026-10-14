@@ -14,7 +14,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.7.0";
+        public const string VERSION = "1.7.1";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -49,7 +49,7 @@ namespace BadNorthNewMode
             Log.LogInfo(Loc.F("[NewMode] 接管开关：原版波次拦下 = {0}，原生单位可遥控 = {1}（F1 菜单可切）。",
                 Util.V(ModConfig.BlockVanillaWaves, false), Util.V(ModConfig.ControlNativeUnits, true)));
 
-            // v1.7.0：一行环境自检（整合包 / Together 联机 / MMHOOK / 游戏本体是否被改造）—— 报障时先看这一行。
+            // v1.7.1：一行环境自检（整合包 / Together 联机 / MMHOOK / 游戏本体是否被改造）—— 报障时先看这一行。
             Compat.ReportEnvironment();
         }
 
@@ -81,7 +81,8 @@ namespace BadNorthNewMode
             }
 
             IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            Compat.Tick(gm);                               // v1.7.0：记录本关是否终岛（HUD 兼容状态行用）
+            Compat.Tick(gm);                               // v1.7.1：记录本关是否终岛（HUD 兼容状态行用）
+            ShipSpeedRuntime.Tick(gm);                     // v1.7.1：靠岸速度档位（原生 + 非原生船；1s 节流）
 
             MarqueeSelect.Tick(gm);                        // 菜单开着时内部自动取消
             SquadBar.Tick(gm);                             // 底部小队头像条（分组 + 点击选中）
@@ -148,7 +149,7 @@ namespace BadNorthNewMode
             PlacementMarker.Get().Hide();
             if (VanillaUI.ModalShowing) return;             // 原版确认框在前台：点击全归它（否则点确认会顺带指挥单位）
 
-            // v1.7.0：联机中遥控让路（客机被主机姿态流覆盖 / 主机会污染对方账本）——
+            // v1.7.1：联机中遥控让路（客机被主机姿态流覆盖 / 主机会污染对方账本）——
             // 这是 RemoteCursor 取不到时的旧路径兜底（v1.5.4 那套点击逻辑）。
             string blockWhy;
             if (Compat.RemoteBlocked(out blockWhy)) { _pendingMoveFrame = 0; Compat.NoteRemoteRefused(blockWhy); return; }
@@ -391,7 +392,7 @@ namespace BadNorthNewMode
         /// <summary>一次投放尝试：全程打日志（排查"点了没反应"的唯一依据）。</summary>
         void DoDrop(IslandGameplayManager gm, Vector2 screenPos, string source)
         {
-            // v1.7.0：让路（Together 联机中 / 整合包终岛无尽接管本关）—— 这条兜底防的是"菜单在让路前就开着"的旧状态。
+            // v1.7.1：让路（Together 联机中 / 整合包终岛无尽接管本关）—— 这条兜底防的是"菜单在让路前就开着"的旧状态。
             string blockWhy;
             if (Compat.DropBlocked(gm, out blockWhy))
             {
@@ -399,6 +400,9 @@ namespace BadNorthNewMode
                 IngameMenu.Say(blockWhy);
                 return;
             }
+
+            // v1.7.1-b3：能走到这里说明联机中的让路被 cfg 关掉/强制开了 → 提示一次"对方看不到这些单位"。
+            if (Compat.TogetherOnline) Compat.NoteDropInSession();
 
             Util.Log(Loc.F("[NewMode][点击] 屏幕 ({0:F0},{1:F0}) 来源={2}", screenPos.x, screenPos.y, source));
 

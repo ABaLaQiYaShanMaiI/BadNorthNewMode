@@ -1,4 +1,4 @@
-# Bad North - New Mode  v1.7.0
+# Bad North - New Mode  v1.7.1
 
 A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 
@@ -8,6 +8,7 @@ A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 - Remote control: left-click a unit = select it, double-click = its squad, click a tile = advance. `Shift`+click = add/remove, `R` = select all, `Alt`+drag = box select; clicking the sea clears the selection. With the one-button cursor setting, one button does both (click a unit to select, click a tile to advance).
 - Squad bar at the bottom: click a portrait to select that squad, `Shift` to merge. It slides above the vanilla ability bar while one of your own squads is selected.
 - `F2`: cleanup (destroy what this mod dropped). `F3`: force win (runs the vanilla results flow).
+- In the `F1` menu: a **4-stop shore-speed drag bar** (`x1 / x1.25 / x1.5 / x2`) — speeds up how fast ships (both native raid waves and mod-dropped ones) reach the shore; drag across the stops to change it, applies to ships already sailing.
 - Settings: `BepInEx/config/badnorth.newmode.cfg`.
 
 ## Compatibility
@@ -21,7 +22,7 @@ Coexists with the `旧灰复燃的战旗` mod pack (V3.0+, including its bundled
 
 ---
 
-# Bad North - New Mode v1.7.0（简体中文）
+# Bad North - New Mode v1.7.1（简体中文）
 
 BepInEx 模组：给《Bad North》加“投放敌舰”和“遥控敌方单位”两种玩法。
 
@@ -31,6 +32,7 @@ BepInEx 模组：给《Bad North》加“投放敌舰”和“遥控敌方单位
 - 遥控：左键点单位 = 选中，双击 = 整队，点地块 = 前进；`Shift` + 点 = 并入/移出，`R` = 全选，`Alt` + 拖动 = 框选；点海面 = 取消选中。单键光标模式下同一个键完成选中与前进。
 - 底部头像条：点一下选中整队（`Shift` 并入）；选中我方小队、原版弹出技能条时，它自动让到上方。
 - `F2`：清场（销毁本模组投放的船与单位）。`F3`：强制胜利（走原版结算）。
+- `F1` 菜单里有一条 **靠岸速度 4 档拖动条**（`×1 / ×1.25 / ×1.5 / ×2`）：加快船只靠岸（**原生波次与投放的船都生效**），按住横扫即换档、在航的船立刻变。
 - 配置：`BepInEx/config/badnorth.newmode.cfg`。
 
 ## 兼容

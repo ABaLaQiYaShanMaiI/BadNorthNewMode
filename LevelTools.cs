@@ -26,7 +26,7 @@ namespace BadNorthNewMode
         {
             if (ModConfig.ForceWinHotkey != null && ModConfig.ForceWinHotkey.Value.IsDown()) TryForceWin(gm);
 
-            // v1.7.0：与"正在接管波次的插件"（整合包终岛无尽 / 贤者时缓 / 入场运镜 / Together 在线）叠加会出现
+            // v1.7.1：与"正在接管波次的插件"（整合包终岛无尽 / 贤者时缓 / 入场运镜 / Together 在线）叠加会出现
             // "波次永远不来" → 默认拒绝（cfg [Compat] BlockWavesWithOthers=true 可强制）。
             if (Util.V(ModConfig.BlockVanillaWaves, false))
             {
@@ -96,7 +96,7 @@ namespace BadNorthNewMode
             _announced = true;
             DropPlanner.InvalidateOccupancy();
 
-            // v1.7.0-b2：整合包叠加**不拒绝**（作者的"无限试炼场"口径），只把风险并进同一条提示里说一次。
+            // v1.7.1-b2：整合包叠加**不拒绝**（作者的"无限试炼场"口径），只把风险并进同一条提示里说一次。
             string say = Loc.F("自定义模式（无尽）：本关只有你投放的单位，不会自然结束 —— 按 F3 强制胜利退出（{0} 波原版波次已拦下）", waves.Length);
             string risk = Compat.WaveBlockRiskNote();
             if (!string.IsNullOrEmpty(risk)) { say += "　" + risk; Util.Warn(risk); }
@@ -133,7 +133,7 @@ namespace BadNorthNewMode
             if (eol == null) { IngameMenu.Say(Loc.T("EndOfLevel 未就绪")); return; }
             if (eol.reason != EndOfLevel.Reason.None) { IngameMenu.Say(Loc.T("本关已经结束过了")); return; }
 
-            // v1.7.0：整合包 / 联机环境下先二次确认（对方的胜负改写可能与我们的结算口径对撞，见兼容方案 §3.3 C5）。
+            // v1.7.1：整合包 / 联机环境下先二次确认（对方的胜负改写可能与我们的结算口径对撞，见兼容方案 §3.3 C5）。
             if (Compat.ForceWinConfirmNeeded)
             {
                 EndOfLevel captured = eol;

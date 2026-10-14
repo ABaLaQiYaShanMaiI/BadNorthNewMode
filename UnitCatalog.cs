@@ -22,7 +22,7 @@ namespace BadNorthNewMode
             Dictionary<string, UnityEngine.Object> dict = LevelStateObjectReferences.dict;
             if (dict != null)
             {
-                // v1.7.0-b2：默认**不限 `Viking_` 前缀** —— 别的兵种 mod 可能给单位起别的名字
+                // v1.7.1-b2：默认**不限 `Viking_` 前缀** —— 别的兵种 mod 可能给单位起别的名字
                 //（判据改为"值确实是 VikingReference 且 agent 不为空"，`AddUnit` 里已保证后者）。
                 // 若菜单里因此出现奇怪条目，可把 cfg [UI] ListAllVikingRefs 关掉（回到"只认 Viking_ 前缀"）。
                 bool allPrefixes = Util.V(ModConfig.ListAllVikingRefs, true);
@@ -36,7 +36,7 @@ namespace BadNorthNewMode
             }
 
             SortByDifficulty(result);
-            LogCatalog(island, result);          // v1.7.0-b2：每座岛打一行"本关可选兵种"（外生兵种排查靠它）
+            LogCatalog(island, result);          // v1.7.1-b2：每座岛打一行"本关可选兵种"（外生兵种排查靠它）
             return result;
         }
 

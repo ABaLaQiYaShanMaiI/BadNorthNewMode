@@ -135,7 +135,7 @@ namespace BadNorthNewMode
                 ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
             }
 
-            // v1.7.0：投放后自检 —— 整合包的插件会在 Squad.CreateAgent 之后给敌人套盾/矛/特性（拦不了，但要让用户知道）。
+            // v1.7.1：投放后自检 —— 整合包的插件会在 Squad.CreateAgent 之后给敌人套盾/矛/特性（拦不了，但要让用户知道）。
             string audit = Compat.AuditEnhancements(ship);
             if (!string.IsNullOrEmpty(audit)) Util.Log(audit);
 

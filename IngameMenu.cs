@@ -53,7 +53,7 @@ namespace BadNorthNewMode
 
         internal static void Toggle()
         {
-            // v1.7.0：让路时不开菜单（联机中投放会冻结整局；整合包终岛无尽在接管波次）。
+            // v1.7.1：让路时不开菜单（联机中投放会冻结整局；整合包终岛无尽在接管波次）。
             if (!IsOpen)
             {
                 string why;
@@ -182,7 +182,7 @@ namespace BadNorthNewMode
             int nativeCount = ForeignUnit.SelectableCount(true);
             int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
             bool active = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;
-            string compat = Compat.StatusLine();                 // v1.7.0：整合包 / 联机状态行（没有就是 null）
+            string compat = Compat.StatusLine();                 // v1.7.1：整合包 / 联机状态行（没有就是 null）
             if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil && string.IsNullOrEmpty(compat)) return;
 
             List<string> lines = _hudLines;      // 复用同一个 List（HUD 每帧重画，不必每帧 new）
@@ -303,6 +303,7 @@ namespace BadNorthNewMode
 
             y = DrawCountRow(x, inner, y);
             y = DrawTakeoverRow(x, inner, y);
+            DrawShipSpeedRow(x, inner, y);                 // v1.7.1：靠岸速度 4 档（拖拽）
             DrawActions(x, inner, y);
         }
 
@@ -377,7 +378,7 @@ namespace BadNorthNewMode
             y += Pad;
             float tw = (inner - Gap) * 0.5f;
 
-            // v1.7.0：整合包 / 联机正在接管波次时，"拦下原版波次"在**菜单侧**就直接拒绝
+            // v1.7.1：整合包 / 联机正在接管波次时，"拦下原版波次"在**菜单侧**就直接拒绝
             //（否则会与对方的波次调度叠加成"波次永远不来"，见兼容方案 §3.3 C4-B）。
             string refuseWhy = null;
             bool waveAllowed = !Compat.WaveBlockForbidden(out refuseWhy);
@@ -438,6 +439,85 @@ namespace BadNorthNewMode
             return _help;
         }
 
+        // ---- 靠岸速度 4 档（v1.7.1）：按下即选、横扫即换、松手落盘 ----
+        static bool _gearDrag;
+        static bool _gearMoved;
+
+        /// <summary>4 档拖动条：四等分，每格写着档位；按住拖动横扫即换档。联机客机/反射不可用时置灰只显示。</summary>
+        static float DrawShipSpeedRow(float x, float inner, float y)
+        {
+            y += Pad;
+
+            bool client = Compat.SessionClient;                     // 联机客机：船由主机权威 → 本地改无意义
+            bool blocked = client || ShipSpeedRuntime.Disabled;
+
+            MenuSkin.DrawHint(new Rect(x, y, inner, LineH),
+                client ? Loc.T("联机客机：靠岸速度由主机决定")
+                       : Loc.T("靠岸速度（原生 / 非原生船都生效，按住拖动切换档位）"));
+            y += LineH;
+
+            Rect track = new Rect(x, y, inner, BtnH);
+            int cur = ShipSpeedRuntime.GearIndex;
+            float segW = inner / ShipSpeedRuntime.Gears.Length;
+
+            for (int i = 0; i < ShipSpeedRuntime.Gears.Length; i++)
+            {
+                Rect seg = new Rect(track.x + i * segW, track.y, segW - 1f, track.height);
+                MenuSkin.Bg(seg, !blocked && IsHover(seg), i == cur);
+                MenuSkin.DrawBtn(seg, "×" + ShipSpeedRuntime.Gears[i].ToString("0.##"), i == cur);
+            }
+
+            if (!blocked) HandleGearDrag(track, segW);
+            return y + BtnH;
+        }
+
+        static void HandleGearDrag(Rect track, float segW)
+        {
+            Event e = Event.current;
+            if (e == null) return;
+
+            Vector2 m = e.mousePosition;                            // IMGUI 坐标（与面板同一坐标系）
+            switch (e.type)
+            {
+                case EventType.MouseDown:
+                    if (!track.Contains(m)) return;
+                    _gearDrag = true;
+                    _gearMoved = false;
+                    ApplyGear(m.x, track, segW);
+                    e.Use();
+                    break;
+
+                case EventType.MouseDrag:
+                    if (!_gearDrag) return;
+                    ApplyGear(m.x, track, segW);
+                    e.Use();
+                    break;
+
+                case EventType.MouseUp:
+                    if (!_gearDrag) return;
+                    _gearDrag = false;
+                    if (_gearMoved)                                     // 只在真的换过档时给一次声音 + 日志
+                    {
+                        VanillaUI.Click();
+                        Util.Log("[NewMode] " + ShipSpeedRuntime.Describe());
+                    }
+                    e.Use();
+                    break;
+            }
+        }
+
+        static void ApplyGear(float mouseX, Rect track, float segW)
+        {
+            int idx = Mathf.Clamp(Mathf.FloorToInt((mouseX - track.x) / Mathf.Max(1f, segW)),
+                                  0, ShipSpeedRuntime.Gears.Length - 1);
+            if (idx == ShipSpeedRuntime.GearIndex) return;               // 同档不重复套用/不反复落盘
+
+            _gearMoved = true;
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island island = (_island != null) ? _island : ((gm != null) ? gm.island : null);
+            ShipSpeedRuntime.SetGearIndex(idx, island);
+        }
+
         /// <summary>面板高度（必须与 DrawMenu 的推进顺序一一对应）。</summary>
         static float MenuHeight(int n)
         {
@@ -446,6 +526,7 @@ namespace BadNorthNewMode
             return TitleH + Pad + LineH + rows * RowH
                  + Pad + BtnH + InfoH
                  + Pad + BtnH + LineH
+                 + Pad + LineH + BtnH                          // v1.7.1：靠岸速度 4 档（提示行 + 轨道）
                  + Pad + BtnH
                  + Pad + HelpTexts().Length * HelpH
                  + Pad + 2f;
@@ -459,6 +540,7 @@ namespace BadNorthNewMode
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("投放菜单") + "  v" + Plugin.VERSION, MenuSkin.Title) + 240f);
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("释放遥控"), MenuSkin.Btn) * 3f + 60f);
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("拦下 = 无原版敌人；可遥控 = 原生敌人也能指挥"), MenuSkin.Hint));
+            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("靠岸速度（原生 / 非原生船都生效，按住拖动切换档位）"), MenuSkin.Hint));
 
             string[] help = HelpTexts();
             for (int i = 0; i < help.Length; i++) w = Mathf.Max(w, MenuSkin.Measure(help[i], MenuSkin.Hint));
@@ -535,7 +617,7 @@ namespace BadNorthNewMode
             DrawToggle(r, entry, onLabel, offLabel, true, null);
         }
 
-        /// <summary>开关按钮。v1.7.0：`allowOn=false` 时"点它置为开"会被拒绝并说明原因（拦波次与整合包/联机互斥）。</summary>
+        /// <summary>开关按钮。v1.7.1：`allowOn=false` 时"点它置为开"会被拒绝并说明原因（拦波次与整合包/联机互斥）。</summary>
         static void DrawToggle(Rect r, ConfigEntry<bool> entry, string onLabel, string offLabel, bool allowOn, string refuseWhy)
         {
             if (entry == null) return;

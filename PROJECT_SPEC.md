@@ -346,7 +346,14 @@ Raid.IIslandFirstEnter:
 
 ---
 
-## 10. 船速运行时控制（设计定稿，待落实）
+## 10. 船速运行时控制（设计定稿，**v1.7.1 已以"4 档"形式落地**）
+
+> ⚠️ **状态更新（2026-10-14）**：作者最终选择 **4 档**（`1 / 1.25 / 1.5 / 2`）+ **F1 菜单 4 档拖动条**，而非本节设想的连续滑条。
+> **实现与验收以 §11.6 为准**；本节的连续滑条细节（拖动中节流、`ApplySpeedToInFlight` 开关、T-S1/T-S3/T-S5 等滑条专属项）**不再实施**，
+> 仅作为设计背景保留。核心结论仍然有效并被 §11.6 沿用：反射写 `shipTravel.duration/fleeDuration`、只写每条船自己那份、
+> **绝不碰共享 `shipPrefab`**、反射失败即降级。
+
+
 
 > **状态**：**设计已定稿，本文档即为落实依据；代码未写**（需求原话：作者问"本项目能否设计开关拖动以控制船只速度"）。
 > 计划版本：v1.7（落实后并入 §6 的 T50 与 §8 版本对照）。**本节所有"原版事实"均已用 BepInEx 自带 `Mono.Cecil` 反查 `BadNorth_Data\Managed\Assembly-CSharp.dll` 验证**（与 `tools/check-api.ps1` 同一套工具、同一份口径）。
@@ -417,8 +424,8 @@ internal static void Forget(Island island);                          // 清场/�
 **D. 联机降级（Together /《旧灰复燃的战旗》）**
 
 客机侧世界由主机权威（`WorldSnapshot` + 客机侧 `Longship.Update` Patch）→ 改 `duration` 会被覆盖/无意义。
-⚠️ **注意**：本仓库当前源码里**没有**联机检测（`Compat.cs` 只存在于**本地、未提交**的兼容计划 `BADNORTHMOD_COMPAT_PLAN.md` §S4）。落实时二选一：① 若届时兼容计划已落地 → 直接复用它的 `Compat.TogetherOnline()`；② 否则在本节实现里做**同口径的最小只读反射**（`Together.Net.Session.Active`，只读、不调用方法，取不到按"未联机"处理并只 Warn 一次）。
-无论哪条路：**客机自动禁用「含在航船」**（开关置灰），HUD 提示"联机客机：只影响后续投放"；主机侧照常。
+✅ **联机检测已在仓库里**（v1.7.0 的 `Compat.TogetherOnline` = 只读反射 `Together.Session.Active`（订正：早先文档写的 `Together.Net.Session` 是错的），取不到按"未联机"处理并只 Warn 一次）→ 本节实现**直接复用它**；另外 `Compat.RemoteBlocked` 已把整条遥控链路（含框选与减速）在联机中整体让路，落地时保持一致口径（细节见 `BADNORTHMOD_COMPAT_PLAN.md` §10.3）。
+落实时：**客机自动禁用「含在航船」**（开关置灰，判定用 `Compat.RemoteBlocked` / `Compat.TogetherOnline`），HUD 提示"联机客机：只影响后续投放"；主机侧照常。
 
 **E. 生命周期清理**
 
@@ -449,7 +456,7 @@ internal static void Forget(Island island);                          // 清场/�
 4. **反射属"非公开契约"**：`duration` 是 public 但 `InitOnly` → 写失败/字段改名时必须**降级为"只影响后续投放"并 Warn 一次**，绝不静默错、绝不每帧重试。
 5. **极端倍率与下船看门狗**：4× 时靠岸动画窗口变短、0.25× 时更慢；`DisembarkWatchdog`（`DisembarkGrace` 默认 3s，到岸后才计时）行为不变，但若实测出现"快船到岸抖动 / 慢船像卡住"，按 §10.6 的 S8 记录读数再决定是否让滑条联动手表阈值。
 6. **落盘语义要写清**：`ConfigEntry.Value` 会写回 cfg（BepInEx `SaveOnConfigSet`）→ 拖动中节流、松手落一次，并明确告知"这是持久设置"。
-7. **联机**：客机禁用"含在航船"（§10.3 D）。**联机检测本身在当前仓库尚不存在**（属本地兼容计划 `BADNORTHMOD_COMPAT_PLAN.md` §S4 的 `Compat.TogetherOnline()` = 只读反射 `Together.Net.Session.Active`）→ 落实时要么等它落地后复用、要么写同口径最小只读反射；检测失败一律按"未联机"处理（绝不误禁）。
+7. **联机**：客机禁用"含在航船"（§10.3 D）。**联机检测已在仓库里**（v1.7.0 的 `Compat.TogetherOnline()` = 只读反射 `Together.Session.Active`）→ 直接复用，别再写第二套；检测失败一律按"未联机"处理（绝不误禁）。
 8. **未落实前不得对外宣称**：本节属计划，`README` / HUD / cfg 里**不应**出现尚未实现的滑条键（避免"文档先行"的假承诺）。
 
 ### 10.6 验证清单（落实后并入 §6，编号 T-S1 ~ T-S8）
@@ -472,6 +479,106 @@ internal static void Forget(Island island);                          // 清场/�
 | **α（推荐，见 10.3）** | 反射写 `ShipTravel.duration` / `fleeDuration` | 唯一能"在航船实时变速且不跳位"的做法；改动面小、可降级 |
 | **β（零反射 / 最低风险）** | 滑条**只影响后续投放**：`TrySpawn` 现读 cfg 已天然支持，UI 只需加一个滑条；「含在航船」开关**不提供** | 半天内可交付、零非公开契约；缺点是"已经在海上的船改不了" |
 | **γ（油门式实时操纵，即"鼠标拖动操纵杆连续控速"）** | 给在航 `Longship` 挂组件，每帧按滑块值改写 `interpolator` 推进（`interpolator += dt/duration × k`），实现"拖动即控速" | 能做出"拖到哪船多快"的手感，但**每帧改游戏状态**、与 Together 的 `Longship.Update` Patch 交互，必须额外做联机降级与冲突处理 → 工作量翻倍，**不推荐**（除非作者要的就是"操纵杆"而非"滑条"） |
+
+
+
+---
+
+## 11. 兼容层落地记录（v1.7.1：重做 → b2 → b3 → b4，2026-10-14）
+
+> 按作者要求**续写**在文末，不改上文既有结论。姊妹文档：`BADNORTHMOD_COMPAT_PLAN.md`（工程侧分析 + §10.3 重做记录）、
+> `TOGETHER_MP_SPEC.md`（联机专项）、`兼容旧灰复燃的战旗.md`（玩家说明书，仅本地）。
+
+**背景**：v1.7.0 曾在 `backup/remote-v1.7.0`（提交 `41175b1`）立项，因"当时不需要联机适配"从主线撤回（HEAD 回到 1.6.3）。
+需求回归后按兼容性笔记**重做**，并修掉 7 个已确认缺陷（B1~B7，见 §11.3）。
+
+### 11.1 兼容层结构
+
+| 文件 | 角色 |
+|---|---|
+| `Compat.cs`（**新**） | 唯一的兼容层：`Chainloader.PluginInfos` 查 20 个整合包 GUID + 本体改造类型探测 + 只读反射会话类 `Together.Session.Active`（**不是** `Together.Net.Session`；另注意要用"AppDomain 找程序集 → `asm.GetType`"，带程序集限定的 `Type.GetType` 在 LoadFrom 上下文会返回 null）。**零 Harmony 补丁**，检测失败一律按"没有"处理（绝不误锁单机玩家） |
+| `ModConfig.cs` | `[Compat]` 6 键：`AutoLetGo`(总开关) / `DropOnTerminal` / `BlockWavesWithOthers`(联机中也强行允许拦波次) / `ForceWinConfirm` / `Report` / `ForceOffline`(排障)；另有 `[UI] UnitNameOverrides`（外生兵种显示名，见 §11.5） |
+| `LevelTools.cs` / `IngameMenu.cs` | 拦波次：**单机一律允许**（叠加只提示一次）+ 联机中拒绝（回写 cfg + 提示）、F3 二次确认、F1 让路、HUD 兼容状态行 |
+| `MarqueeSelect.cs` / `RemoteCursor.cs` / `Plugin.cs` | 联机中遥控整体让路（含框选与选中减速） |
+| `LandingInjector.cs` | 投放后"被整合包增强"自检日志（整合包从 `Squad.CreateAgent` 挂载，拦不住 → 只如实告知） |
+| `build.ps1` + `tools/check-pack-compat.ps1` | **第三个构建闸门**：把成员引用校验基准换成**包版** `Assembly-CSharp.dll` |
+
+### 11.2 让路面（判定口径）
+
+| 功能 | 单机 + 整合包 | Together 联机中 |
+|---|---|---|
+| 投放（F1） | 普通关可用；**终岛**（`LevelNode.isEnd`）让路 | **让路**（否则主机判"待开波缺少稳定逻辑身份"→ 整局冻结） |
+| 遥控（点击 / 框选 / 减速） | 可用 | **让路**（客机被主机姿态流覆盖 = 无效；主机侧污染对方账本与存活统计） |
+| 拦下原版波次 | **照常可用**（"无限试炼场"的核心设计，**不让路**）；与接管波次的插件叠加只**提示一次** | **拒绝**（每帧改写波次时间会让主机永远发布不出去 → 整局冻结）；`BlockWavesWithOthers=true` 可强行开 |
+| F3 强制胜利 | 二次确认 | 二次确认 |
+| F2 清场 | 可用 | 可用（清掉"联机前投放的船"反而减少对方账本污染） |
+
+### 11.3 修掉的缺陷
+
+| # | 症状 | 修法 |
+|---|---|---|
+| B1 | 提示让人去 cfg 找 `CompatBlockWavesWithOthers`（该键不存在） | 词条/日志改回真实键名 `BlockWavesWithOthers` |
+| B2 | F1 菜单显示"原版波次：拦下"但实际每帧被拒（UI 撒谎） | `Compat.RefuseWaveBlock`：写回 `false` + 通知条 + 日志一次 |
+| B3 | 菜单点"拦下"只有日志、没有可见反馈 | `IngameMenu.DrawToggle` 增 `(allowOn, refuseWhy)` 重载，菜单侧拒绝并说明 |
+| B4 | 联机中遥控仍生效（v1.7.0 漏做） | `Compat.RemoteBlocked` 接入 `MarqueeSelect` / `RemoteCursor` / `Plugin.HandleRemoteMode` |
+| **B5** | **联机让路会完全失效**（最要命）：会话探测永远返回"未联机" → 联机里投放/遥控照真执行 | 笔记把会话类写成 `Together.Net.Session`（实测是 `Together.Session`）+ 带程序集限定的 `Type.GetType` 在 LoadFrom 上下文返回 null → 改为 `FindAssembly("Together")` + `asm.GetType` 试候选名 + 要求真有 `Active`(bool)；`PackType` 同改 |
+| **B6** | **"拦下原版波次"被误禁**：作者口径 = 它是"无限试炼场"的核心设计，1.7.0 不得让它失效 | `WaveBlockForbidden` 改为**只在 Together 联机中拒绝**；单机（含整合包）一律可用，叠加风险改由 `WaveBlockRiskNote()` **只提示一次**（并进 F3 提示条） |
+| **B7** | 外生兵种（别的 mod 加/换的）只能看内部名，UI/程序对"兵种 mod 一多"不够兼容（见 §11.5） | `[UI] UnitNameOverrides` 自定义显示名 + 每岛一行 `[NewMode][兵种]` 日志 + 菜单标注（外生）+ 内置表补 `Viking_Spearman=长矛兵` |
+| **B8** | 单机：**我方"手持盾牌的长矛兵"挡不住我们投放的巨弓**（原版巨弓正常）——`ShipboardThreat` 在船上上报 `dangerous=true`，命中 `Shield.ShieldCheck` 第②条 `enemyDist < 1 && enemyData.dangerous → noShield`（**放盾**）；原版 `Brain.<Setup>m__0` 带 `navPos.island == null` 门控（**船上不上报**），船上只有 `Longship` 报且 `dangerous=false` | `ShipboardThreat.Update`：`dangerous` → **`false`**（只留 `hittable=true`＝"可被索敌"），并加"生成+存活"门控 |
+| **B9** | 联机：主机投放后**客机看不到**非原生船/敌人（逻辑与伤害仍在） | Together `AgentAuthority.CanPublishActor` 只广播"自己清单里的波次"（`RaidIdentity.IsCommitted` + `HostRaidManifest.IsWaveReady`）→ 我们自建 Wave 的 `ActorSpawn` **永不发送**。属架构级（笔记 §8 L2），本轮不做协议对接；改为在"强行投放"时由 `Compat.NoteDropInSession()` **提示一次**"对方看不到" |
+
+### 11.4 验证状态
+
+- **构建闸门（本机实测通过，v1.7.1）**：`api-check 605` / `loc-check 206（占位符 95）` / `pack-compat 165 → 全部存在 OK`。
+- **参考数据**：包版 `Assembly-CSharp.dll` 与原版 **MVID 相同**（`38edd33c-…`，就地编辑版）→ 同一份产物单构建即可两边跑。
+- **反射实证**：32 位 PowerShell 对真实 `Together.dll` 实跑 —— `asm.GetType("Together.Net.Session")` = null（旧写法必失效），`asm.GetType("Together.Session")` 命中且 `Active/IsHost/IsClient` 均为 public static bool。
+- **待实机**：单机共存冒烟（8 项）、联机让路（可用 `tools\mp-fake-peer.ps1` 假客机/假主机验证）、§10 的"含在航船"滑条（尚未实现，见 §10）。
+
+### 11.5 外生兵种兼容（v1.7.0-b2，为"加兵种的 mod"做的）
+
+**问题**：整合包的长矛兵（`Wei_Jing_Chang_Mao` = 克隆投斧手引用注册出 `Viking_Spearman`，并 Patch `GameSetup.Awake` / `Squad.CreateAgent`）会与**原版兵种槽位**互相影响；我们的兵种列表虽然是**动态枚举**（`island.levelNode.enemies` ∪ 全局 `Viking_*` 字典），但**显示名**原先只认 8 个硬编码原版名。
+
+**已落地的四条**（都不涉及 Harmony 补丁）：
+
+1. **列表始终动态**：任何新单位只要进了"本关生成池"或 `LevelStateObjectReferences` 字典就会被列出 —— 不靠硬编码清单。
+   - 字典侧默认**不限 `Viking_` 前缀**（`[UI] ListAllVikingRefs`，默认 `true`）：合法判据 = "值是 `VikingReference` 且 `agent != null`"。别的 mod 用别的命名也能列出来；若菜单出现奇怪条目，关掉这个键即回到"只认 `Viking_` 前缀"。
+2. **显示名三级回退**：`cfg [UI] UnitNameOverrides`（用户可改）→ 内置表 → 去掉 `Viking_` 前缀并自动分字（`WeiJingSpearman` → `Wei Jing Spearman`）。**永远不会没名字**。
+3. **可自查**：每座岛打一行 `[NewMode][兵种] 本关可选 N 种（*=外生兵种…）：Viking_Sword=剑兵，Viking_Spearman=长矛兵*…`；菜单信息行也在内部名后标注**（外生）**。报障时这一行就能确认"列表里到底有什么、内部名是什么"。
+4. **头像/图标天然兼容**：`UnitPortraits` 直接读该单位自己的 `VikingReference.sprite2`（包里的长矛兵会 SetSprite2，所以图标正常），取不到才回退；`VanillaSprites.DrawIcon/DrawPortrait` 对 null 安全（什么都不画，不报错）。
+
+**做不到的（要说清）**：若某个原版兵种被别的 mod **真正替换/移除**（引用表里不再有它），我们**无法凭空生成**它 —— 能投的只有"当前引用表里真实存在"的单位。这类"某兵种消失"的报障，请附日志里的 `[NewMode][兵种]` 那一行（它列出的是**实际可用**的完整清单）。
+
+### 11.6 局内"靠岸速度"4 档（v1.7.1 / b4，取代 §10 的连续滑条）
+
+**需求**：局内可调**原生波次 + 本模组投放**的船只"靠岸/撤离"速度；档位 4 档：`1`（初始）/ `1.25` / `1.5` / `2`（二倍速）。
+
+**机制（已实测核对 IL）**
+
+- 原版 `Longship.UpdateIncoming` 与 `get_timeRemaining` **每帧读** `landing.shipTravel.duration`；`UpdateOutGoing` 读 `fleeDuration`
+  ⇒ 改这两个字段就能"**在航的船立刻变速**、不改航线、不跳位"。
+- `Landing.shipTravel` 是 **public 值类型字段**（嵌套 `Landing/ShipTravel`），`ShipTravel` 里还有 `startPos/endPos/distance`
+  ⇒ 写法 = 反射取值 → 装箱改 → 整块写回（Together 自己做同样的事，见其 `HostRaidManifest.Build`）。
+- **只写每条 Landing 自己那份**，**绝不碰共享的 `shipPrefab`**（那是所有船共用的预制体）。
+- 缩放用**比值**：`duration' = duration × 旧档 / 新档` ⇒ 每条船在 `TryPlace` 里的随机档位自动约掉，抖动保留；
+  无需为每条船记录基准值（新船出生即"初始速度"，登记表默认 1）。
+- 覆盖范围：原生波次的船与我们投放的船**都挂在 `raid.landingContainer` 下** ⇒ 一次遍历全覆盖（每 1s 补扫新出现的船；换档时立即全量套用）。
+
+**门控与降级**
+
+| 情况 | 行为 |
+|---|---|
+| 反射拿不到字段 / 写入抛异常 | 整体禁用（`Disabled`）+ **Warn 一次**；菜单控件置灰 |
+| `duration` 被运行时忽略（initonly 只读） | 写入后**读回校验**，不一致即按"不可用"降级（绝不静默无效） |
+| 联机**客机**（`Compat.SessionClient`） | 控件置灰并提示"由主机决定"（船由主机权威，本地改无意义）；主机/单机正常 |
+| 运行期异常 | 全部 `try/catch`；本条 Landing 跳过，不影响其他船 |
+
+**UI**：F1 菜单新增一行 —— 一句提示 + **四等分拖动条**（每格写 `×1 / ×1.25 / ×1.5 / ×2`）：按下即选、按住横扫即换档、松手播一次点击音 + 打一行日志；换档时立即写 cfg（`[Landing] ShipSpeedGear`）并套用到全船。面板高度/宽度已同步（`MenuHeight`/`MenuWidth`）。
+
+**顺带修掉的一个真 bug（闸门抓到）**：`FieldInfo == null` 会编译成 `MemberInfo.op_Equality`，那是 .NET 4.0 才有的成员、**游戏 mscorlib 2.0 里不存在** → 运行期 `MissingMethodException`。
+`tools/check-api.ps1` 当场拦下（`方法不存在: System.Reflection.FieldInfo::op_Equality(2 参)`），已全部改为 `object.ReferenceEquals`。**反射代码必须走这个约定。**
+
+**验收要点**：① 单机开档 → 在航的船立刻改变到岸时间（不改航线/不跳位）；② 原生波次与投放的船同时生效；
+③ 切岛/重开一局后登记表作废、新船按当前档生效；④ 调回 `×1` 应还原；⑤ 联机客机置灰、主机正常。
 
 
 

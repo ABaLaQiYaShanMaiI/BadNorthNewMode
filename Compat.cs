@@ -9,18 +9,18 @@ using Voxels.TowerDefense;
 namespace BadNorthNewMode
 {
     /// <summary>
-    /// 《旧灰复燃的战旗》整合包（林风柳 V3.0+）与联机模组 Together 的"让路"检测（v1.7.0）。
+    /// 《旧灰复燃的战旗》整合包（林风柳 V3.0+）与联机模组 Together 的"让路"检测（v1.7.1）。
     /// 原则（见 BADNORTHMOD_COMPAT_PLAN.md §3.4 / TOGETHER_MP_SPEC.md §8）：
     ///   ① **零 Harmony 补丁**：只用 `Chainloader.PluginInfos` 与只读反射，绝不改别人的行为；
     ///   ② **检测失败一律按"没有"处理**（宁可不禁用我们的功能，也不误锁单机玩家）；
     ///   ③ 所有让路都有 cfg 开关，关掉即回到旧行为（见 ModConfig.BindCompat）。
     ///
-    /// 让路面（v1.7.0）：**投放**（联机中 / 整合包终岛无尽）、**遥控**（联机中）、**拦下原版波次**（被接管波次的插件排斥）、
+    /// 让路面（v1.7.1）：**投放**（联机中 / 整合包终岛无尽）、**遥控**（联机中）、**拦下原版波次**（被接管波次的插件排斥）、
     /// **强制胜利**（整合包 / 联机环境先二次确认）。
     /// </summary>
     internal static class Compat
     {
-        // ---- 整合包插件的 GUID（v1.7.0 实测自各 DLL 的 [BepInPlugin]，见兼容方案 §3.4）----
+        // ---- 整合包插件的 GUID（v1.7.1 实测自各 DLL 的 [BepInPlugin]，见兼容方案 §3.4）----
         internal const string GuidTogether = "com.linfeng.together";
         internal const string GuidEndlessFinale = "com.antigravity.badnorth.endless_finale";
         internal const string GuidSageTimeFreeze = "com.antigravity.sage_time_freeze";
@@ -73,6 +73,7 @@ namespace BadNorthNewMode
         static bool _probeWarned;
         static bool _waveBlockWarned;
         static bool _remoteWarned;
+        static bool _sessionDropWarned;
         static bool _lastTerminal;
 
         // ===================== 基础探测 =====================
@@ -168,6 +169,23 @@ namespace BadNorthNewMode
         internal static bool TogetherOnline
         {
             get { return ProbeTogetherOnline(); }
+        }
+
+        /// <summary>联机中且**本机是客机**（= 世界由主机权威；本地改船速无意义）→ 菜单据此置灰。</summary>
+        internal static bool SessionClient
+        {
+            get
+            {
+                if (!TogetherOnline) return false;
+                try
+                {
+                    PropertyInfo isHost = SessionProperty("IsHost");
+                    if (object.ReferenceEquals(isHost, null)) return false;      // 探测不到 → 不误禁
+                    object v = isHost.GetValue(null, null);
+                    return (v is bool) && !(bool)v;
+                }
+                catch { return false; }
+            }
         }
 
         /// <summary>联机中的角色（HUD 用；探测不到返回 null → 就显示不带角色那版文案，不影响让路）。</summary>
@@ -309,7 +327,7 @@ namespace BadNorthNewMode
 
         /// <summary>
         /// 拦下原版波次是否被禁止。
-        /// **作者口径（2026-10-14 明确）**：拦下原版波次 = "把任意一关变成无限试炼场"的核心设计，1.7.0 **不得让它失效**
+        /// **作者口径（2026-10-14 明确）**：拦下原版波次 = "把任意一关变成无限试炼场"的核心设计，1.7.1 **不得让它失效**
         /// → 单机（**包括装了整合包**）一律允许，只给一次"与接管波次的插件叠加"的提示（见 `WaveBlockRiskNote`）。
         /// 唯一的硬拒绝是 **Together 联机中**：每帧改写 `waveStartTime` 会让主机的波次永远发布不出去，
         /// 把整局合作打停在冻结态（TOGETHER_MP_SPEC §8 第 1/2 条），那属于"毁掉别人的存档"，不是让路。
@@ -382,7 +400,7 @@ namespace BadNorthNewMode
         }
 
         /// <summary>
-        /// 拒绝打开"拦下原版波次"（v1.7.0-b，见兼容方案 §3.3 C4-B）：**把 cfg 写回 false** 并提示一次。
+        /// 拒绝打开"拦下原版波次"（v1.7.1-b，见兼容方案 §3.3 C4-B）：**把 cfg 写回 false** 并提示一次。
         /// 为什么必须回写：F1 菜单的开关是直接读 cfg 值画的 —— 只拦行为不回写，菜单会一直显示"原版波次：拦下"，
         /// 与实际状态不符（用户以为开着，其实每帧都被拒绝）。写回后 LevelTools 下一帧就不会再进来，天然只执行一次。
         /// </summary>
@@ -394,7 +412,7 @@ namespace BadNorthNewMode
             IngameMenu.Say(Loc.T("已拒绝：拦下原版波次会与整合包 / 联机的波次调度叠加，出现「波次永远不来」"));
         }
 
-        /// <summary>遥控下单是否让路（v1.7.0-b）：Together 联机中，客机的指令被主机姿态流每帧覆盖（等于无效），
+        /// <summary>遥控下单是否让路（v1.7.1-b）：Together 联机中，客机的指令被主机姿态流每帧覆盖（等于无效），
         /// 主机的指令又会被当成真实变化流出去、污染对方的波次账本与存活统计（见 TOGETHER_MP_SPEC §8 第 4/5/10 条）
         /// → 联机中整体让路（笔记 §8 的建议路线 L0：\"遥控功能默认关闭\"）。</summary>
         internal static bool RemoteBlocked(out string why)
@@ -416,6 +434,22 @@ namespace BadNorthNewMode
             if (_remoteWarned) return;
             _remoteWarned = true;
             Util.Warn(Loc.F("[NewMode][兼容] 遥控已让路：{0}", why));
+        }
+
+        /// <summary>
+        /// 联机中**真的投放了一次**（说明让路被 cfg 关掉或强制开了）→ 提示一次"对方看不到你的单位"。
+        /// 原因（Together 0.6.13 逆向，`AgentAuthority.SendBirth/CanPublishActor`）：敌人侧 actor 只有
+        /// `RaidIdentity.IsCommitted(key.A) && HostRaidManifest.IsWaveReady(key.A)` 才会广播 `ActorSpawn`；
+        /// 我们自建的 Wave 不在它的清单里 → 客机永远收不到出生消息（主机视角正常）。见 TOGETHER_MP_SPEC §8。
+        /// </summary>
+        internal static void NoteDropInSession()
+        {
+            if (_sessionDropWarned) return;
+            _sessionDropWarned = true;
+
+            string msg = Loc.T("注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上");
+            Util.Warn("[NewMode][兼容] " + msg);
+            IngameMenu.Say(msg);
         }
 
         /// <summary>启动时一行环境自检：报障时这一行就能定位环境（见兼容方案 §3.4）。</summary>

@@ -69,6 +69,9 @@ namespace BadNorthNewMode
 
         // ============ Landing ============
         public static ConfigEntry<float> ShipSpeedMultiplier;
+
+        /// <summary>局内"靠岸速度"档位（v1.7.1）：1 / 1.25 / 1.5 / 2 —— 原生与非原生船只都生效（4 档 UI 写这个键）。</summary>
+        public static ConfigEntry<float> ShipSpeedGear;
         public static ConfigEntry<float> MaxShoreDistance;
         public static ConfigEntry<float> MaxLandHeight;
         public static ConfigEntry<float> WaterLevelY;
@@ -89,7 +92,7 @@ namespace BadNorthNewMode
         /// <summary>是否生成日志文件（默认 false：加载时摘掉 BepInEx 的磁盘日志监听器）。</summary>
         public static ConfigEntry<bool> LogToFile;
 
-        // ============ Compat（v1.7.0：《旧灰复燃的战旗》整合包 / Together 联机让路）============
+        // ============ Compat（v1.7.1：《旧灰复燃的战旗》整合包 / Together 联机让路）============
         /// <summary>总开关：检测到整合包或联机会话时自动让路（关掉 = 完全按旧行为，风险自负）。</summary>
         public static ConfigEntry<bool> CompatAutoLetGo;
 
@@ -188,6 +191,11 @@ namespace BadNorthNewMode
         {
             ShipSpeedMultiplier = cfg.Bind("Landing", "ShipSpeedMultiplier", 1f,
                 "航行速度倍率（原版 TryPlace 的 speedMultiplier）。");
+            ShipSpeedGear = cfg.Bind("Landing", "ShipSpeedGear", 1f,
+                "局内\"靠岸速度\"档位（v1.7.1）：只认这 4 档 —— 1（初始速度）/ 1.25 / 1.5 / 2（二倍速）。\n" +
+                "作用是船只**靠岸/撤离**用时按档位缩放；**原生波次的船和本模组投放的船都生效**，在航的船也会立刻变。\n" +
+                "改这个值等于改速度：越大越快（1.5 = 用时变 1/1.5）。通常用 F1 菜单里那根 4 档拖动条调节，不用手改。\n" +
+                "联机中只有主机侧有意义（客机侧船由主机权威，界面会置灰）。");
             MaxShoreDistance = cfg.Bind("Landing", "MaxShoreDistance", 3f,
                 "点击处到最近可登陆岸线的最大距离（米），超过就拒绝投放。");
             MaxLandHeight = cfg.Bind("Landing", "MaxLandHeight", 0.5f,
@@ -277,7 +285,7 @@ namespace BadNorthNewMode
                 "是否生成 BepInEx\\LogOutput.log。默认 false（控制台窗口的日志不受影响）。");
         }
 
-        /// <summary>v1.7.0：与《旧灰复燃的战旗》整合包（含 Together 联机）共存时的让路开关。</summary>
+        /// <summary>v1.7.1：与《旧灰复燃的战旗》整合包（含 Together 联机）共存时的让路开关。</summary>
         static void BindCompat(ConfigFile cfg)
         {
             CompatAutoLetGo = cfg.Bind("Compat", "AutoLetGo", true,
