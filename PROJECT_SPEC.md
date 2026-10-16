@@ -73,6 +73,7 @@ Raid.IIslandFirstEnter:
 | 坑 | 现象 | 正确做法 |
 |---|---|---|
 | net472 编 params 空数组 | 运行期 `MissingMethodException: System.Array.Empty`，插件静默失效 | 写 `new KeyCode[0]`；API 闸门会拦 |
+| net472 的 `System.Func<>` / `System.Action<>` | 编译把 `Func`/`Action` 解析到 **mscorlib**（.NET 4 起它们就在 mscorlib 里），而本游戏是 Mono 2.0 + **System.Core 3.5** → 运行期找不到 `[mscorlib]System.Func` ⇒ `MissingMethodException`（v1.7.5 挂原版设置项时被 `check-api` **当场拦下**） | 需要**游戏侧的委托类型**时**别写 lambda / 方法组**：反射取参数的 `ParameterType`，用 `Delegate.CreateDelegate(游戏侧类型, MethodInfo)` 现造委托，再 `MethodInfo.Invoke`（见 `VanillaSettings.PrepareWidgetApi`） |
 | `EventSystem.IsPointerOverGameObject()` | 本游戏恒为真（世界点击走一个**全屏**手势接收器 `PointerRationalizer`）→ 点击被静默吞掉、无任何日志。**v1.7.4 又栽了一次**（拿它做 UI 门控 → 所有世界点击全被丢弃、报障"鼠标不能控制"；见 §11.10 修订 3） | 不用它做 UI 判断：世界点击直接订阅原版 `onClick`；要判"指针在不在 UI 上"用 `Util.PointerOverUi()`（`RaycastAll` + 跳过那个全屏接收器）。已做成**闸门**：规则⑦ 禁用清单 `tools\banned-api.txt`（加一行即永久拦截，见下表「坑 → 闸门 覆盖对照」） |
 | `pointerRationalizer.onClick +=` | 事件类型是 System.Core 3.5 的 `Action`2，运行期解析不到 | 反射 `GetEvent` + `Delegate.CreateDelegate` + `AddEventHandler` |
 | `EventInfo/MethodInfo == null` | `MemberInfo`/`Type` 的 `op_Equality`/`op_Inequality` 是 **.NET 4.0 才有的运算符**，游戏 mscorlib 2.0 没有（闸门实测会拦：`Type::op_Equality`、`MethodInfo::op_Equality`、`Type::op_Inequality`） | 一律 `object.ReferenceEquals(x, null)`；`Plugin`(onClick 订阅)、`GameInput`(反射读 Rewired) 都按这条写 |
@@ -110,6 +111,8 @@ Raid.IIslandFirstEnter:
 |---|---|---|
 | `EventSystem.IsPointerOverGameObject()` | **闸门**：规则⑦ 禁用清单（`tools\banned-api.txt`） | **加一行即永久拦截**；替代物 = `Util.PointerOverUi()` |
 | `Array.Empty`（params 空数组被 Roslyn 优化出来） | **闸门**：① `check-api` **＋** 规则⑦ 清单 | 双保险：编译期清单 + 运行期成员引用校验 |
+| net472 把 `Func`/`Action` 解析到 mscorlib（游戏侧却在 System.Core） | **闸门**：① `check-api` | v1.7.5 挂原版设置项时被它当场拦下；解法 = 按游戏侧类型现造委托 |
+| 原版 `ValueWidget` 的 setter 必须 `return true` | `AddBoolWidget(词条, get, set, …)` 的 `set` 是 `Func<T,bool>`，**返回 false 会被当成"这次设置被拒绝"** → 控件不刷新（v1.7.5 实机现象：关掉了但"开"的高亮还亮着，退出设置再进才显示为关） | setter 写完就 `return true`（原版所有 setter 都这样）；外部改了值再靠 `ForceUpdate()` 跟上（设置界面开着时每 15 帧刷一次，同原版 `UpdateOccasionally` 节奏） |
 | 反射成员用 `== null` 判空 | **闸门**：规则② | 作用域精确（只认反射类型的字段/方法内局部） |
 | 空 `catch { }` 没有说明 | **闸门**：规则① | 有意静默必须写 `// silent-ok` |
 | 用 `Debug.Log` / 硬编码盘符路径 | **闸门**：规则③ / 规则④ | 走 `Util.Log/Warn`、路径从 `BadNorthDir` 来 |
@@ -298,7 +301,7 @@ Raid.IIslandFirstEnter:
 - **日志文件开关**（v1.5.0）：`LogFileSwitch`(摘掉 BepInEx 磁盘日志监听 + 清启动残留；`[Diag] LogToFile` 默认 false)。
 - **菜单点击拦截面**（v1.5.6）：`ClickShield`(菜单矩形上的不可见 UI，阻断原版 EventSystem 点击；`[General] MenuBlocksWorldClicks` 默认 true)。
 - **点击路由 / 接管本关**（v1.5.6）：`RemoteCursor`(按下那一帧压 `CursorManager` 栈顶吃掉这一次点击：左键=选整队、右键=前进；`[Remote] RemoteOrderButton` 默认 Right) · `LevelTools`(拦下原版波次 + F3 强制胜利；`[Native] BlockVanillaWaves`) · `ClickShield`(菜单矩形上的不可见 UI)。
-- **构建闸门**（v1.7.3 起**五道**，全部并进 `build.ps1`）：① `tools/check-api.ps1`（全部被引用程序集的成员引用都要在游戏侧存在：BCL + UnityEngine* + BepInEx* + Assembly-CSharp，当前 **633 项**）② `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key，当前 **217 条**）③ `tools/check-pack-compat.ps1`（对整合包替换的那份 `Assembly-CSharp.dll` 做同样的成员引用校验，当前 **165 项**；需传 `-PackAssemblyCSharp` 或环境变量 `BadNorthPackDll`）④ `tools/check-rules.ps1`（静态规则：空 catch 必须写 `silent-ok`、反射成员不许用 `== null` 判空、禁 `Debug.Log` 与盘符路径、热路径方法体不许每帧分配、**纵向布局链 `DrawXxx(x, inner, y)` 必须接返回值**（规则⑥）、**规则⑦ 禁用清单**（`tools\banned-api.txt`，逐行扫全部 `.cs`；当前 2 条：`IsPointerOverGameObject` —— 本游戏恒为真、会静默吞掉世界点击，`Array.Empty` —— 游戏 mscorlib 2.0 没有）；**不需要游戏 DLL**）⑤ `tools/check-docrefs.ps1`（`.cs` 注释里的 `§N`/`§N.M` 必须在 md 里真有对应标题；**不需要游戏 DLL**）。④⑤ 可在 CI 跑（`.github/workflows/gates.yml`）。
+- **构建闸门**（v1.7.3 起**五道**，全部并进 `build.ps1`）：① `tools/check-api.ps1`（全部被引用程序集的成员引用都要在游戏侧存在：BCL + UnityEngine* + BepInEx* + Assembly-CSharp，当前 **650 项**）② `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key，当前 **227 条**）③ `tools/check-pack-compat.ps1`（对整合包替换的那份 `Assembly-CSharp.dll` 做同样的成员引用校验，当前 **165 项**；需传 `-PackAssemblyCSharp` 或环境变量 `BadNorthPackDll`）④ `tools/check-rules.ps1`（静态规则：空 catch 必须写 `silent-ok`、反射成员不许用 `== null` 判空、禁 `Debug.Log` 与盘符路径、热路径方法体不许每帧分配、**纵向布局链 `DrawXxx(x, inner, y)` 必须接返回值**（规则⑥）、**规则⑦ 禁用清单**（`tools\banned-api.txt`，逐行扫全部 `.cs`；当前 2 条：`IsPointerOverGameObject` —— 本游戏恒为真、会静默吞掉世界点击，`Array.Empty` —— 游戏 mscorlib 2.0 没有）；**不需要游戏 DLL**）⑤ `tools/check-docrefs.ps1`（`.cs` 注释里的 `§N`/`§N.M` 必须在 md 里真有对应标题；**不需要游戏 DLL**）。④⑤ 可在 CI 跑（`.github/workflows/gates.yml`）。
 - **中英切换**（v1.5.1）：`Loc`(界面/日志文案对照表 + `[General] Language`) · `UnitNames`(增英文显示名) · `README.md`(双语)。
 
 - **借用原版 UI / 自绘外观**（v1.6.1）：`VanillaUI`（原版通知条 · `ModalOverlay` 确认框 · `FabricID` 按钮音 · 借原版 `Font`；`ModalShowing` 供各处让位） · `MenuSkin`（运行时生成圆角 9 宫格贴图与 `GUIStyle`，卸载时释放） · 新增依赖 `UnityEngine.TextRenderingModule`（只为 `UnityEngine.Font`） · cfg 段 `[UI] UseVanillaUI / UseVanillaFont / UiFontSize / ConfirmDestructive`。
@@ -350,7 +353,8 @@ Raid.IIslandFirstEnter:
 | **v1.7.3** | **1.7.3** | **性能与结构（零行为变更）：热路径去分配（HUD 文本 0.2s 节流、状态行 0.5s 缓存、候选扫描同帧去重、拦波次扫描按需重扫）；`MarqueeSelect`/`Plugin` 按职责拆 `partial` 文件、删死代码 `PickAt`、`MenuHeight` 自检；新增两道闸门 `check-rules` / `check-docrefs` + CI（见 §11.7）** |
 | **v1.7.4（第 1 批）** | **1.7.4** | **UI 可读性与挡岛：面板高度改"实测自纠"（修 77px 空高）；删冗余说明、说明块可关（`[UI] ShowHelp`）、船速 ×1 标"（原版）"；数字字体默认跟随原版（`[UI] NumberFont`）；修"切语言后字体不重挑"；菜单开着时 HUD 并入面板 + 标题栏可收起（见 §11.8）** |
 | **v1.7.4（第 2 批）** | **1.7.4** | **UI 间距与排版（作者实机反馈）：行距 10→13、说明行与按钮拉开 6px、说明文字垂直居中、数量行预设铺满到右边界、靠岸速度改成"轨道在上/说明在下"；环境自检挪到第一次 Update（修"整合包=0 个插件"的误导数字）；`[Diag] CleanLogOnStart`（默认不再删共享日志）；点击路由 / 框选加 UI 门控（点原版 UI 不再对世界下令，见 §11.10）** |
-> **版本号口径**：本次提交 = **`v1.7.4`**（含两批改动），`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.4**（v1.7.0 = 整合包 / Together 共存立项与重做；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，见 §11.3）；**v1.7.3 = 性能与结构 + 两道新闸门**（零行为变更，见 §11.7）；**v1.7.4（第 1 批）= UI 可读性与挡岛**（见 §11.8）；**v1.7.4（第 2 批）= UI 间距与排版 + 三项代码问题**（见 §11.10）。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
+| **v1.7.5** | **1.7.5** | **在游戏原生设置界面里开关本模组：设置 → 控制 分类末尾两行（`BadNorthNewMode：启用模组` = 新 cfg `[General] Enabled` 总开关；`原生单位：可遥控` = 与 F1 菜单同键）。总开关关掉 = 完全静默（不接管点击 / 不画菜单·HUD / 快捷键失效 / 不拦波次 / 在航船速还原原版）；实现**零 Harmony·零 MMHOOK**（轮询 `UserSettingsMenu` + 反射 `AddBoolWidget` + 运行期注入 I2 词条，见 §11.12）** |
+> **版本号口径**：v1.7.4 的两批改动 + **v1.7.5**（原版设置里的开关，见 §11.12）在同一轮交付，但按"新增功能"递增版本号 ⇒ 本次 = **`v1.7.5`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.5**（v1.7.0 = 整合包 / Together 共存立项与重做；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，见 §11.3）；**v1.7.3 = 性能与结构 + 两道新闸门**（零行为变更，见 §11.7）；**v1.7.4（第 1 批）= UI 可读性与挡岛**（见 §11.8）；**v1.7.4（第 2 批）= UI 间距与排版 + 三项代码问题**（见 §11.10）；**v1.7.5 = 原版设置里可开关本模组 + 模组总开关**（见 §11.12）。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
 
 ## 9. UI 打磨路线
 
@@ -811,4 +815,49 @@ internal static void Forget(Island island);                          // 清场/�
 - **不参与** Together 的清单 / 序号 / 签名 / 姿态流协议（投放会让主机 `Fail("待开波缺少稳定逻辑身份")` 冻结整局 —— 见 §11.3 B9 与 `TOGETHER_MP_SPEC.md` §8）。
 - 要做真正的联机投放需要**上游**把"外部波次接入"泛化成公开接口；研究结论与提案在本地笔记 `TOGETHER_L2_FEASIBILITY.md` / `TOGETHER_UPSTREAM_PROPOSAL.md`（不入库）。
 - README 与玩家说明已按此口径写明"**适用范围：单机**"。
+
+
+### 11.12 v1.7.5：把开关挂进**原版设置界面**（2026-10-16，作者需求）
+
+> 作者需求原文：**"在游戏原生设置里能否增加按钮，开关我们的 BadNorthNewMode —— 避免正常游戏控制了原生敌方单位。"**
+
+**做了什么**
+
+| 项 | 内容 |
+|---|---|
+| 原版设置里**两行布尔项** | ESC → 设置（`UserSettingsMenu`）→ **控制** 分类**末尾**追加：`BadNorthNewMode：启用模组`（= 新 cfg `[General] Enabled`，**模组总开关**）与 `原生单位：可遥控`（= cfg `[Native] ControlNativeUnits`，**与 F1 菜单同一键**）。标签中英各一份 |
+| **总开关**（默认开） | `[General] Enabled = false` ⇒ **完全静默**：`Plugin.Update` / `OnGUI` 全部早退 → 不接管点击（点单位选中 / 点地块前进 / 框选 / 点海面取消全归原版）、不画菜单·HUD·头像条、快捷键（F1/F2/F3/R）失效、不拦原版波次。从"开"变"关"的**那一帧**做一次收尾：关菜单与 HUD、撤拦截面、`RemoteCursor.ForceRelease()`（把原版 `Navigator` 从停用态还回去）、`RemoteGroup.Clear()` 归还 order、清时间减速账、`ShipSpeedRuntime.RestoreVanilla()` 把**在航船速还原原版**（不动 cfg 里的档位） |
+| **逃生门**（关键设计） | `VanillaSettings.Tick()` 放在**总开关判断之前** ⇒ 关掉模组后，原版设置里那两行**照样在**（否则关掉就再也没法从游戏里打开它） |
+| 三处同步 | 两行的 getter/setter **直接读写 cfg** ⇒ 原版设置 ↔ F1 菜单 ↔ cfg 文件天然一致，不引入第二份状态；关掉后重启游戏仍是关的 |
+
+**怎么挂上去的（反编译 `BadNorthDatabase` 核实，非猜测）**
+
+```
+UserSettingsMenu : GeneratedMenu : UIMenu
+  GeneratedMenu.MaybeInitialize()        ← Awake / IGameSetup.OnGameAwake 里只跑一次
+     Initialize() → ClearWidgets()       ← 会 DestroyChildren(分类容器) ⇒ 必须等它跑完再加
+  GeneratedMenu.AddBoolWidget(string 词条, Func<bool> get, Func<bool,bool> set, Transform 分类)
+  UserSettingsMenu.Initialize()          ← 具体各项；分类容器挂 VerticalLayoutGroup（后加的子项会自动排版）
+  private static UserSettingsMenu _instance;   private bool initialized;
+  private Transform categoryControls;          ← 「控制」列
+```
+
+| 设计决定 | 原因（都在这一步踩过或差点踩到） |
+|---|---|
+| **不引入 Harmony / MMHOOK** | 本模组一贯"零补丁"。改为**每秒轮询**（私有 `_instance` + `initialized`），初始化完成后再追加；结构不符就**一次性放弃 + Warn**（不静默、不每帧重试），F1 菜单与 cfg 照旧可用 |
+| 词条**运行期注入 I2** | 原版控件只认"词条"（`I2.Loc`），**缺词条 = 标签空白**。注入 `LocalizationManager.Sources[i].AddTerm(term)` → 按语言名写 `TermData.Languages[zh/en]` → `UpdateDictionary(true)`；中英都没认出来就整表填英文兜底 |
+| 控件创建走**反射 + 现造委托** | `AddBoolWidget` 第 2/3 个参数是游戏侧的 `System.Func<bool>` / `System.Func<bool,bool>`；net472 会把 `Func` 解析到 **mscorlib**（游戏 mscorlib 2.0 没有它，本游戏在 **System.Core**）⇒ 直接传 lambda / 方法组必 `MissingMethodException`。**`check-api` 当场拦下**（"类型不存在: System.Func`1<System.Boolean> [mscorlib]"）→ 改为反射取参数 `ParameterType` 后 `Delegate.CreateDelegate(游戏侧类型, MethodInfo)` 现造委托再 `Invoke` |
+| 标签文本**不写死**在控件上 | 语言切换时 I2 会重刷所有 `Localize` 组件；写死文本会在换语言后变空白。走词条 ⇒ 跟着游戏语言走 |
+
+**验证**：五道闸门全绿（`api-check 650` / `loc-check 227（占位符 103）` / `rules 34 文件 8667 行 / 禁用清单 2 条` / `docrefs 96 处` / `pack-compat 165`）；
+产物与仓库构建**逐方法 IL 零差异**。**实机验收（待作者）**：① 设置 → 控制 末尾能看到两行、开关能点；② 关掉总开关 → 鼠标完全交还原版（点单位 / 点地块 / 框选都不再被接管）、菜单与 HUD 消失、`F1`/`F2`/`F3` 失效、在航船速还原；③ 再从原版设置打开 → 一切恢复；④ 只用 `原生单位：可遥控` 关掉那一项 → 原版上岛的敌人不再被点选/遥控（本次需求的直接目的）。
+
+**v1.7.5 修订（同日，作者实机反馈两点）**
+
+| 反馈 | 根因 | 修法 |
+|---|---|---|
+| 切到"关"时那个"开"的**高亮不及时消失**，退出设置再进去才显示为关 | `ValueWidget<T>.SetValueHandler` 只在 **setAction 返回 true** 时才认这次改动：`if (!newValue.Equals(value) && setAction != null && this.setAction(newValue)) { …; onValueChanged(newValue); }`。我们的 setter 当初返回的是**新值**（关掉时 = `false`）⇒ 被当成"设置被拒绝" → **控件内部状态不更新**（副作用说明：cfg 其实已经写下去，所以模组行为立刻变了，只有控件显示没跟上） | 两个 setter 改为 `return true`（= 设置成功，与原版所有 setter 一致）；并新增 `RefreshRows()`：设置界面**开着**时按原版节奏（每 15 帧，同 `UserSettingsMenu.UpdateOccasionally`）`ForceUpdate()` 两行 ⇒ 在 F1 菜单 / cfg 里改了值，设置界面也会自动跟上 |
+| 位置希望更显眼（"在所有选项的第一位"） | `AddBoolWidget` 走 `InstantiateChild` → `SetParent(parent, false)`：**只追加、不动 siblingIndex**，位置取决于容器现状（此前是排在末尾） | 显式 `SetSiblingIndex(0/1)`：两行**固定排在「控制」分类最前面**，顺序 = `启用模组` → `原生单位` |
+
+**验证**：五道闸门全绿（`api-check 651` / `loc-check 227（占位符 103）` / `rules 34 文件 8699 行 / 禁用清单 2 条` / `docrefs 96 处` / `pack-compat 172`）；产物与仓库构建**逐方法 IL 零差异**。
 

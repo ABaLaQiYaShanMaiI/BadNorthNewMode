@@ -17,10 +17,16 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.7.4";
+        public const string VERSION = "1.7.5";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
+
+        /// <summary>v1.7.5：**模组总开关**（cfg `[General] Enabled`，游戏内可在原版设置里切）。
+        /// false = 完全静默：不接管输入、不绘制、不拦波次（见 `Update` / `OnGUI` / `ApplyDisabled`）。</summary>
+        internal static bool Enabled { get { return Util.V(ModConfig.Enabled, true); } }
+
+        bool _disabledApplied;             // v1.7.5：总开关"关掉"的收尾只做一次
 
         bool _subscribed;
         bool _subscribeFailed;
@@ -68,6 +74,24 @@ namespace BadNorthNewMode
             }
 
             LogFileSwitch.Tick();                       // 重试删日志残留（≤30s，见 LogFileSwitch）
+
+            // v1.7.5：把两行开关挂进**原版设置界面**（只做一次）。必须在总开关判断**之前** —— 关掉模组之后
+            // 还得靠这一项从游戏里再打开它（原版设置是我们的"逃生门"）。
+            VanillaSettings.Tick();
+
+            // v1.7.5：**总开关**。false = 完全静默：不接管点击 / 不画菜单·HUD / 快捷键失效 / 不拦原版波次。
+            // 从"开"变"关"的那一帧做一次收尾（见 ApplyDisabled），之后直接 return（不注册、不扫描、不绘制）。
+            if (!Enabled)
+            {
+                if (!_disabledApplied) { _disabledApplied = true; ApplyDisabled(); }
+                return;
+            }
+            if (_disabledApplied)
+            {
+                _disabledApplied = false;
+                Util.Log(Loc.T("[NewMode] 总开关已开：投放菜单 / HUD / 点击遥控恢复（原版设置里可随时再关）"));
+            }
+
             IngameMenu.HandleDrag();                    // 菜单标题栏 / 提示框拖动
             // 菜单 / 头像条上盖住原版点击（见 §6 T2），用上一帧矩形；原版确认框在前台时反而要让开（它自己会挡世界点击）
             bool modal = VanillaUI.ModalShowing;
@@ -107,12 +131,36 @@ namespace BadNorthNewMode
 
         void OnGUI()
         {
+            if (!Enabled) return;                 // v1.7.5：总开关关掉 = 一个像素都不画（菜单 / HUD / 头像条 / 覆盖层全停）
+
             // v1.7.4 修订：绘制顺序 = 覆盖层 → 头像条 → **菜单最后**。
             // 菜单是我们自己的"前台面板"，必须盖在其它两层之上 —— 曾出现头像条/标记压住菜单最后几行
             //（第 5 行正是"靠岸速度"档位条）的报障；IMGUI 里后画的在上层，所以这里改顺序即可。
             MarqueeSelect.DrawOverlay();
             SquadBar.Draw();                      // 底部小队头像条
             IngameMenu.Draw();                    // 菜单 + HUD（最后画 = 最上层）
+        }
+
+        /// <summary>v1.7.5：总开关从"开"变"关"的那一帧做一次收尾（**不每帧跑**）。目标 = 完全不介入：
+        /// 菜单 / HUD / 拦截面收起、遥控归还给原版、时间减速的账清掉、在航船速还原原版；此后 Update/OnGUI 全部早退。</summary>
+        void ApplyDisabled()
+        {
+            try
+            {
+                IngameMenu.Close();                       // 关菜单 + 收起 HUD（内部会 Hide ClickShield）
+                ClickShield.Hide();
+                RemoteCursor.ForceRelease();              // 从 CursorManager 栈上摘掉（否则原版 Navigator 会一直是停用态）
+                RemoteGroup.Clear();                      // 归还 order / 销毁我们挂的组件
+                MarqueeSelect.ClearPending();
+                MarqueeSelect.ClearSlowMo();              // 释放时间减速，别在 TimeManager 里留残账
+                PlacementMarker.Get().Hide();
+                ShipSpeedRuntime.RestoreVanilla(Singleton<IslandGameplayManager>.instance);
+                Util.Log(Loc.T("[NewMode] 总开关已关（原版设置 → 控制 末尾可再打开）：菜单/HUD 已收起、遥控已归还、船速已还原"));
+            }
+            catch (System.Exception e)
+            {
+                Util.Warn(Loc.F("[NewMode] 总开关关闭时的收尾出错：{0}", e.Message));
+            }
         }
 
         void OnDestroy()

@@ -94,6 +94,41 @@ namespace BadNorthNewMode
 
         internal static void Reset() { _applied.Clear(); _nextTick = 0f; }
 
+        /// <summary>v1.7.5：**总开关关掉时**把在航 / 在场的船还原成原版速度（**不动 cfg 里的档位**）。
+        /// 走换档同一条比值路径：把每条船从"上次套用的档"缩放到 `1`（原版）—— `k = seen / 1 = seen`，
+        /// 正好抵消当初 `k = 1 / seen` 的缩放；之后清空登记表，重新启用时按 cfg 档位重新套用。</summary>
+        internal static void RestoreVanilla(IslandGameplayManager gm)
+        {
+            if (_applied.Count == 0) return;                              // 没改过任何船（或已经还原过）→ 什么都不做
+
+            Island island = (gm != null) ? gm.island : null;
+            if (island == null || island.raid == null || island.raid.landingContainer == null) { _applied.Clear(); return; }
+            if (!Probe()) { _applied.Clear(); return; }
+
+            int restored = 0;
+            Wave[] waves = island.raid.landingContainer.GetComponentsInChildren<Wave>(true);
+            if (waves != null)
+            {
+                for (int w = 0; w < waves.Length; w++)
+                {
+                    Wave wave = waves[w];
+                    if (wave == null || wave.shipGroups == null) continue;
+
+                    for (int g = 0; g < wave.shipGroups.Count; g++)
+                    {
+                        ShipGroup sg = wave.shipGroups[g];
+                        if (sg == null || sg.landings == null) continue;
+
+                        for (int l = 0; l < sg.landings.Count; l++)
+                            if (Adjust(sg.landings[l], 1f)) restored++;
+                    }
+                }
+            }
+
+            _applied.Clear();                                            // 登记表作废（下次启用时按 cfg 档位重新套用）
+            Util.Log(Loc.F("[NewMode][船速] 总开关关闭 → 已把 {0} 艘船的靠岸速度还原成原版", restored));
+        }
+
         static void ApplyAll(Island island, bool announce)
         {
             if (_disabled) return;

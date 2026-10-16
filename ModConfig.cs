@@ -18,6 +18,11 @@ namespace BadNorthNewMode
         /// <summary>菜单打开时盖住"原版点击"（见 PROJECT_SPEC §6 T2）。</summary>
         public static ConfigEntry<bool> MenuBlocksWorldClicks;
 
+        /// <summary>v1.7.5：**模组总开关**（默认 true）。关掉 = 完全静默：不接管点击 / 不画菜单·HUD·头像条 /
+        /// 快捷键失效 / 不拦原版波次，并把在航船速还原成原版。游戏内可在**原版设置**（ESC → 设置 → 控制 分类末尾）
+        /// 切换，见 `VanillaSettings`。</summary>
+        public static ConfigEntry<bool> Enabled;
+
         // ============ UI（借用原版 UI + 原版贴图/配色/字体）============
         public static ConfigEntry<bool> UseVanillaUI;
         public static ConfigEntry<bool> UseVanillaFont;
@@ -141,6 +146,11 @@ namespace BadNorthNewMode
 
         static void BindGeneral(ConfigFile cfg)
         {
+            Enabled = cfg.Bind("General", "Enabled", true,
+                "模组总开关：false = 完全静默 —— 不接管鼠标（点单位选中 / 点地块前进 / 框选全交还原版）、\n" +
+                "不画投放菜单与 HUD、快捷键（F1/F2/F3/R…）失效、不拦原版波次；在航的船速也会还原成原版。\n" +
+                "游戏内也能切：ESC → 设置（原版界面）→ 控制 分类末尾「BadNorthNewMode：启用模组」。\n" +
+                "想安静地按原版玩法（例如不想误遥控原版上岛的敌方单位）就把它关掉。");
             // 显式传空数组：不能写 new KeyboardShortcut(KeyCode.F1) —— params 空数组会被 Roslyn
             // 优化成 Array.Empty<T>()，而游戏运行时 mscorlib 2.0 没有该 API（见 csproj 注释）。
             Hotkey = cfg.Bind("General", "Hotkey", new KeyboardShortcut(KeyCode.F1, new KeyCode[0]),

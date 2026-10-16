@@ -80,6 +80,17 @@ namespace BadNorthNewMode
 
         static readonly Dictionary<string, string> En = new Dictionary<string, string>(System.StringComparer.Ordinal)
         {
+            // ---- v1.7.5：原版设置里的开关（VanillaSettings）+ 模组总开关 ----
+            { "[NewMode] 挂原版设置项失败（{0}）→ 跳过；F1 菜单与 cfg 仍可用", "[NewMode] failed to add the vanilla-settings rows ({0}) -> skipped; the F1 menu and the cfg still work" },
+            { "[NewMode] 原版设置菜单结构不符（找不到 _instance / categoryControls / initialized）→ 不挂设置项；F1 菜单与 cfg 仍可用", "[NewMode] vanilla settings menu layout does not match (no _instance / categoryControls / initialized) -> rows not added; the F1 menu and the cfg still work" },
+            { "[NewMode] 原版设置菜单的连接分类为空 → 不挂设置项；F1 菜单与 cfg 仍可用", "[NewMode] vanilla settings menu has no Controls column -> rows not added; the F1 menu and the cfg still work" },
+            { "[NewMode] 已把两行开关挂进原版设置界面（控制 分类末尾）：启用模组 / 原生单位可遥控", "[NewMode] two switches added to the vanilla settings screen (end of the Controls column): mod enabled / native units controllable" },
+            { "[NewMode] 总开关已开：投放菜单 / HUD / 点击遥控恢复（原版设置里可随时再关）", "[NewMode] master switch ON: drop menu / HUD / click control restored (turn it off any time in the vanilla settings)" },
+            { "[NewMode] 总开关已关（原版设置 → 控制 末尾可再打开）：菜单/HUD 已收起、遥控已归还、船速已还原", "[NewMode] master switch OFF (re-enable it at the end of Settings -> Controls): menu/HUD hidden, remote control returned, ship speed restored" },
+            { "[NewMode] 总开关关闭时的收尾出错：{0}", "[NewMode] error while applying master switch OFF: {0}" },
+            { "[NewMode][船速] 总开关关闭 → 已把 {0} 艘船的靠岸速度还原成原版", "[NewMode][ship speed] master switch OFF -> restored {0} ship(s) to the vanilla landing speed" },
+            { "[NewMode] 原版设置菜单结构不符（找不到 AddBoolWidget(string, Func<bool>, Func<bool,bool>, Transform)）→ 不挂设置项；F1 菜单与 cfg 仍可用", "[NewMode] vanilla settings menu layout does not match (no AddBoolWidget(string, Func<bool>, Func<bool,bool>, Transform)) -> rows not added; the F1 menu and the cfg still work" },
+            { "[NewMode] 原版设置项的回调委托创建失败 → 不挂设置项；F1 菜单与 cfg 仍可用", "[NewMode] could not build the callbacks for the vanilla settings rows -> rows not added; the F1 menu and the cfg still work" },
             // ---- Plugin ----
             { "[NewMode] 配置绑定失败：{0}", "[NewMode] config bind failed: {0}" },
             { "[NewMode] 菜单拦截面创建失败（{0}）→ 回到旧行为", "[NewMode] failed to create the menu click shield ({0}) -> back to the old behaviour" },

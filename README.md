@@ -1,4 +1,4 @@
-# Bad North - New Mode  v1.7.4
+# Bad North - New Mode  v1.7.5
 
 A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 
@@ -10,6 +10,7 @@ A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 - `F2`: cleanup (destroy what this mod dropped). `F3`: force win (runs the vanilla results flow).
 - In the `F1` menu: a **4-stop shore-speed drag bar** (`x1 / x1.25 / x1.5 / x2`) — speeds up how fast ships (both native raid waves and mod-dropped ones) reach the shore; `x1` = vanilla speed (labelled on the bar), drag across the stops to change it, applies to ships already sailing.
 - The menu title bar has a **Fold / Expand** button: folds the whole panel down to its title row when you want to see the island.
+- **In the game's own settings** (Esc → Settings → the **top** of the `Controls` column) there are two switches: `BadNorthNewMode: mod enabled` (master switch — off = the mod goes completely quiet: it stops taking over mouse clicks, draws nothing, its hotkeys stop working, and ships already sailing are restored to vanilla speed) and `Native units: controllable` (turn this off and vanilla raiders are never selected/commanded by a mouse click — handy when you just want to play normally). Toggling takes effect immediately, the two rows always stay in the game's own settings (so you can switch back any time), and they follow the F1 menu / the cfg file automatically.
 - Settings: `BepInEx/config/badnorth.newmode.cfg`.
 
 ## Compatibility
@@ -25,7 +26,7 @@ A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 
 ---
 
-# Bad North - New Mode v1.7.4（简体中文）
+# Bad North - New Mode v1.7.5（简体中文）
 
 BepInEx 模组：给《Bad North》加“投放敌舰”和“遥控敌方单位”两种玩法。
 
@@ -37,6 +38,7 @@ BepInEx 模组：给《Bad North》加“投放敌舰”和“遥控敌方单位
 - `F2`：清场（销毁本模组投放的船与单位）。`F3`：强制胜利（走原版结算）。
 - `F1` 菜单里有一条 **靠岸速度 4 档拖动条**（`×1 / ×1.25 / ×1.5 / ×2`）：加快船只靠岸（**原生波次与投放的船都生效**）；`×1` = 原版速度（条上直接标着"原版"），按住横扫即换档、在航的船立刻变。
 - 菜单标题栏有 **收起 / 展开**：一键把整块面板收成一行标题，方便看清岛屿。
+- **游戏原生设置里就能开关本模组**（ESC → 设置 → **控制** 分类**最前面**两行）：`BadNorthNewMode：启用模组`（**总开关**，关掉后模组完全静默 —— 不再接管鼠标点击、不画任何东西、快捷键失效、在航的船速还原成原版）与 `原生单位：可遥控`（关掉后，点原版上岛的敌方单位不再被选中/遥控 —— 想安安静静按原版玩法时用这一条）。点击**立即生效**；两行始终留在原版设置里（随时能切回来），并会跟着 F1 菜单 / 配置文件的值自动更新。
 - 配置：`BepInEx/config/badnorth.newmode.cfg`。
 
 ## 兼容
