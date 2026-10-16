@@ -53,6 +53,26 @@ namespace BadNorthNewMode
             items.Add(it);
         }
 
+        /// <summary>这个对象（Wave / Landing / 船）是不是本模组投放的东西：我们的 Wave 根节点本身，或它的任一后代。
+        /// 用途：让"原版侧的整体扫描"能跳过自家对象（当前唯一调用方 `LevelTools.TryBlockWaves`）——
+        /// 我们的 Wave 由 `FlotillaLauncher` 挂在 `raid.landingContainer` 下，会被"拦下原版波次"的
+        /// `GetComponentsInChildren<Wave>` 一并命中，那会把自家船的**占位互斥**（`DropPlanner.CollectPlaced`
+        /// 里的 `IsBlocked` 过滤）和**编队出发错峰**（`waveStartTime` → `Landing.startTime`）一起抹掉（见 §4 坑表）。</summary>
+        internal static bool Owns(GameObject go)
+        {
+            if (_instance == null || go == null) return false;
+
+            List<Item> items = _instance._items;
+            for (int i = 0; i < items.Count; i++)
+            {
+                GameObject root = items[i].root;
+                if (root == null) continue;                        // 已销毁的根（换岛/清场后）直接跳过
+                if (go == root) return true;
+                if (go.transform.IsChildOf(root.transform)) return true;
+            }
+            return false;
+        }
+
         void Update()
         {
             TrySubscribeLevelEnd();

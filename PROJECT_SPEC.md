@@ -79,7 +79,7 @@ Raid.IIslandFirstEnter:
 | 中途投放不下船 | `brain.order` 被 `KillAllEnemies` 抢走 → `orderDist = 1e6` → `MaybeAct` 永不成立 | 生成后 `AttachAgentBehaviours()` 把 order 交还 `Pirate`（原版靠"生成期我方未部署"天然正确） |
 | 幽灵船（波次残留） | 我们的 Wave 不在 `raid.waves` → `Raid.IIslandWipe` 不清它 | `SpawnLedger` 在战局结束 / 离开战局 / 换岛时销毁（订阅 `EndOfLevel.postProcess`） |
 | 滩头看似可用却投放失败 | 点击命中 `Modules`，或进近廊道被挡 | 收集候选滩头逐个 `TryPlace`；`CorridorClear()` 预检廊道（悬停预览共用同一判定） |
-| 连续投放"叠船"（看着像一船混编） | `CollectPlaced` 只查 `raid.waves`，而我们的 Wave 不在其中 → **自家的船不参与占位互斥**，可叠在同一滩头 | 改为收集 `raid.landingContainer` 下**所有** Landing（含我们自己的）；另加船员自检日志 |
+| 连续投放"叠船"（看着像一船混编） | `CollectPlaced` 只查 `raid.waves`，而我们的 Wave 不在其中 → **自家的船不参与占位互斥**，可叠在同一滩头 | 改为收集 `raid.landingContainer` 下**所有** Landing（含我们自己的）；另加船员自检日志。⚠️ v1.7.1-b4：该互斥在"拦下原版波次"模式下会被我们自己的 `_blockedLandings` 抹掉（见 §11.3 B10），已修 |
 | `EndOfLevel` 的两个事件 | `preProcess` 是 `Action<T1,T2>` 形态（同 `onClick`，直接 `+=` 会炸） | 只用 `postProcess`（`Action<Island>`，可直接订阅）做清场；要 hook `preProcess` 须照 `onClick` 的反射写法 |
 | 弓手在船上照样射击 | 与 `Pirate` / order 无关（`Archery : Brain` 自驱） | 无需处理；下船时只摘掉 Pirate action，Archery 不受影响 |
 | 船上敌人"打不到" | 原版 `Longship` 每帧以 `Data(…, dangerous:false, **hittable:false**)` 上报流场 → 我方只能"感到要来"，不会交战（原版设计：打船要用火箭技能） | `ShipboardThreat` 在靠岸前 4m 起（同原版 amount 门控）追加一条 `hittable=true` 的存在；下船后自动停用、交回 Brain 上报 |
@@ -264,7 +264,7 @@ Raid.IIslandFirstEnter:
 
 - 产物：`BadNorthNewMode.dll`；命名空间 `BadNorthNewMode`；GUID `badnorth.newmode`；部署到 `BepInEx\plugins`。
 - 仓库根另有 **`README.md`**（面向玩家的操作说明 + 链接 + 许可，≤250 汉字，不再写其他内容）。
-- **版本号统一**：`Plugin.VERSION` = `csproj Version` = 仓库提交 `vX.Y.Z`（自 v1.2.0 起）。**本次提交 = `v1.6.3`**（两处都写 `1.6.3`；作者手动提交）。
+- **版本号统一**：`Plugin.VERSION` = `csproj Version` = 仓库提交 `vX.Y.Z`（自 v1.2.0 起）。**本次提交 = `v1.7.2`**（两处都写 `1.7.2`；作者手动提交）。
 - 提交：一个里程碑一个提交，标题由作者撰写。
 - 文档纪律：只本文件（+ 可选 `开发日志.md`）；新改动只在 §5 追加一行、§8 表格追加一行，不写长叙事。
 - **代码结构**（v1.3.1 按职责拆分）：`Plugin`(入口/输入/取点) · `IngameMenu`(HUD + 兵种菜单) · `DropPlanner`(滩头解析/落差/占用/廊道，长方法拆成 `CheckClickHeight`/`CollectCandidates`/`PreferClearCorridor`) · `UnitCatalog`(兵种·船·人数) · `LandingInjector`(建树/投放/装配) · `FlotillaLauncher` · `SpawnLedger` · `DisembarkWatchdog` · `ShipboardThreat` · `PlacementMarker` · `ModConfig` · `UnitNames` · `Util`(向量格式化 / cfg 守卫 / 日志守卫)。
@@ -272,7 +272,7 @@ Raid.IIslandFirstEnter:
 - **日志文件开关**（v1.5.0）：`LogFileSwitch`(摘掉 BepInEx 磁盘日志监听 + 清启动残留；`[Diag] LogToFile` 默认 false)。
 - **菜单点击拦截面**（v1.5.6）：`ClickShield`(菜单矩形上的不可见 UI，阻断原版 EventSystem 点击；`[General] MenuBlocksWorldClicks` 默认 true)。
 - **点击路由 / 接管本关**（v1.5.6）：`RemoteCursor`(按下那一帧压 `CursorManager` 栈顶吃掉这一次点击：左键=选整队、右键=前进；`[Remote] RemoteOrderButton` 默认 Right) · `LevelTools`(拦下原版波次 + F3 强制胜利；`[Native] BlockVanillaWaves`) · `ClickShield`(菜单矩形上的不可见 UI)。
-- **构建闸门**：`tools/check-api.ps1`（全部被引用程序集的成员引用都要在游戏侧存在：BCL + UnityEngine* + BepInEx* + Assembly-CSharp，当前 **581 项**）+ `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key，当前 **174 条**）；两个闸门都已并进 `build.ps1`。
+- **构建闸门**：`tools/check-api.ps1`（全部被引用程序集的成员引用都要在游戏侧存在：BCL + UnityEngine* + BepInEx* + Assembly-CSharp，当前 **624 项**）+ `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key，当前 **213 条**）+ `tools/check-pack-compat.ps1`（对整合包替换的那份 `Assembly-CSharp.dll` 做同样的成员引用校验，当前 **165 项**）；三个闸门都已并进 `build.ps1`（包版闸门需传 `-PackAssemblyCSharp` 或环境变量 `BadNorthPackDll`）。
 - **中英切换**（v1.5.1）：`Loc`(界面/日志文案对照表 + `[General] Language`) · `UnitNames`(增英文显示名) · `README.md`(双语)。
 
 - **借用原版 UI / 自绘外观**（v1.6.1）：`VanillaUI`（原版通知条 · `ModalOverlay` 确认框 · `FabricID` 按钮音 · 借原版 `Font`；`ModalShowing` 供各处让位） · `MenuSkin`（运行时生成圆角 9 宫格贴图与 `GUIStyle`，卸载时释放） · 新增依赖 `UnityEngine.TextRenderingModule`（只为 `UnityEngine.Font`） · cfg 段 `[UI] UseVanillaUI / UseVanillaFont / UiFontSize / ConfirmDestructive`。
@@ -318,7 +318,10 @@ Raid.IIslandFirstEnter:
 | **v1.6.0（第 1 批）** | **1.6.0** | **按实机反馈修 7 项：拾取改 `PickAtTight`；烧房判定改单一出口；重开局残留船（`ReferenceEquals`）；`RemoteNativeUnits` → `ControlNativeUnits`；未选中不移动；采信原版 `NavSpotCast` 的 null；修 `Reslot` NRE** |
 | **v1.5.7** | **1.5.7** | **点击路由改按下帧轮询；点选精确 1 人（双击整队）；`GroupOrder` 防抽动；烧房改按 `worldTargetPos` + 高差门控；原生单位可遥控并默认开** |
 | **v1.5.6** | **1.5.6** | **`ClickShield` 阻止菜单点击穿透；点击路由 v3（`RemoteCursor`）；船上可选 + 登陆集结点；接管本关（拦波次 / 原生单位 / `F3` 强制胜利）** |
-> **版本号口径**：本次提交 = **`v1.6.3`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.6.3**（v1.6.1 两批 = 借用原版 UI（提示条/确认框/外观）+ 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、数字改 Times New Roman、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
+| **v1.7.0** | **1.7.0** | **与《旧灰复燃的战旗》3.0 整合包 / Together 联机共存立项（含 2026-10-14 重做）：`Compat` 检测与让路（投放 / 遥控 / 终岛 / 拦波次 / `F3`）、`tools/check-pack-compat.ps1` 闸门、外生兵种 UI 兼容** |
+| **v1.7.1** | **1.7.1** | **修 B1~B9（含"联机会话类名写错使让路静默全失效"、"拦波次在单机被误禁"、"盾兵挡不住我们投放的巨弓"）+ 局内「靠岸速度」4 档（`ShipSpeedRuntime` + F1 拖动条）** |
+| **v1.7.2** | **1.7.2** | **修 B10：`BlockVanillaWaves` 误伤自家 `ModWave`（→ 叠船 / 编队出发错峰失效）；自建波显式写 `waveStartTime = 0f`；联机拒绝拦波次的文案只针对 Together（见 §11.3）** |
+> **版本号口径**：本次提交 = **`v1.7.2`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.2**（v1.7.0 = 整合包 / Together 共存立项与重做；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave → 叠船 / 编队错峰失效，见 §11.3）。更早：v1.6.1 两批 = 借用原版 UI（提示条/确认框/外观）+ 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、数字改 Times New Roman、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
 
 ## 9. UI 打磨路线
 
@@ -526,10 +529,16 @@ internal static void Forget(Island island);                          // 清场/�
 | **B7** | 外生兵种（别的 mod 加/换的）只能看内部名，UI/程序对"兵种 mod 一多"不够兼容（见 §11.5） | `[UI] UnitNameOverrides` 自定义显示名 + 每岛一行 `[NewMode][兵种]` 日志 + 菜单标注（外生）+ 内置表补 `Viking_Spearman=长矛兵` |
 | **B8** | 单机：**我方"手持盾牌的长矛兵"挡不住我们投放的巨弓**（原版巨弓正常）——`ShipboardThreat` 在船上上报 `dangerous=true`，命中 `Shield.ShieldCheck` 第②条 `enemyDist < 1 && enemyData.dangerous → noShield`（**放盾**）；原版 `Brain.<Setup>m__0` 带 `navPos.island == null` 门控（**船上不上报**），船上只有 `Longship` 报且 `dangerous=false` | `ShipboardThreat.Update`：`dangerous` → **`false`**（只留 `hittable=true`＝"可被索敌"），并加"生成+存活"门控 |
 | **B9** | 联机：主机投放后**客机看不到**非原生船/敌人（逻辑与伤害仍在） | Together `AgentAuthority.CanPublishActor` 只广播"自己清单里的波次"（`RaidIdentity.IsCommitted` + `HostRaidManifest.IsWaveReady`）→ 我们自建 Wave 的 `ActorSpawn` **永不发送**。属架构级（笔记 §8 L2），本轮不做协议对接；改为在"强行投放"时由 `Compat.NoteDropInSession()` **提示一次**"对方看不到" |
+| **B10** | 单机：`BlockVanillaWaves`（拦下原版波次）打开时**我们自己的 Wave 也被当成原版波拦掉**（它同样挂在 `raid.landingContainer` 下，被 `GetComponentsInChildren<Wave>(true)` 一并命中）→ ① `_blockedLandings` 把自家已放置的船标成"被拦的原版 Landing" → `DropPlanner.CollectPlaced` 的 `!IsBlocked` 过滤把自家船从**占位表与 `TryPlace` 的互斥列表**里一起剔除（§4 坑表那条"含我们自己的"防叠船设计被抹掉 → 反复投放会叠船、预览/HUD 一直说"滩头可用"）；② `ModWave.waveStartTime` 被写成 `float.MaxValue` → 经 `ShipGroup.startTime`/`Landing.startTime` 同时毁掉 `Landing.TryPlace` 的重叠盒 Y（`startTime*0.1f` → 盒被搬到 Y≈3.4e37，`Intersections` 的 SAT 必然判"不相交"）与 `Wave.BeginWave` 的出发错峰（各自 `startTime` 差值饱和成 0 → 同一编队一帧全出发） | `SpawnLedger.Owns(GameObject)`（根节点或其子代是否属于我们的投放）+ `LevelTools.TryBlockWaves` 两处循环 `continue` 跳过自家 Wave；提示/日志里的波数改用只统计原版波的 `blocked`；`FlotillaLauncher` 给自建波显式写 `waveStartTime = 0f`（= 原版第 0 波语义；`MaxValue` 只留给"永不发射"的占位波）。另：`Compat.RefuseWaveBlock` 文案/注释订正为"只针对 Together 联机"（此前写成"整合包 / 联机"，纯联机时会误导排查） |
 
 ### 11.4 验证状态
 
-- **构建闸门（本机实测通过，v1.7.1）**：`api-check 605` / `loc-check 206（占位符 95）` / `pack-compat 165 → 全部存在 OK`。
+- **构建闸门（本机实测通过）**：`api-check 623` / `loc-check 213（占位符 98）` / `pack-compat 165 → 全部存在 OK`（v1.7.1 / b4 轮）。
+- **v1.7.1-b4 体检轮（2026-10-16，本机实测）**：修 B10 后三闸门 `api-check 624` / `loc-check 213（占位符 98）` / `pack-compat 165` 全绿；
+  另用 Cecil 对整合包 `MOD\BepInEx\plugins` 的 21 个 DLL 反读 `[BepInPlugin]` → 与 `Compat.PackGuids` **逐条一致**，`Together.dll` 里确认 `Together.Session`（静态类）的 `Active`/`IsHost` 均为 public static bool；
+  包版特征类型 `SpearShield` / `ShieldChargeAbility` / `ShieldJumpEnforcer` / `CanGroundPound` 与 `EnhancementTypes` 全 10 项都能在包版 `Assembly-CSharp.dll` 里匹配到；
+  游戏目录里已部署的 `BadNorthNewMode.dll`（v1.7.1）与 HEAD 构建 **IL 级一致**（42 类型 / 469 方法 / 461 个有 IL 的方法逐一比对，**0 差异**；755 条字符串字面量全同）。
+  原版语义复核（数据库反编译源码）：`Longship.shipTravel` 是**属性**（每次读 `landing.shipTravel`）→ 靠岸速度"在航即时"成立；`Wave.BeginWave` 只吃各 landing `startTime` 的**差值**，`Raid.MaybeLaunchWaves` 只吃 `timer >= wave.waveStartTime` —— 与 §4/§5 的既有结论一致。
 - **参考数据**：包版 `Assembly-CSharp.dll` 与原版 **MVID 相同**（`38edd33c-…`，就地编辑版）→ 同一份产物单构建即可两边跑。
 - **反射实证**：32 位 PowerShell 对真实 `Together.dll` 实跑 —— `asm.GetType("Together.Net.Session")` = null（旧写法必失效），`asm.GetType("Together.Session")` 命中且 `Active/IsHost/IsClient` 均为 public static bool。
 - **待实机**：单机共存冒烟（8 项）、联机让路（可用 `tools\mp-fake-peer.ps1` 假客机/假主机验证）、§10 的"含在航船"滑条（尚未实现，见 §10）。

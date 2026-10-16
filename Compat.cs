@@ -400,7 +400,9 @@ namespace BadNorthNewMode
         }
 
         /// <summary>
-        /// 拒绝打开"拦下原版波次"（v1.7.1-b，见兼容方案 §3.3 C4-B）：**把 cfg 写回 false** 并提示一次。
+        /// 拒绝打开"拦下原版波次"（见兼容方案 §3.3 C4-B + 2026-10-14 口径订正）：**把 cfg 写回 false** 并提示一次。
+        /// 唯一触发场景是 **Together 联机中**（`WaveBlockForbidden`）：每帧改写 `waveStartTime` 会让主机的波次永远发布不出去，
+        /// 把整局合作打停在冻结态；**单机（含装了整合包）一律允许**，那里只走 `WaveBlockRiskNote()` 的一次性叠加提示。
         /// 为什么必须回写：F1 菜单的开关是直接读 cfg 值画的 —— 只拦行为不回写，菜单会一直显示"原版波次：拦下"，
         /// 与实际状态不符（用户以为开着，其实每帧都被拒绝）。写回后 LevelTools 下一帧就不会再进来，天然只执行一次。
         /// </summary>
@@ -409,7 +411,7 @@ namespace BadNorthNewMode
             if (ModConfig.BlockVanillaWaves != null && ModConfig.BlockVanillaWaves.Value)
                 ModConfig.BlockVanillaWaves.Value = false;            // BepInEx 会写回 cfg：下次启动也不会再犯
             WarnWaveBlockRefused(why);
-            IngameMenu.Say(Loc.T("已拒绝：拦下原版波次会与整合包 / 联机的波次调度叠加，出现「波次永远不来」"));
+            IngameMenu.Say(Loc.T("已拒绝：联机中拦波次会让主机的波次永远发不出去（单机不受影响）"));
         }
 
         /// <summary>遥控下单是否让路（v1.7.1-b）：Together 联机中，客机的指令被主机姿态流每帧覆盖（等于无效），

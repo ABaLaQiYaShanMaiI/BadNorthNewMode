@@ -46,7 +46,9 @@ namespace BadNorthNewMode
             if (_island != null) ReleaseWaves();
         }
 
-        /// <summary>彻底拦下原版波次（见 §4）：必须**每帧重写** —— 原版 `IIslandFirstEnter` 是协程，创建 Wave 之后才按排序赋 `waveStartTime`（第 0 波 = 0，进岛即发），只拦一次会被它覆盖回去。</summary>
+        /// <summary>彻底拦下原版波次（见 §4）：必须**每帧重写** —— 原版 `IIslandFirstEnter` 是协程，创建 Wave 之后才按排序赋 `waveStartTime`（第 0 波 = 0，进岛即发），只拦一次会被它覆盖回去。
+        /// v1.7.1-b4：**只拦原版波**——我们自建的 Wave（`FlotillaLauncher`，同样挂在 `landingContainer` 下）必须跳过（`SpawnLedger.Owns`），
+        /// 否则会把自家船的占位互斥与编队出发错峰一起抹掉（见 §4 坑表"叠船"）。</summary>
         static void TryBlockWaves(IslandGameplayManager gm)
         {
             Island island = (gm != null) ? gm.island : null;
@@ -64,11 +66,16 @@ namespace BadNorthNewMode
             Wave[] waves = raid.landingContainer.GetComponentsInChildren<Wave>(true);
             if (waves == null || waves.Length == 0) return;
 
+            int blocked = 0;
             for (int i = 0; i < waves.Length; i++)
             {
                 Wave w = waves[i];
                 if (w == null) continue;
+                // v1.7.1-b4：跳过我们自建的 Wave（它不在 raid.waves 里，也不该被拦）——
+                // 命中它会把自家船的占位互斥（DropPlanner.CollectPlaced）与编队出发错峰一起抹掉。
+                if (SpawnLedger.Owns(w.gameObject)) continue;
 
+                blocked++;
                 if (w.waveStartTime != float.MaxValue)
                 {
                     if (!_origStart.ContainsKey(w)) _origStart[w] = w.waveStartTime;
@@ -77,10 +84,13 @@ namespace BadNorthNewMode
             }
 
             _blockedLandings.Clear();
+            if (blocked == 0) return;                              // 本关已无原版波可拦（只剩自家编队）→ 也不留旧占位条目
             for (int i = 0; i < waves.Length; i++)
             {
                 Wave w = waves[i];
-                if (w == null || w.shipGroups == null) continue;
+                if (w == null) continue;
+                if (SpawnLedger.Owns(w.gameObject)) continue;
+                if (w.shipGroups == null) continue;
 
                 for (int g = 0; g < w.shipGroups.Count; g++)
                 {
@@ -97,12 +107,12 @@ namespace BadNorthNewMode
             DropPlanner.InvalidateOccupancy();
 
             // v1.7.1-b2：整合包叠加**不拒绝**（作者的"无限试炼场"口径），只把风险并进同一条提示里说一次。
-            string say = Loc.F("自定义模式（无尽）：本关只有你投放的单位，不会自然结束 —— 按 F3 强制胜利退出（{0} 波原版波次已拦下）", waves.Length);
+            string say = Loc.F("自定义模式（无尽）：本关只有你投放的单位，不会自然结束 —— 按 F3 强制胜利退出（{0} 波原版波次已拦下）", blocked);
             string risk = Compat.WaveBlockRiskNote();
             if (!string.IsNullOrEmpty(risk)) { say += "　" + risk; Util.Warn(risk); }
 
             IngameMenu.Say(say);
-            Util.Log(Loc.F("[NewMode][接管] 已拦下原版波次：{0} 波不再发射（占位一并放行）。本关不会自然结束，退出请按 F3 强制胜利。", waves.Length));
+            Util.Log(Loc.F("[NewMode][接管] 已拦下原版波次：{0} 波不再发射（占位一并放行）。本关不会自然结束，退出请按 F3 强制胜利。", blocked));
         }
 
         static void ReleaseWaves()

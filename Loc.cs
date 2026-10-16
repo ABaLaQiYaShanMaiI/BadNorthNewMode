@@ -310,7 +310,7 @@ namespace BadNorthNewMode
             { "[NewMode][兼容] 投放已让路：{0}", "[NewMode][compat] dropping stands down: {0}" },
             { "联机中（Together 在线）：遥控下单在客机不成立、在主机还会污染对方账本，已自动让路", "In a Together session: remote orders do not hold on the client and pollute the host's ledger on the host, so this mod stands down" },
             { "[NewMode][兼容] 遥控已让路：{0}", "[NewMode][compat] remote command stands down: {0}" },
-            { "已拒绝：拦下原版波次会与整合包 / 联机的波次调度叠加，出现「波次永远不来」", "Refused: blocking vanilla waves stacks with the pack / online wave scheduling and leads to \"waves never arrive\"" },
+            { "已拒绝：联机中拦波次会让主机的波次永远发不出去（单机不受影响）", "Refused: blocking waves online would stop the host's waves from ever launching (single-player is unaffected)" },
             { "不能开：{0}", "Cannot enable: {0}" },
         };
     }

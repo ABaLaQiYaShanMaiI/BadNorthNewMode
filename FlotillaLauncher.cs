@@ -44,6 +44,12 @@ namespace BadNorthNewMode
             GameObject waveGo = new GameObject("ModWave");
             wave = waveGo.AddComponent<Wave>();
             wave.raid = raid;
+            // v1.7.1-b4：自建波显式写 0（= 原版第 0 波的语义），不要留字段默认的 -1f。
+            // `waveStartTime` 经 `ShipGroup.startTime` → `Landing.startTime` 参与两处：
+            //   ① `Landing.TryPlace` 用它当重叠盒的 Y（`startTime * 0.1f`）——负值会让船从海平面以下进场；
+            //   ② `Wave.BeginWave` 用各 landing 的 `startTime` **差值**错开出发时刻 —— 写成 float.MaxValue 会让
+            //      所有差值饱和成 0（同一编队同一帧全出发，见 LevelTools.TryBlockWaves 为何必须跳过自家 Wave）。
+            wave.waveStartTime = 0f;
             wave.transform.SetParent(raid.landingContainer, false);
 
             GameObject groupGo = new GameObject("Group");
