@@ -6,6 +6,11 @@
 #   ③ `Debug.Log(`              → 游戏内统一走 `Util.Log/Warn/LogOnce`（便于按 cfg 开关）
 #   ④ 硬编码盘符路径            → 一律从 `BadNorthDir` / cfg 来
 #   ⑤ 热路径（Update/OnGUI/Draw*/Tick*）方法体里 new List/Dictionary/HashSet → 每帧分配；确有必要时写 `// alloc-ok`
+#   ⑥ 纵向布局链丢返回值（`DrawXxx(x, inner, y);` 前必须写 `y =`）→ 本行与下一行同 y，后画的盖住先画的
+#      （v1.7.4 实机事故：靠岸速度 4 格被操作按钮行整片盖住、点那里会误触发清场/强制胜利）
+#   ⑦ 禁用清单（`tools\banned-api.txt`）：逐行扫全部 .cs，命中即拦（该行写 `// ok:` 可豁免）
+#      —— 目前含 `IsPointerOverGameObject`（本游戏恒为真，会把我们的世界点击静默吞掉；v1.0.4 / v1.7.4 各栽一次）
+#      与 `Array.Empty`（游戏 mscorlib 2.0 没有）。**加一条清单 = 永久拦截**，不再依赖"谁记得"。
 # 用法：.\tools\check-rules.ps1 -Root <仓库根>
 param([Parameter(Mandatory = $true)][string]$Root)
 $ErrorActionPreference = 'Stop'
@@ -54,6 +59,19 @@ $sigRe = '^\s+(?:internal |public |private |protected |static |virtual |override
 
 $files = @(Get-ChildItem $Root -Filter *.cs -File)
 if ($files.Count -eq 0) { Write-Host "[rules] 找不到任何 .cs（-Root 传错？）" -ForegroundColor Red; exit 1 }
+
+# ---- 禁用清单（规则⑦）：`tools\banned-api.txt`，一行 `正则模式 | 原因`；文件不存在 = 清单为空 ----
+$banned = New-Object System.Collections.ArrayList
+$banFile = Join-Path $Root 'tools\banned-api.txt'
+if (Test-Path $banFile) {
+    foreach ($l in [System.IO.File]::ReadAllLines($banFile, [Text.Encoding]::UTF8)) {
+        $t = $l.Trim()
+        if ($t.Length -eq 0 -or $t.StartsWith('#')) { continue }
+        $parts = $t.Split('|')
+        if ($parts.Count -lt 2) { continue }
+        [void]$banned.Add([pscustomobject]@{ Pattern = $parts[0].Trim(); Reason = $parts[1].Trim() })
+    }
+}
 
 $v = New-Object System.Collections.ArrayList
 $scannedLines = 0
@@ -138,6 +156,23 @@ foreach ($f in $files) {
         if ($raw -notmatch '^\s*//' -and $code -match '[A-Za-z]:\\') {
             [void]$v.Add(("④ 代码里出现硬编码盘符路径  " + $f.Name + ":" + $lineNo + "   " + $raw.Trim()))
         }
+
+        # ⑥ 纵向布局链丢返回值：`DrawXxx(x, inner, y);` 必须以 `y =` 接住（丢 → 与下一行同 y，后画的盖住先画的）
+        if ($code -match '^\s*Draw\w+\s*\(\s*x\s*,\s*inner\s*,\s*y\s*\)\s*;') {
+            if ($raw -notmatch '//\s*layout-ok') {
+                [void]$v.Add(("⑥ 纵向布局链丢了返回值（写成 y = DrawXxx(x, inner, y);；确有不接的理由写 // layout-ok）  " + $f.Name + ":" + $lineNo + "   " + $raw.Trim()))
+            }
+        }
+
+        # ⑦ 禁用清单（tools\banned-api.txt；见文件头 ⑦）：一行一个模式，命中即拦（该行写 // ok: 可豁免）
+        foreach ($ban in $banned) {
+            if ($code -match $ban.Pattern) {
+                if ($raw -notmatch '//\s*ok:') {
+                    [void]$v.Add(("⑦ 命中禁用清单「" + $ban.Pattern + "」：" + $ban.Reason + "  " + $f.Name + ":" + $lineNo + "   " + $raw.Trim()))
+                }
+                break
+            }
+        }
     }
 
     # ---- D. ⑤ 热路径方法体里的分配 ----
@@ -156,7 +191,7 @@ foreach ($f in $files) {
     }
 }
 
-Write-Host "[rules] 扫描 $($files.Count) 个 .cs / $scannedLines 行 / 热路径方法 $hotMethods 个"
+Write-Host "[rules] 扫描 $($files.Count) 个 .cs / $scannedLines 行 / 热路径方法 $hotMethods 个 / 禁用清单 $($banned.Count) 条"
 if ($v.Count -gt 0) {
     Write-Host "[rules] 违规 $($v.Count) 处：" -ForegroundColor Red
     $v | Sort-Object -Unique | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }

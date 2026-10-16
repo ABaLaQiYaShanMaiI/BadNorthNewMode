@@ -125,6 +125,7 @@ namespace BadNorthNewMode
 
         static Font _font;
         static string _fontInfo = "";
+        static bool _fontEnglish = true;      // v1.7.4：这份字体是按哪种语言挑的（切换语言要重挑）
         static float _nextFontScan;
 
         static readonly string[] LatinOnly = { "arial", "liberation", "roboto", "helvetica", "legacyruntime", "segoe ui" };   // 纯拉丁字体：靠系统兜底也能画中文，但观感与原版默认一样 → 不作候选
@@ -141,16 +142,20 @@ namespace BadNorthNewMode
             "SimSun", "宋体", "NSimSun", "Malgun Gothic", "Meiryo", "MS Gothic", "Yu Gothic UI",
         };
 
-        /// <summary>游戏自带字体：① `[UI] FontName` 指定 → ② 原版语言字体（`UserSettingsMenu.fontMap`）→ ③ 系统里支持中文的字体 → ④ 原版任意 Text 的字体。</summary>
+        /// <summary>游戏自带字体：① `[UI] FontName` 指定 → ② 原版语言字体（`UserSettingsMenu.fontMap`）→ ③ 系统里支持中文的字体 → ④ 原版任意 Text 的字体。
+        /// v1.7.4：缓存按**当前语言**记账 —— 在菜单里切中/英后，原版语言字体是会变的（`Body` 与 `Body_Chinese_Simp` 不是同一份资产），
+        /// 旧代码会把首帧选中的那份用到底（实机表现为"切到中文后字体不是原版字体/字形不对"）。</summary>
         internal static Font GameFont()
         {
-            if (_font != null) return _font;                          // Unity 的 == 能识别已随场景销毁的字体
+            if (_font != null && Loc.IsEnglish == _fontEnglish) return _font;   // Unity 的 == 能识别已随场景销毁的字体
             if (!Util.V(ModConfig.UseVanillaFont, true)) return null;
             if (Time.unscaledTime < _nextFontScan) return null;        // 找不到时节流重扫，别每帧遍历场景
 
             _nextFontScan = Time.unscaledTime + 2f;
+            _font = null;                                             // 语言变了 / 上次没找到 → 重挑
             _font = PickFont();
-            if (_font != null) Util.Log("[NewMode] UI 字体 = " + _fontInfo);
+            _fontEnglish = Loc.IsEnglish;
+            if (_font != null) Util.Log("[NewMode] UI 字体 = " + _fontInfo + (Loc.IsEnglish ? "" : "（中文）"));
             return _font;
         }
 

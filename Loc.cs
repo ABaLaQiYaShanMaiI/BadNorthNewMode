@@ -133,8 +133,10 @@ namespace BadNorthNewMode
             { "[NewMode] 已借用原版按钮底：{0}（色 {1}）", "[NewMode] borrowed the vanilla button background: {0} (color {1})" },
             { "[NewMode] 没借到原版按钮底（ButtonWidget/Image 都没有 sprite）→ 用自绘圆角", "[NewMode] no vanilla button background found (no ButtonWidget/Image with a sprite) -> using the drawn rounded rects" },
             { "[NewMode] 原版贴图借用结果：{0}/{1} 张（缺的用自绘回退）", "[NewMode] vanilla sprite borrowing result: {0}/{1} (missing ones fall back to drawn shapes)" },
-            { "[NewMode] 找不到 Times New Roman → 数字沿用界面字体", "[NewMode] Times New Roman not found -> numbers keep the UI font" },
+            { "[NewMode] 找不到指定数字字体 → 数字沿用正文（原版）字体", "[NewMode] the configured number font is unavailable -> numbers use the body (vanilla) font" },
             { "关闭", "Close" },
+            { "收起", "Fold" },
+            { "展开", "Expand" },
             { "遥控：{0}｜共 {1}", "Remote: {0} | total {1}" },
             { "非原生单位 {0}{1}", "Foreign units {0}{1}" },
             { ", 已选中 ", ", selected " },
@@ -149,7 +151,7 @@ namespace BadNorthNewMode
             { "数量", "Count" },
             { "单键：点单位 = 选中｜双击 = 整队｜有选中时点地块 = 前进", "One-button: click = select one | double-click = whole squad | with a selection, click a tile = advance" },
             { "双键：左键点单位 = 选中｜双击 = 整队｜右键点地块 = 前进", "Two-button: left-click = select one | double-click = whole squad | right-click a tile = advance" },
-            { "Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选", "Shift + click = merge | R = select all | Alt+drag = box select" },
+            { "Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选｜拖动 = 平移相机", "Shift + click = merge | R = select all | Alt+drag = box select | drag = pan camera" },
             { "（已取消选择）", " (selection cleared)" },
             { "无尽模式：本关不会自然结束，按 F3 退出", "Endless mode: this battle never ends by itself - press F3 to leave" },
             { "原生单位 {0}｜可遥控", "Native units {0} | commandable" },
@@ -159,7 +161,8 @@ namespace BadNorthNewMode
             { "原生单位：不可", "Native units: not controllable" },
             { "已切换：{0}", "Toggled: {0}" },
             { "没选中单位：先点一个单位", "no unit selected: click a unit first" },
-            { "已取消选择", "selection cleared" },
+            { "已取消选择", "selection cleared" },
+
             { "释放遥控", "Release remote control" },
             { "把 {0} 支小队 / {1} 个单位交还原版 AI？", "Hand {0} squad(s) / {1} unit(s) back to the vanilla AI?" },
             { "清场（F2）", "Cleanup (F2)" },
@@ -171,7 +174,6 @@ namespace BadNorthNewMode
             { "[NewMode][清理] ", "[NewMode][cleanup] " },
             { "[NewMode] 原版提示条不可用（{0}）→ 回退到 HUD 文本", "[NewMode] the vanilla notification bar is unavailable ({0}) -> falling back to HUD text" },
             { "[NewMode] 原版确认框不可用（{0}）→ 直接执行", "[NewMode] the vanilla confirm dialog is unavailable ({0}) -> executing directly" },
-            { "拖动 = 平移相机｜船上也能选｜F2 清场 · F3 强制胜利", "Drag = pan camera | aboard units can be picked too | F2 cleanup · F3 force win" },
             { "已释放遥控：{0} 支小队 / {1} 个单位", "remote control released: {0} squads / {1} units" },
             { "没有受控的遥控小队", "no remote squads under control" },
             { "已选择兵种：{0}", "Unit type selected: {0}" },
@@ -219,7 +221,8 @@ namespace BadNorthNewMode
             { "[NewMode][下船] 兜底下船：把 {0} 个敌人移下船（走原版 RemoveFromShip）", "[NewMode][disembark] fallback disembark: moved {0} enemies off the ship (via the vanilla RemoveFromShip)" },
 
             // ---- LogFileSwitch ----
-            { "[NewMode] 文件日志默认关闭（[Diag] LogToFile = false）：本次不写 BepInEx\\{0}。需要排查时把它设成 true 再启动。", "[NewMode] file logging is off by default ([Diag] LogToFile = false): BepInEx\\{0} will not be written this session. Set it to true and restart when you need to troubleshoot." },
+            { "[NewMode] 文件日志已停止写入（[Diag] LogToFile = false）：本次不写 BepInEx\\{0}，也不删上一次的（要删就设 [Diag] CleanLogOnStart = true）。", "[NewMode] file logging stopped ([Diag] LogToFile = false): BepInEx\\{0} is not written this session, and the previous file is kept (set [Diag] CleanLogOnStart = true to delete it)." },
+            { "[NewMode] 文件日志已关闭并且清空上一次残留（[Diag] CleanLogOnStart = true）：本次不写 BepInEx\\{0}。", "[NewMode] file logging off and the previous log was deleted ([Diag] CleanLogOnStart = true): BepInEx\\{0} is not written this session." },
             { "[NewMode] 关闭文件日志失败（不影响游戏）：{0}", "[NewMode] failed to disable file logging (harmless to the game): {0}" },
             { "[NewMode] 已删除启动残留：{0}", "[NewMode] deleted the startup remnant: {0}" },
             { "[NewMode] 暂时删不掉日志残留（{0}）：{1}", "[NewMode] cannot delete the log remnant yet ({0}): {1}" },
@@ -235,7 +238,6 @@ namespace BadNorthNewMode
             { "没有可下令的单位", "no unit to command" },
             { "[NewMode] 点击路由已启用：单击选 1 个 / 双击选整队、点地块前进（自动跟随单/双键设置）。", "[NewMode] click routing enabled: click = select one, double-click = whole squad, click a tile = advance (follows the one/two-button setting)." },
             { "[NewMode] 已登记原生单位 {0} 个（可遥控；F1 菜单可关）。", "[NewMode] registered {0} native unit(s) (controllable; turn it off in the F1 menu)." },
-            { "拦下 = 无原版敌人；可遥控 = 原生敌人也能指挥", "blocked = no vanilla enemies; controllable = the native enemies can be commanded too" },
             { "[NewMode] 接管开关：原版波次拦下 = {0}，原生单位可遥控 = {1}（F1 菜单可切）。", "[NewMode] takeover switches: vanilla waves blocked = {0}, native units controllable = {1} (togglable in the F1 menu)." },
             { "[NewMode][烧房] 房距 {0:F2}｜orderDist {1:F2}｜放行 {2}｜房子 {3}", "[NewMode][arson] house distance {0:F2} | orderDist {1:F2} | allowed {2} | house {3}" },
             { "无（没有分到房子）", "none (no house assigned)" },
@@ -253,7 +255,9 @@ namespace BadNorthNewMode
             { "[NewMode][遥控] 改用相机 {0}（与已知点误差 {1:F0}px；原 {2}）", "[NewMode][remote] switching to camera {0} (error {1:F0}px vs a known point; was {2})" },
 
             // ---- RemoteGroup ----
-            { "、", ", " },
+            { "、", ", " },
+
+
             { "已接管 {0}{1}，点地块前进", "Took control of {0}{1} - click a tile to advance" },
             { "；{0} 个超出上限 {1}，未组队", "; {0} over the cap {1} stayed ungrouped" },
             { "还没有遥控小队：先点一个单位", "no remote squads yet: click a unit first" },
@@ -285,7 +289,8 @@ namespace BadNorthNewMode
             { "（外生）", " (mod unit)" },
             { "注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上", "Note: units dropped during an online session are not broadcast to the other player (Together only syncs waves from its own manifest) - they cannot see these ships or enemies, yet damage and results still apply to them" },
             { "靠岸速度 ×{0}（第 {1}/{2} 档）", "Shore speed x{0} (gear {1}/{2})" },
-            { "靠岸速度（原生 / 非原生船都生效，按住拖动切换档位）", "Shore speed (applies to native and mod-dropped ships; press and drag to change gear)" },
+            { "靠岸速度（×1 = 原版速度；按住拖动切档）", "Shore speed (x1 = vanilla; press and drag to change gear)" },
+            { "×1（原版）", "x1 (vanilla)" },
             { "联机客机：靠岸速度由主机决定", "Online client: the host decides the shore speed" },
             { "[NewMode][船速] {0} · 已套用 {1} 艘船（原生 + 非原生）", "[NewMode][ship speed] {0} - applied to {1} ship(s) (native + mod-dropped)" },
             { "[NewMode][船速] 反射写入不可用（{0}）→ 靠岸速度调节已禁用（只 Warn 一次）", "[NewMode][ship speed] reflection write unavailable ({0}) -> shore-speed adjustment disabled (warned once)" },
@@ -311,8 +316,9 @@ namespace BadNorthNewMode
             { "联机中（Together 在线）：遥控下单在客机不成立、在主机还会污染对方账本，已自动让路", "In a Together session: remote orders do not hold on the client and pollute the host's ledger on the host, so this mod stands down" },
             { "[NewMode][兼容] 遥控已让路：{0}", "[NewMode][compat] remote command stands down: {0}" },
             { "已拒绝：联机中拦波次会让主机的波次永远发不出去（单机不受影响）", "Refused: blocking waves online would stop the host's waves from ever launching (single-player is unaffected)" },
+            { "[NewMode] 本次点击落在 UI 上 → 归 UI（v1.7.4 门控，遥控不下令）", "[NewMode] this click landed on UI -> it belongs to the UI (v1.7.4 guard; no remote order issued)" },
             { "不能开：{0}", "Cannot enable: {0}" },
-            { "[NewMode] 面板高度自检失败：内容底边 {0:F1} ≠ MenuHeight 预算 {1:F1}（差 {2:F1}px）—— 请同步 MenuHeight 与 DrawMenu", "[NewMode] panel height self-check failed: content bottom {0:F1} != MenuHeight budget {1:F1} (diff {2:F1}px) -- keep MenuHeight and DrawMenu in sync" },
+            { "[NewMode] 面板高度自纠：本帧用 {1:F1}，实测内容 {0:F1}（差 {2:F1}px）—— 下一帧起改按实测高度绘制", "[NewMode] panel height self-corrected: used {1:F1}, measured {0:F1} (diff {2:F1}px) -- next frame draws at the measured height" },
         };
     }
 }

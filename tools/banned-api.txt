@@ -1,0 +1,10 @@
+# 禁用 API / 写法的「一行清单」（v1.7.4 新增，规则⑦）
+#   一行 = `正则模式 | 原因`；`#` 开头为注释，空行忽略。
+#   · tools\check-rules.ps1 会逐行扫全部 .cs：命中即让构建失败（exit 1）。
+#   · 确需使用：在该行写 `// ok:`（例如注释里只是引用它的名字）。
+#   · 加一条 = 把一次踩过的坑永久变成构建期拦截 —— 不再依赖"谁记得"（见 PROJECT_SPEC §4「坑 → 闸门 覆盖对照」）。
+# 为什么要有这个文件：`EventSystem.IsPointerOverGameObject()` 在 §4 坑表里躺了很久，v1.7.4 还是被重踩了一次
+#   （拿它做 UI 门控 → 世界点击被静默吞掉 → 报障"鼠标不能控制"）。光写在文档里守不住，必须让构建来守。
+# 模式（正则） | 原因
+IsPointerOverGameObject | 本游戏恒为真（世界点击由一个全屏手势接收器 pointerRationalizer 接管）→ 我们的点击被静默吞掉、连日志都没有；要判"指针在不在 UI 上"用 Util.PointerOverUi()（RaycastAll + 跳过那个接收器）。依据：PROJECT_SPEC §4 坑表 / §11.10 修订 3（v1.0.4 与 v1.7.4 各栽一次）
+Array\.Empty | 游戏 mscorlib 2.0 没有该成员 → 运行期 MissingMethodException、插件静默失效；写 `new KeyCode[0]` 这类显式空数组。依据：PROJECT_SPEC §2 技术基线 / §4 坑表

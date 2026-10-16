@@ -19,8 +19,11 @@ namespace BadNorthNewMode
         static float _nextTry;
         static bool _done;
 
-        /// <summary>按 cfg 决定是否允许写日志文件。任何失败都只打警告，绝不影响游戏。</summary>
-        internal static void Apply(bool allowFile)
+        /// <summary>按 cfg 决定是否允许写日志文件。任何失败都只打警告，绝不影响游戏。
+        /// v1.7.4：**默认不再删共享日志** —— `LogToFile=false` 只做"停止写入"（摘监听器 + 关句柄），
+        /// 要不要连旧文件一起清掉由 `[Diag] CleanLogOnStart` 决定（默认 false）。原因：`LogOutput.log` 是所有插件共用的，
+        /// 删掉会让整合包 / Together 的报错一起消失，反而害了排障。</summary>
+        internal static void Apply(bool allowFile, bool cleanExisting)
         {
             if (allowFile) { _done = true; return; }             // 排查模式：完全不干预 BepInEx 原行为
 
@@ -37,7 +40,16 @@ namespace BadNorthNewMode
                     Logger.Listeners.Remove(l);                  // 摘掉：之后一行都不会再落盘
                     CloseListener(l);                            // 亲自关句柄：BepInEx 自带 Dispose 关不掉文件
                 }
-                Util.Log(Loc.F("[NewMode] 文件日志默认关闭（[Diag] LogToFile = false）：本次不写 BepInEx\\{0}。需要排查时把它设成 true 再启动。",
+
+                if (!cleanExisting)
+                {
+                    Util.Log(Loc.F("[NewMode] 文件日志已停止写入（[Diag] LogToFile = false）：本次不写 BepInEx\\{0}，也不删上一次的（要删就设 [Diag] CleanLogOnStart = true）。",
+                        FileName));
+                    _done = true;
+                    return;
+                }
+
+                Util.Log(Loc.F("[NewMode] 文件日志已关闭并且清空上一次残留（[Diag] CleanLogOnStart = true）：本次不写 BepInEx\\{0}。",
                     FileName));
             }
             catch (Exception e)

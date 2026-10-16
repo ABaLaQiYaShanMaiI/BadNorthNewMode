@@ -32,6 +32,12 @@ namespace BadNorthNewMode
 
         public static ConfigEntry<bool> ShowSquadBar;
 
+        /// <summary>菜单里的按键说明块（v1.7.4：想更清爽可关掉）。</summary>
+        public static ConfigEntry<bool> ShowHelp;
+
+        /// <summary>数字字体（v1.7.4）：留空 = **跟正文同字体**（= 原版字体）；填 `Times New Roman` 才用系统衬线体（旧行为）。</summary>
+        public static ConfigEntry<string> UiNumberFont;
+
         /// <summary>兵种显示名的补充/覆盖（`内部名=显示名;…`）。给"添加兵种的 mod"用：纯 UI，不影响投放逻辑。</summary>
         public static ConfigEntry<string> UnitNameOverrides;
 
@@ -67,6 +73,13 @@ namespace BadNorthNewMode
         public static ConfigEntry<int> RemoteSoftCap;
         public static ConfigEntry<bool> RemoteHighlight;
 
+        /// <summary>v1.7.4 修订 4：指针在原版 UI 上时是否让我们的点击**整体让路**（不选中 / 不下令）。
+        /// **默认 false** —— "点原版 UI 会误下令"这条只是**静态推断、实机从未复现**（作者实测"本批没有这个问题"）：
+        /// 技能条只在"原版正选着我方小队"时出现，而那一刻既有规则已双保险（单键模式第一道 `VanillaSelected` 直接
+        /// return；双键模式右键 `VanillaSelected` return ＋ `!HasSelection()` return，我方选中早被互斥清空）。
+        /// 想加"额外保险"的人再打开它。见 `PROJECT_SPEC.md` §11.10 修订 4。</summary>
+        public static ConfigEntry<bool> UiClickGate;
+
         // ============ Landing ============
         public static ConfigEntry<float> ShipSpeedMultiplier;
 
@@ -91,6 +104,9 @@ namespace BadNorthNewMode
 
         /// <summary>是否生成日志文件（默认 false：加载时摘掉 BepInEx 的磁盘日志监听器）。</summary>
         public static ConfigEntry<bool> LogToFile;
+
+        /// <summary>v1.7.4：`LogToFile=false` 时是否顺手删掉上一次的共享日志（默认 false = 不删）。</summary>
+        public static ConfigEntry<bool> CleanLogOnStart;
 
         // ============ Compat（v1.7.1：《旧灰复燃的战旗》整合包 / Together 联机让路）============
         /// <summary>总开关：检测到整合包或联机会话时自动让路（关掉 = 完全按旧行为，风险自负）。</summary>
@@ -185,6 +201,11 @@ namespace BadNorthNewMode
                 "兵种菜单是否列出引用表里**所有** VikingReference（不再只认 `Viking_` 前缀）。\n" +
                 "为\"添加兵种的 mod\"留的兼容口：别的 mod 用别的命名也能被列出来。默认开。\n" +
                 "若菜单里因此出现奇怪的条目，关掉即回到旧行为（只列 Viking_ 前缀的）。");
+            ShowHelp = cfg.Bind("UI", "ShowHelp", true,
+                "F1 菜单底部的按键说明块（两行）。默认开；嫌占地方（挡岛）就设 false。");
+            UiNumberFont = cfg.Bind("UI", "NumberFont", "",
+                "数字用的字体。**留空（默认）= 跟正文同字体**（= 原版艺术字，观感统一）。\n" +
+                "要以前的衬线数字就填 Times New Roman（系统字体，取不到则回退正文）。");
         }
 
         static void BindLanding(ConfigFile cfg)
@@ -275,6 +296,13 @@ namespace BadNorthNewMode
                 "框选中或有选中时放慢时间（与原版选中我方小队同一套减速）。默认开。");
             RemoteSlowMoScale = cfg.Bind("Remote", "RemoteSlowMoScale", 0.1f,
                 "减速倍率（原版选中我方小队用的是 0.1）。0.1~0.35 之间比较舒服。");
+            UiClickGate = cfg.Bind("Remote", "UiClickGate", false,
+                "指针在原版 UI（技能条 / 按钮）上时，是否让我们的点击**整体让路**（不选中、不下令）。\n" +
+                "默认 false = 与 v1.7.3 及以前完全一致（推荐）。\n" +
+                "为什么默认关：\"点原版 UI 会误下令\"这条**实测无法复现** —— 技能条只在原版正选着我方小队时出现，\n" +
+                "那一刻我们本来就没有选中（单键模式第一道 VanillaSelected 就直接 return）。\n" +
+                "打开它 = 多加一道\"指针在真 UI 上\"的射线判定（RaycastAll + 跳过原版全屏手势接收器）；\n" +
+                "若某次发现\"点技能条会让我们的部队动\"，再把它打开并把现象反馈给作者。");
         }
 
         static void BindDiag(ConfigFile cfg)
@@ -283,6 +311,10 @@ namespace BadNorthNewMode
                 "详细日志：打印点击命中的地形点/海拔、滩头点、距离、最终 shipPrefab 与失败原因。排查时开。");
             LogToFile = cfg.Bind("Diag", "LogToFile", false,
                 "是否生成 BepInEx\\LogOutput.log。默认 false（控制台窗口的日志不受影响）。");
+            CleanLogOnStart = cfg.Bind("Diag", "CleanLogOnStart", false,
+                "LogToFile=false 时是否**顺手删掉**上一次的 BepInEx\\LogOutput.log。\n" +
+                "默认 false（v1.7.4 起改为不删）：那个文件是所有插件共用的（整合包的报错、Together 的联机日志都在里面），\n" +
+                "删掉会让别人在你机器上排障时没日志可看。要恢复旧行为（启动即清空）就设 true。");
         }
 
         /// <summary>v1.7.1：与《旧灰复燃的战旗》整合包（含 Together 联机）共存时的让路开关。</summary>
