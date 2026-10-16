@@ -195,7 +195,8 @@ namespace BadNorthNewMode
             return Mathf.Clamp(x, 4f, Mathf.Max(4f, Screen.width - total - 4f));
         }
 
-        /// <summary>纵向：`[UI] SquadBarBottom &lt; 0` = 自动（贴底，但**原版"选中我方小队"的技能条出现时自动抬到它上面**）；&gt;= 0 = 固定离底像素。</summary>
+        /// <summary>纵向：`[UI] SquadBarBottom &lt; 0` = 自动（贴底，但**原版"选中我方小队"的技能条出现时自动抬到它上面**）；&gt;= 0 = 固定离底像素。
+        /// v1.7.4 修订：投放菜单开着时，头像条主动让开菜单矩形（否则会压住菜单最后几行 —— 第 5 行是靠岸速度档位条）。</summary>
         static float BarY()
         {
             int cfg = Util.V(ModConfig.SquadBarBottom, -1);
@@ -207,7 +208,25 @@ namespace BadNorthNewMode
                 if (avoid < float.MaxValue) y = Mathf.Min(y, avoid - SlotH - 6f);
             }
 
+            if (IngameMenu.IsOpen)
+            {
+                Rect menu = IngameMenu.MenuRect;
+                if (menu.height > 0f && (y + SlotH) > (menu.y - 6f) && y < (menu.yMax + 6f))
+                {
+                    float below = menu.yMax + 6f;                          // 优先放到菜单下方
+                    float above = menu.y - SlotH - 6f;                     // 放不下就放到菜单上方
+                    y = ((below + SlotH) <= (Screen.height - 8f)) ? below : above;
+                }
+            }
+
             return Mathf.Clamp(y, 8f, Mathf.Max(8f, Screen.height - SlotH - 8f));
+        }
+
+        /// <summary>原版底部 UI（技能条 / 提示条所在区）的上沿（IMGUI 坐标，向下为增）；读不到返回 `float.MaxValue`。
+        /// 已经有 0.2s 缓存（同一份数据给"头像条避让"与"菜单矮屏自适应"共用）。</summary>
+        internal static float VanillaUiTop()
+        {
+            return VanillaBottomTop();
         }
 
         /// <summary>读原版技能条的屏幕矩形（选中我方小队时才激活）；读不到返回 MaxValue = 不避让。**每 0.2s 才查一次**：这函数要遍历全部已加载对象，不能每帧调。</summary>

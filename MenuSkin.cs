@@ -27,6 +27,7 @@ namespace BadNorthNewMode
         static Texture2D _panel, _bar, _row, _rowHover, _rowOn, _photo;
         static Font _numFont;
         static int _numFontSize = -1;
+        static string _numFontName;                   // v1.7.4：数字字体名（cfg 变了要重建）
         static int _size = -1;
         static Font _font;
         static string _appliedColor;
@@ -65,7 +66,7 @@ namespace BadNorthNewMode
 
             Title = Label(font, size + 1, FontStyle.Bold, TextColor, TextAnchor.MiddleLeft);
             Section = Label(font, size - 1, FontStyle.Bold, Gold, TextAnchor.MiddleLeft);
-            Hint = Label(font, size - 1, FontStyle.Normal, DimColor, TextAnchor.UpperLeft);
+            Hint = Label(font, size - 1, FontStyle.Normal, DimColor, TextAnchor.MiddleLeft);   // v1.7.4：单行说明**垂直居中**（原来 UpperLeft，文字贴着行顶 → 看着"贴着上面的按钮"）
             Line = Label(font, size, FontStyle.Normal, TextColor, TextAnchor.MiddleLeft);
 
             Row = Padded(Label(font, size, FontStyle.Normal, BtnText, TextAnchor.MiddleLeft));
@@ -89,40 +90,40 @@ namespace BadNorthNewMode
             return s;
         }
 
-        /// <summary>数字字体：Times New Roman（系统必有）；取不到就用界面字体。</summary>
+        /// <summary>数字字体（v1.7.4）：`[UI] NumberFont` **留空**（默认）= 与正文/原版字体同款；
+        /// 填了名字才去系统字体里找（旧行为是硬编码 Times New Roman，与"原版字体"观感不统一）。</summary>
         static Font NumberFont(int size, Font fallback)
         {
-            if (_numFont != null && _numFontSize == size) return _numFont;
+            string want = Util.V(ModConfig.UiNumberFont, null);
+            if (string.IsNullOrEmpty(want)) return fallback;              // 默认：跟正文一样（= 原版艺术字）
+
+            if (_numFont != null && _numFontSize == size &&
+                string.Equals(_numFontName, want, System.StringComparison.OrdinalIgnoreCase)) return _numFont;
 
             _numFontSize = size;
+            _numFontName = want;
             _numFont = null;
 
             try
             {
                 string[] all = Font.GetOSInstalledFontNames();
-                string[] want = { "Times New Roman", "TimesNewRoman", "Times", "Nimbus Roman", "Liberation Serif" };
+                string[] cand = { want, "Times New Roman", "TimesNewRoman", "Times", "Nimbus Roman", "Liberation Serif" };
 
-                for (int n = 0; n < want.Length && _numFont == null; n++)
+                for (int n = 0; n < cand.Length && _numFont == null; n++)
                 {
                     for (int i = 0; i < all.Length; i++)
                     {
-                        if (!string.Equals(all[i], want[n], System.StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!string.Equals(all[i], cand[n], System.StringComparison.OrdinalIgnoreCase)) continue;
                         _numFont = Font.CreateDynamicFontFromOSFont(all[i], size);
                         break;
                     }
-                }
-
-                for (int i = 0; i < all.Length && _numFont == null; i++)       // 兜底：名字里带 Times 的
-                {
-                    if (all[i].IndexOf("Times", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    _numFont = Font.CreateDynamicFontFromOSFont(all[i], size);
                 }
             }
             catch { _numFont = null; }
 
             if (_numFont == null)
             {
-                Util.LogOnce("numfont", Loc.T("[NewMode] 找不到 Times New Roman → 数字沿用界面字体"));
+                Util.LogOnce("numfont", Loc.T("[NewMode] 找不到指定数字字体 → 数字沿用正文（原版）字体"));
                 return fallback;
             }
             return _numFont;

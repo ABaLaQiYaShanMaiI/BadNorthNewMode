@@ -14,20 +14,27 @@ namespace BadNorthNewMode
         /// <summary>菜单屏幕矩形（IMGUI 坐标：左上原点）——ClickShield 按它摆位，拖动标题栏会一起改。</summary>
         internal static Rect MenuRect { get { return _rect; } }
 
-        // ---- 布局（IMGUI 坐标：左上原点；高度由 MenuHeight 统一算，改这里必须同步改那里）----
-        const float Pad = 10f;
+        // ---- 布局（IMGUI 坐标：左上原点；v1.7.4 起面板高度以"上一帧实测"为准，见 _measuredH）----
+        const float Pad = 10f;       // 左右外边距（内容贴住边框，别再加大）
+        const float VPad = 13f;      // v1.7.4：行与行之间的纵向间距（原 10 → 13，治"纵向挤"）
+        const float HintGap = 6f;    // v1.7.4：说明行与上方按钮行的间距（治"说明贴着按键"）
         const float Gap = 6f;
         const float TitleH = 28f;
-        const float RowH = 26f;
-        const float RowGap = 3f;
+        const float RowH = 27f;
+        const float RowGap = 4f;     // v1.7.4：3 → 4（兵种格子之间松一点）
         const float BtnH = 26f;
-        const float LineH = 19f;
-        const float InfoH = 19f;
-        const float HelpH = 18f;
+        const float LineH = 21f;     // v1.7.4：19 → 21（文字行留白，治"拥挤"）
+        const float InfoH = 21f;     // 同上（兵种信息行）
+        const float HelpH = 20f;     // 同上（按键说明行）
         const float ColGap = 8f;
-        const float IdxW = 22f;      // 序号（Times New Roman）宽
+        const float IdxW = 22f;      // 序号宽
         const int CountMin = 1;
         const int CountMax = 24;
+
+        // v1.7.4 修订：矮屏自适应用（菜单离顶部的默认边距 / 给底部原版 UI 预留的像素）
+        const float TopMargin = 8f;
+        const float BottomReserve = 150f;
+        static int _menuUnits;       // 上一次绘制的兵种数（`TightScreen` 估高度用）
 
         /// <summary>超过这个长度就别发通知条了（它只有一行，长句会被裁）→ 留给 HUD。</summary>
         const int ToastMaxChars = 34;
@@ -51,6 +58,8 @@ namespace BadNorthNewMode
         static Vector2 _pos = new Vector2(8f, 8f);    // 面板左上角（拖动标题栏可改）
         static bool _dragging;
         static Vector2 _dragGrab;
+        static float _measuredH = -1f;                // v1.7.4：上一帧"实测内容高"（≤0 = 还没量过 → 用 MenuHeight 兜底）
+        static bool _collapsed;                       // v1.7.4：折叠成只剩标题栏（想看清岛屿时用；会话内有效）
         static Vector2 _hudPos = new Vector2(-1f, -1f);   // 提示框位置（-1 = 自动：菜单下方 / 左上角）
         static Rect _hudRect;
         static bool _hudDrawn;
@@ -198,7 +207,11 @@ namespace BadNorthNewMode
                 BuildHudLines(compat);
             }
 
-            if (!IsOpen && !_hudActive && !MarqueeSelect.Dragging && Time.time > _hudUntil && string.IsNullOrEmpty(compat)) return;
+            // v1.7.4：菜单开着时状态行并入面板底部（见 DrawStatusRow）→ 不再另画浮窗（少一块挡岛的面板）。
+            // 注意：这里的"重建文本"必须发生在早退之前，否则面板里的状态行会停在旧文本上。
+            if (IsOpen) { _hudRect = new Rect(0f, 0f, 0f, 0f); return; }
+
+            if (!_hudActive && !MarqueeSelect.Dragging && Time.time > _hudUntil && string.IsNullOrEmpty(compat)) return;
 
             List<string> lines = _hudLines;      // 复用同一个 List（HUD 每帧重画，不必每帧 new）
             float w = 0f;
@@ -256,8 +269,12 @@ namespace BadNorthNewMode
         static void DrawMenu()
         {
             int n = (_units != null) ? _units.Count : 0;
+            _menuUnits = n;                              // v1.7.4 修订：给 TightScreen 估高度用
             float w = MenuWidth(n);
-            float h = MenuHeight(n);
+            // v1.7.4：高度**不再信任手写公式** —— 用上一帧"实测内容高"，首帧才用 MenuHeight 兜底。
+            // 实机日志证明两者会脱钩（曾多算 77px：面板底部一大块空白，既难看又挡岛）。
+            float h = _collapsed ? (TitleH + 4f)
+                                 : ((_measuredH > 0f) ? _measuredH : MenuHeight(n));
             _pos.x = Mathf.Clamp(_pos.x, 0f, Mathf.Max(0f, Screen.width - w));
             _pos.y = Mathf.Clamp(_pos.y, 0f, Mathf.Max(0f, Screen.height - h));
 
@@ -271,6 +288,8 @@ namespace BadNorthNewMode
             float y = _rect.y + TitleH + Pad;
 
             DrawTitleBar(x, inner);
+
+            if (_collapsed) { _measuredH = TitleH + 4f; return; }      // 折叠：只剩标题栏（能看清岛屿）
 
             // ---- 兵种（>4 种时排两列：省竖向空间，尽量不挡岛）----
             MenuSkin.DrawSection(new Rect(x, y, inner, LineH), Loc.T("兵种"));
@@ -329,17 +348,55 @@ namespace BadNorthNewMode
 
             y = DrawCountRow(x, inner, y);
             y = DrawTakeoverRow(x, inner, y);
-            DrawShipSpeedRow(x, inner, y);                 // v1.7.1：靠岸速度 4 档（拖拽）
-            CheckMenuHeight(DrawActions(x, inner, y), _rect.y + h);   // v1.7.3：内容底边 vs MenuHeight 预算（自检，只报日志）
+            // v1.7.4 修订 2：**必须接住返回值**。丢掉它 → 本行与下一行画在**同一个 y**，
+            // 后画的按钮行正好盖住"靠岸速度"4 格（点那个位置会误触发清场/强制胜利）。
+            // `tools\check-rules.ps1` 规则⑥ 已把这种写法拦在构建期（见 PROJECT_SPEC.md §11.10）。
+            y = DrawShipSpeedRow(x, inner, y);             // v1.7.1：靠岸速度 4 档（拖拽）
+            y = DrawActions(x, inner, y);
+            y = DrawStatusRow(x, inner, y);                // v1.7.4：HUD 状态行并入面板（不再另画浮窗）
+
+            // v1.7.4：实测内容高 → 下一帧的面板高度（自纠，永不脱钩）；两者不一致时打一次日志留证据。
+            float measured = y - _rect.y;
+            CheckMenuHeight(measured, h);
+            _measuredH = measured;
         }
 
-        /// <summary>标题栏：标题 + 版本 + 语言 + 关闭（标题栏同时是拖动手柄）。</summary>
+        /// <summary>菜单开着时，原本独立浮窗的 HUD 状态行**并入面板底部**（v1.7.4）：屏幕上少一块挡岛的面板。
+        /// 矮屏（`TightScreen`）时整块省掉，优先保证档位条与操作按钮不被底部 UI 压住。</summary>
+        static float DrawStatusRow(float x, float inner, float y)
+        {
+            if (!Util.V(ModConfig.ShowHud, true)) return y;
+            if (TightScreen()) return y;
+
+            List<string> lines = _hudLines;
+            if (lines == null || lines.Count <= 1) return y;          // 0 = 标题行（面板标题已有版本号）
+
+            y += Gap;
+            for (int i = 1; i < lines.Count; i++)
+            {
+                MenuSkin.DrawHint(new Rect(x, y, inner, LineH), lines[i]);
+                y += LineH;
+            }
+            return y;
+        }
+
+        /// <summary>标题栏：标题 + 收起 / 展开 + 语言 + 关闭（标题栏同时是拖动手柄）。</summary>
         static void DrawTitleBar(float x, float inner)
         {
             float by = _rect.y + 2f;
             float bh = TitleH - 4f;
 
-            MenuSkin.DrawTitle(new Rect(x, by, inner - 220f, bh), Loc.T("投放菜单") + "  v" + Plugin.VERSION);
+            MenuSkin.DrawTitle(new Rect(x, by, inner - 292f, bh), Loc.T("投放菜单") + "  v" + Plugin.VERSION);
+
+            Rect fold = new Rect(_rect.xMax - Pad - 236f, by, 58f, bh);        // v1.7.4：一键收起（想看清岛屿时）
+            MenuSkin.Bg(fold, IsHover(fold), false);
+            if (GUI.Button(fold, GUIContent.none, MenuSkin.HitCenter))
+            {
+                VanillaUI.Click();
+                _collapsed = !_collapsed;
+                _measuredH = -1f;                       // 展开后重新量一次高度（折叠期间不写 _measuredH）
+            }
+            MenuSkin.DrawBtn(fold, _collapsed ? Loc.T("展开") : Loc.T("收起"), false);
 
             bool zh = !Loc.IsEnglish;
             DrawLangButton(new Rect(_rect.xMax - Pad - 178f, by, 52f, bh), "中文", zh, "zh");
@@ -359,6 +416,7 @@ namespace BadNorthNewMode
         /// <summary>数量行（− / + 与预设）+ 兵种信息行。</summary>
         static float DrawCountRow(float x, float inner, float y)
         {
+            y += VPad;                                   // v1.7.4：与上方兵种网格拉开（原来贴在一起）
             int curSize = Util.V(ModConfig.SquadSize, 0);
             int shown = (curSize > 0) ? curSize : AutoCount();
             float cx = x;
@@ -378,11 +436,15 @@ namespace BadNorthNewMode
             MenuSkin.DrawBtn(plus, "+", false);
             cx += 36f;
 
+            // v1.7.4：预设按钮**拉伸铺满到右边界**（原来是固定 38px 步长 → 右侧留 ~80px 空白，看着"离边框很远"）
+            float avail = (x + inner) - cx;
+            float step = avail / Presets.Length;
+            float pw = Mathf.Max(24f, step - 4f);
             for (int i = 0; i < Presets.Length; i++)
             {
                 int v = Presets[i];
                 bool on = (curSize == v);
-                Rect pr = new Rect(cx + i * 38f, y, 34f, BtnH);
+                Rect pr = new Rect(cx + i * step, y, pw, BtnH);
                 MenuSkin.Bg(pr, IsHover(pr), on);
                 string text = v.ToString();
                 if (GUI.Button(pr, GUIContent.none, MenuSkin.HitCenter))
@@ -393,15 +455,15 @@ namespace BadNorthNewMode
                 MenuSkin.DrawNum(pr, text, true, false);
             }
 
-            y += BtnH;
+            y += BtnH + HintGap;                         // v1.7.4：说明行与按钮行拉开
             MenuSkin.DrawHint(new Rect(x, y, inner, InfoH), _tip);
             return y + InfoH;
         }
 
-        /// <summary>接管开关两枚 + 说明行。</summary>
+        /// <summary>接管开关两枚（v1.7.4 起无说明行）。</summary>
         static float DrawTakeoverRow(float x, float inner, float y)
         {
-            y += Pad;
+            y += VPad;
             float tw = (inner - Gap) * 0.5f;
 
             // v1.7.1：整合包 / 联机正在接管波次时，"拦下原版波次"在**菜单侧**就直接拒绝
@@ -413,14 +475,13 @@ namespace BadNorthNewMode
             DrawToggle(new Rect(x + tw + Gap, y, tw, BtnH), ModConfig.ControlNativeUnits, Loc.T("原生单位：可遥控"), Loc.T("原生单位：不可"));
 
             y += BtnH;
-            MenuSkin.DrawHint(new Rect(x, y, inner, LineH), Loc.T("拦下 = 无原版敌人；可遥控 = 原生敌人也能指挥"));
-            return y + LineH;
+            return y;                                   // v1.7.4：删掉"拦下 = …"那句冗余说明（按钮文字已自解释）
         }
 
         /// <summary>三个常用操作（清场/强制胜利也能从菜单点，不必记快捷键）。</summary>
         static float DrawActions(float x, float inner, float y)
         {
-            y += Pad;
+            y += VPad;
             float aw = (inner - Gap * 2f) / 3f;
 
             Rect rel = new Rect(x, y, aw, BtnH);
@@ -437,34 +498,53 @@ namespace BadNorthNewMode
             MenuSkin.Bg(win, IsHover(win), false);
             if (GUI.Button(win, GUIContent.none, MenuSkin.HitCenter)) { VanillaUI.Click(); LevelTools.RequestForceWin(); }
             MenuSkin.DrawBtn(win, Loc.T("强制胜利（F3）"), false);
-            y += BtnH + Pad;
+            y += BtnH + VPad;
 
+            if (!ShowHelpCfg() || TightScreen()) return y;   // cfg 关掉，或矮屏自适应要省掉说明块
+            y += HintGap;                               // v1.7.4：说明块与按钮行拉开
             string[] help = HelpTexts();
             for (int i = 0; i < help.Length; i++)
                 MenuSkin.DrawHint(new Rect(x, y + i * HelpH, inner, HelpH), help[i]);
 
-            return y + help.Length * HelpH;      // v1.7.3：把实际底边交回 DrawMenu，供 MenuHeight 自检
+            return y + help.Length * HelpH;      // 把实际底边交回 DrawMenu（面板高度按它自纠）
+        }
+
+        /// <summary>按键说明块的 cfg 开关（`[UI] ShowHelp`）。**只读 cfg** —— 面板高度与宽度估算用它，
+        /// 避免与 `TightScreen()` 互相依赖（否则会递归）。</summary>
+        static bool ShowHelpCfg()
+        {
+            return Util.V(ModConfig.ShowHelp, true);
+        }
+
+        /// <summary>矮屏自适应（v1.7.4 修订）：菜单若会压到底部原版 UI 区（技能条 / 提示条），本轮就省掉"按键说明块 + 状态行"，
+        /// 免得菜单最后几行（靠岸速度档位条、清场/强制胜利）被底部 UI 或头像条压住。
+        /// 判定只用屏幕高度与**预估**高度（与收缩结果无关）→ 不会来回抖。</summary>
+        static bool TightScreen()
+        {
+            float limit = SquadBar.VanillaUiTop();
+            if (limit >= float.MaxValue) limit = Screen.height - BottomReserve;
+            return (TopMargin + MenuHeight(_menuUnits) + 8f) > limit;
         }
 
         static bool _heightWarned;
 
-        /// <summary>自检（v1.7.3 / P2）：`MenuHeight` 是手写的累加式，必须与 `DrawMenu` 的推进顺序逐项对齐。
-        /// 两者一旦脱钩（比如新增一行忘了改高度），面板底边与内容底边就会不一致 → `ClickShield` 会挡住错误区域。
-        /// 这里只报一次日志，不改布局、不改行为。</summary>
-        static void CheckMenuHeight(float drawnBottom, float plannedBottom)
+        /// <summary>自检（v1.7.3 / P2 起；v1.7.4 起面板高度改为"实测自纠"）：本帧用来画面板的高度 `used` 与实测内容高 `measured`
+        /// 不一致时打一次日志（历史上手写公式曾多算 77px）。因为下一帧会用 `measured`，这不会导致持续偏差，只作为"布局改动"的证据。</summary>
+        static void CheckMenuHeight(float measured, float used)
         {
             if (_heightWarned) return;
-            if (Mathf.Abs(drawnBottom - plannedBottom) <= 1.5f) return;
+            if (Mathf.Abs(measured - used) <= 1.5f) return;
 
             _heightWarned = true;
-            Util.Warn(Loc.F("[NewMode] 面板高度自检失败：内容底边 {0:F1} ≠ MenuHeight 预算 {1:F1}（差 {2:F1}px）—— 请同步 MenuHeight 与 DrawMenu",
-                drawnBottom, plannedBottom, drawnBottom - plannedBottom));
+            Util.Log(Loc.F("[NewMode] 面板高度自纠：本帧用 {1:F1}，实测内容 {0:F1}（差 {2:F1}px）—— 下一帧起改按实测高度绘制",
+                measured, used, measured - used));
         }
 
         static string[] _help;
         static string _helpKey;
 
-        /// <summary>3 行按键说明（按语言与单/双键缓存；每帧会被量宽/绘制各调一次，别每次 new 数组）。</summary>
+        /// <summary>2 行按键说明（按语言与单/双键缓存；每帧会被量宽/绘制各调一次，别每次 new 数组）。
+        /// v1.7.4：3 行合并成 2 行（原第 2/3 行说的是同一件事：修饰键与拖动）。</summary>
         static string[] HelpTexts()
         {
             string key = (Loc.IsEnglish ? "en" : "zh") + (MarqueeSelect.SingleButtonMode() ? "1" : "2");
@@ -476,8 +556,7 @@ namespace BadNorthNewMode
                 MarqueeSelect.SingleButtonMode()
                     ? Loc.T("单键：点单位 = 选中｜双击 = 整队｜有选中时点地块 = 前进")
                     : Loc.T("双键：左键点单位 = 选中｜双击 = 整队｜右键点地块 = 前进"),
-                Loc.T("Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选"),
-                Loc.T("拖动 = 平移相机｜船上也能选｜F2 清场 · F3 强制胜利"),
+                Loc.T("Shift + 点 = 并入｜R = 全选｜Alt + 拖动 = 框选｜拖动 = 平移相机"),
             };
             return _help;
         }
@@ -486,18 +565,14 @@ namespace BadNorthNewMode
         static bool _gearDrag;
         static bool _gearMoved;
 
-        /// <summary>4 档拖动条：四等分，每格写着档位；按住拖动横扫即换档。联机客机/反射不可用时置灰只显示。</summary>
+        /// <summary>4 档拖动条：四等分，每格写着档位；按住拖动横扫即换档。联机客机/反射不可用时置灰只显示。
+        /// v1.7.4：说明行改成**先画轨道、说明放轨道下面**（原来说明在上、轨道贴着说明，看着像"说明被挤在中间"）。</summary>
         static float DrawShipSpeedRow(float x, float inner, float y)
         {
-            y += Pad;
+            y += VPad;
 
             bool client = Compat.SessionClient;                     // 联机客机：船由主机权威 → 本地改无意义
             bool blocked = client || ShipSpeedRuntime.Disabled;
-
-            MenuSkin.DrawHint(new Rect(x, y, inner, LineH),
-                client ? Loc.T("联机客机：靠岸速度由主机决定")
-                       : Loc.T("靠岸速度（原生 / 非原生船都生效，按住拖动切换档位）"));
-            y += LineH;
 
             Rect track = new Rect(x, y, inner, BtnH);
             int cur = ShipSpeedRuntime.GearIndex;
@@ -507,11 +582,17 @@ namespace BadNorthNewMode
             {
                 Rect seg = new Rect(track.x + i * segW, track.y, segW - 1f, track.height);
                 MenuSkin.Bg(seg, !blocked && IsHover(seg), i == cur);
-                MenuSkin.DrawBtn(seg, "×" + ShipSpeedRuntime.Gears[i].ToString("0.##"), i == cur);
+                MenuSkin.DrawBtn(seg, GearLabel(i), i == cur);
             }
 
             if (!blocked) HandleGearDrag(track, segW);
-            return y + BtnH;
+
+            y += BtnH + HintGap;                                    // 说明行与轨道拉开
+            MenuSkin.DrawHint(new Rect(x, y, inner, HelpH),
+                client ? Loc.T("联机客机：靠岸速度由主机决定")
+                       : Loc.T("靠岸速度（×1 = 原版速度；按住拖动切档）"));
+
+            return y + HelpH;
         }
 
         static void HandleGearDrag(Rect track, float segW)
@@ -561,18 +642,26 @@ namespace BadNorthNewMode
             ShipSpeedRuntime.SetGearIndex(idx, island);
         }
 
-        /// <summary>面板高度（必须与 DrawMenu 的推进顺序一一对应）。</summary>
+        /// <summary>档位标签（v1.7.4）：第 1 档就是**原版速度**，明确标出来，免得玩家以为是"我们改过的 ×1"。</summary>
+        static string GearLabel(int i)
+        {
+            if (i <= 0) return Loc.T("×1（原版）");
+            return "×" + ShipSpeedRuntime.Gears[i].ToString("0.##");
+        }
+
+        /// <summary>面板高度（v1.7.4：**只作首帧兜底** —— 之后用上一帧实测内容高，见 `_measuredH` 与 `CheckMenuHeight`）。
+        /// 保留这个粗算式是为了"第一帧别太小"；它不再需要与 DrawMenu 逐项精确对齐（那正是 77px 偏差的来源）。</summary>
         static float MenuHeight(int n)
         {
             int cc = (n > 4) ? 2 : 1;
             int rows = (n <= 0) ? 1 : (n + cc - 1) / cc;
-            return TitleH + Pad + LineH + rows * RowH
-                 + Pad + BtnH + InfoH
-                 + Pad + BtnH + LineH
-                 + Pad + LineH + BtnH                          // v1.7.1：靠岸速度 4 档（提示行 + 轨道）
-                 + Pad + BtnH
-                 + Pad + HelpTexts().Length * HelpH
-                 + Pad + 2f;
+            return TitleH + Pad + LineH + rows * RowH        // 标题 + 兵种小节
+                 + VPad + BtnH + HintGap + InfoH             // 数量行 + 兵种信息行
+                 + VPad + BtnH                               // 接管开关（v1.7.4 起无说明行）
+                 + VPad + BtnH + HintGap + HelpH             // 靠岸速度（轨道 + 说明）
+                 + VPad + BtnH + VPad                        // 三个操作
+                 + (ShowHelpCfg() ? HintGap + HelpTexts().Length * HelpH : 0f)
+                 + 4f;
         }
 
         /// <summary>面板宽度：按当前语言与兵种名实测后夹到屏幕内（中英都不写死宽度）。</summary>
@@ -580,13 +669,16 @@ namespace BadNorthNewMode
         {
             int cc = (n > 4) ? 2 : 1;
             float w = 560f;                                  // 数量行（8 个预设）+ 两列兵种的下限
-            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("投放菜单") + "  v" + Plugin.VERSION, MenuSkin.Title) + 240f);
+            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("投放菜单") + "  v" + Plugin.VERSION, MenuSkin.Title) + 292f);   // 标题栏：收起 + 中文 + English + 关闭
             w = Mathf.Max(w, MenuSkin.Measure(Loc.T("释放遥控"), MenuSkin.Btn) * 3f + 60f);
-            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("拦下 = 无原版敌人；可遥控 = 原生敌人也能指挥"), MenuSkin.Hint));
-            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("靠岸速度（原生 / 非原生船都生效，按住拖动切换档位）"), MenuSkin.Hint));
+            w = Mathf.Max(w, MenuSkin.Measure(Loc.T("靠岸速度（×1 = 原版速度；按住拖动切档）"), MenuSkin.Hint));
+            w = Mathf.Max(w, MenuSkin.Measure(GearLabel(0), MenuSkin.NumOn) * ShipSpeedRuntime.Gears.Length + 24f);   // 4 档标签绝不裁字
 
-            string[] help = HelpTexts();
-            for (int i = 0; i < help.Length; i++) w = Mathf.Max(w, MenuSkin.Measure(help[i], MenuSkin.Hint));
+            if (ShowHelpCfg())
+            {
+                string[] help = HelpTexts();
+                for (int i = 0; i < help.Length; i++) w = Mathf.Max(w, MenuSkin.Measure(help[i], MenuSkin.Hint));
+            }
 
             float cell = 0f;
             for (int i = 0; i < n; i++)

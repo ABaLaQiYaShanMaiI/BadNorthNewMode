@@ -6,6 +6,8 @@
 #   ③ `Debug.Log(`              → 游戏内统一走 `Util.Log/Warn/LogOnce`（便于按 cfg 开关）
 #   ④ 硬编码盘符路径            → 一律从 `BadNorthDir` / cfg 来
 #   ⑤ 热路径（Update/OnGUI/Draw*/Tick*）方法体里 new List/Dictionary/HashSet → 每帧分配；确有必要时写 `// alloc-ok`
+#   ⑥ 纵向布局链丢返回值（`DrawXxx(x, inner, y);` 前必须写 `y =`）→ 本行与下一行同 y，后画的盖住先画的
+#      （v1.7.4 实机事故：靠岸速度 4 格被操作按钮行整片盖住、点那里会误触发清场/强制胜利）
 # 用法：.\tools\check-rules.ps1 -Root <仓库根>
 param([Parameter(Mandatory = $true)][string]$Root)
 $ErrorActionPreference = 'Stop'
@@ -137,6 +139,13 @@ foreach ($f in $files) {
         # ④ 硬编码盘符路径（注释行不算）
         if ($raw -notmatch '^\s*//' -and $code -match '[A-Za-z]:\\') {
             [void]$v.Add(("④ 代码里出现硬编码盘符路径  " + $f.Name + ":" + $lineNo + "   " + $raw.Trim()))
+        }
+
+        # ⑥ 纵向布局链丢返回值：`DrawXxx(x, inner, y);` 必须以 `y =` 接住（丢 → 与下一行同 y，后画的盖住先画的）
+        if ($code -match '^\s*Draw\w+\s*\(\s*x\s*,\s*inner\s*,\s*y\s*\)\s*;') {
+            if ($raw -notmatch '//\s*layout-ok') {
+                [void]$v.Add(("⑥ 纵向布局链丢了返回值（写成 y = DrawXxx(x, inner, y);；确有不接的理由写 // layout-ok）  " + $f.Name + ":" + $lineNo + "   " + $raw.Trim()))
+            }
         }
     }
 

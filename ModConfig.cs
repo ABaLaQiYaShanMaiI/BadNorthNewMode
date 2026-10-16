@@ -32,6 +32,12 @@ namespace BadNorthNewMode
 
         public static ConfigEntry<bool> ShowSquadBar;
 
+        /// <summary>菜单里的按键说明块（v1.7.4：想更清爽可关掉）。</summary>
+        public static ConfigEntry<bool> ShowHelp;
+
+        /// <summary>数字字体（v1.7.4）：留空 = **跟正文同字体**（= 原版字体）；填 `Times New Roman` 才用系统衬线体（旧行为）。</summary>
+        public static ConfigEntry<string> UiNumberFont;
+
         /// <summary>兵种显示名的补充/覆盖（`内部名=显示名;…`）。给"添加兵种的 mod"用：纯 UI，不影响投放逻辑。</summary>
         public static ConfigEntry<string> UnitNameOverrides;
 
@@ -91,6 +97,9 @@ namespace BadNorthNewMode
 
         /// <summary>是否生成日志文件（默认 false：加载时摘掉 BepInEx 的磁盘日志监听器）。</summary>
         public static ConfigEntry<bool> LogToFile;
+
+        /// <summary>v1.7.4：`LogToFile=false` 时是否顺手删掉上一次的共享日志（默认 false = 不删）。</summary>
+        public static ConfigEntry<bool> CleanLogOnStart;
 
         // ============ Compat（v1.7.1：《旧灰复燃的战旗》整合包 / Together 联机让路）============
         /// <summary>总开关：检测到整合包或联机会话时自动让路（关掉 = 完全按旧行为，风险自负）。</summary>
@@ -185,6 +194,11 @@ namespace BadNorthNewMode
                 "兵种菜单是否列出引用表里**所有** VikingReference（不再只认 `Viking_` 前缀）。\n" +
                 "为\"添加兵种的 mod\"留的兼容口：别的 mod 用别的命名也能被列出来。默认开。\n" +
                 "若菜单里因此出现奇怪的条目，关掉即回到旧行为（只列 Viking_ 前缀的）。");
+            ShowHelp = cfg.Bind("UI", "ShowHelp", true,
+                "F1 菜单底部的按键说明块（两行）。默认开；嫌占地方（挡岛）就设 false。");
+            UiNumberFont = cfg.Bind("UI", "NumberFont", "",
+                "数字用的字体。**留空（默认）= 跟正文同字体**（= 原版艺术字，观感统一）。\n" +
+                "要以前的衬线数字就填 Times New Roman（系统字体，取不到则回退正文）。");
         }
 
         static void BindLanding(ConfigFile cfg)
@@ -283,6 +297,10 @@ namespace BadNorthNewMode
                 "详细日志：打印点击命中的地形点/海拔、滩头点、距离、最终 shipPrefab 与失败原因。排查时开。");
             LogToFile = cfg.Bind("Diag", "LogToFile", false,
                 "是否生成 BepInEx\\LogOutput.log。默认 false（控制台窗口的日志不受影响）。");
+            CleanLogOnStart = cfg.Bind("Diag", "CleanLogOnStart", false,
+                "LogToFile=false 时是否**顺手删掉**上一次的 BepInEx\\LogOutput.log。\n" +
+                "默认 false（v1.7.4 起改为不删）：那个文件是所有插件共用的（整合包的报错、Together 的联机日志都在里面），\n" +
+                "删掉会让别人在你机器上排障时没日志可看。要恢复旧行为（启动即清空）就设 true。");
         }
 
         /// <summary>v1.7.1：与《旧灰复燃的战旗》整合包（含 Together 联机）共存时的让路开关。</summary>

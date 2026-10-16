@@ -17,13 +17,14 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.7.3";
+        public const string VERSION = "1.7.4";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
 
         bool _subscribed;
         bool _subscribeFailed;
+        bool _envReported;                 // v1.7.4：环境自检只在第一次 Update 报一次（那时插件才全部加载完）
         Vector2 _pressPos;                 // 本次按下的屏幕位置（区分"点击"与"拖动/平移相机"）
         Vector2 _pendingMovePos;           // 挂起的"普通点击下令"（见 HandleRemoteMode / FlushPendingMove）
         int _pendingMoveFrame;             // 0 = 无挂起
@@ -44,20 +45,28 @@ namespace BadNorthNewMode
             }
 
             // v1.5.0：默认不生成日志文件（尽早执行，cfg 里的启动日志也一并清掉）。
-            LogFileSwitch.Apply(Util.V(ModConfig.LogToFile, false));
+            // v1.7.4：第二个参数 = 是否顺手删掉上一次的共享日志（默认 false，见 ModConfig.CleanLogOnStart）。
+            LogFileSwitch.Apply(Util.V(ModConfig.LogToFile, false), Util.V(ModConfig.CleanLogOnStart, false));
 
             ConfigEntry<KeyboardShortcut> hk = ModConfig.Hotkey;
             Log.LogInfo(Loc.F("[NewMode] v{0} 已加载：{1} 开关投放模式，点击滩头陆地投放敌舰。",
                 VERSION, (hk != null) ? hk.Value.ToString() : Loc.T("(热键未绑定)")));
+            // v1.7.1：一行环境自检；v1.7.4 起**挪到第一次 Update**才报 —— Awake 阶段 BepInEx 还在按顺序加载插件，
+            // `Chainloader.PluginInfos` 里只有我们自己（实机日志因此打出"整合包=有（0 个插件）"这种误导数字）。
             Log.LogInfo(Loc.F("[NewMode] 接管开关：原版波次拦下 = {0}，原生单位可遥控 = {1}（F1 菜单可切）。",
                 Util.V(ModConfig.BlockVanillaWaves, false), Util.V(ModConfig.ControlNativeUnits, true)));
-
-            // v1.7.1：一行环境自检（整合包 / Together 联机 / MMHOOK / 游戏本体是否被改造）—— 报障时先看这一行。
-            Compat.ReportEnvironment();
         }
 
         void Update()
         {
+            // v1.7.4：环境自检挪到**第一次 Update**（此时 Chainloader 已把 23 个插件全加载完）；
+            // 原先放在 Awake 会让"整合包=N 个插件"永远是 0（我们排在最前，后面还没加载）。
+            if (!_envReported)
+            {
+                _envReported = true;
+                Compat.ReportEnvironment();
+            }
+
             LogFileSwitch.Tick();                       // 重试删日志残留（≤30s，见 LogFileSwitch）
             IngameMenu.HandleDrag();                    // 菜单标题栏 / 提示框拖动
             // 菜单 / 头像条上盖住原版点击（见 §6 T2），用上一帧矩形；原版确认框在前台时反而要让开（它自己会挡世界点击）
@@ -98,9 +107,12 @@ namespace BadNorthNewMode
 
         void OnGUI()
         {
-            IngameMenu.Draw();
+            // v1.7.4 修订：绘制顺序 = 覆盖层 → 头像条 → **菜单最后**。
+            // 菜单是我们自己的"前台面板"，必须盖在其它两层之上 —— 曾出现头像条/标记压住菜单最后几行
+            //（第 5 行正是"靠岸速度"档位条）的报障；IMGUI 里后画的在上层，所以这里改顺序即可。
             MarqueeSelect.DrawOverlay();
             SquadBar.Draw();                      // 底部小队头像条
+            IngameMenu.Draw();                    // 菜单 + HUD（最后画 = 最上层）
         }
 
         void OnDestroy()

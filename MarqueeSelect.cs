@@ -88,6 +88,7 @@ namespace BadNorthNewMode
             if (Input.GetMouseButtonDown(0))
             {
                 if (IngameMenu.AnyPanelContains(Input.mousePosition) || SquadBar.Contains(Input.mousePosition)) return;   // 按在面板 / 头像条上：这次点击归它们
+                if (Util.PointerOverUi()) return;                        // v1.7.4：按在原版 UI 上（技能条等）→ 这次点击完全归 UI
                 _held = true;
                 _dragging = false;
                 _start = Input.mousePosition;
