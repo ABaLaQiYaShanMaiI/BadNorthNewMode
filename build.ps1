@@ -77,6 +77,24 @@ if (Test-Path $locCheck) {
     Write-Host "[build] 未找到 tools\check-loc.ps1，跳过本地化校验" -ForegroundColor Yellow
 }
 
+# ---------- 3.55 静态规则校验（v1.7.3 新增闸门：空 catch 没写 silent-ok / 反射判空 / Debug.Log / 盘符路径 / 热路径分配；不需要游戏 DLL）----------
+$rulesCheck = Join-Path $root 'tools\check-rules.ps1'
+if (Test-Path $rulesCheck) {
+    & $rulesCheck -Root $root
+    if ($LASTEXITCODE -ne 0) { throw "静态规则校验失败（见上方 rules-check 输出）" }
+} else {
+    Write-Host "[build] 未找到 tools\check-rules.ps1，跳过静态规则校验" -ForegroundColor Yellow
+}
+
+# ---------- 3.56 文档引用校验（v1.7.3 新增闸门：.cs 注释里的 §N 必须在 md 里真有对应标题；不需要游戏 DLL）----------
+$docRefs = Join-Path $root 'tools\check-docrefs.ps1'
+if (Test-Path $docRefs) {
+    & $docRefs -Root $root
+    if ($LASTEXITCODE -ne 0) { throw "文档引用校验失败（见上方 docrefs-check 输出）" }
+} else {
+    Write-Host "[build] 未找到 tools\check-docrefs.ps1，跳过文档引用校验" -ForegroundColor Yellow
+}
+
 # ---------- 3.6 整合包引用校验（v1.7.1：《旧灰复燃的战旗》替换了 Assembly-CSharp.dll）----------
 # 包版是原版的"就地编辑版"（MVID 相同、成员是超集）→ **同一份产物在两边都能跑**；
 # 这一层用来把"包升版时删/改了成员"提前拦在构建期，而不是玩家侧抛 MissingMethodException。

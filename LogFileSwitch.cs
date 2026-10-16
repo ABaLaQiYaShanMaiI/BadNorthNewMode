@@ -79,7 +79,7 @@ namespace BadNorthNewMode
                 FileStream fs = sw.BaseStream as FileStream;
                 if (fs != null) AddPath(fs.Name);
             }
-            catch { }
+            catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
         }
 
         /// <summary>亲自关句柄：先 Dispose 监听器，再 Dispose 它的 LogWriter（后者才是真正关文件的那一步）。</summary>
@@ -97,8 +97,8 @@ namespace BadNorthNewMode
 
         static void AddFallbackTarget()
         {
-            try { AddPath(Path.Combine(Paths.BepInExRootPath, FileName)); } catch { }
-            try { AddPath(Path.Combine(Path.Combine(Paths.GameRootPath, "BepInEx"), FileName)); } catch { }
+            try { AddPath(Path.Combine(Paths.BepInExRootPath, FileName)); } catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
+            try { AddPath(Path.Combine(Path.Combine(Paths.GameRootPath, "BepInEx"), FileName)); } catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
         }
 
         static void AddPath(string p)

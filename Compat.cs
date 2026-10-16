@@ -76,6 +76,12 @@ namespace BadNorthNewMode
         static bool _sessionDropWarned;
         static bool _lastTerminal;
 
+        /// <summary>状态行缓存（v1.7.3 / P1）：HUD 每帧都会调 `StatusLine()`，见那里的 XML 注释。</summary>
+        const float StatusInterval = 0.5f;
+        static string _statusCache;
+        static bool _statusValid;
+        static float _statusAt;
+
         // ===================== 基础探测 =====================
 
         /// <summary>BepInEx 插件是否加载（Chainloader 是公开 API；异常一律当"没有"）。</summary>
@@ -112,7 +118,7 @@ namespace BadNorthNewMode
                     if (n != null && n.Name == simpleName) return asms[i];
                 }
             }
-            catch { }
+            catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
             return null;
         }
 
@@ -301,7 +307,9 @@ namespace BadNorthNewMode
         /// <summary>每帧记录"本关是否终岛"（HUD 在拿不到 gm 的上下文里也要用）。</summary>
         internal static void Tick(IslandGameplayManager gm)
         {
-            _lastTerminal = TerminalIsland(gm);
+            bool terminal = TerminalIsland(gm);
+            if (terminal != _lastTerminal) _statusValid = false;      // 终岛状态变了 → 状态行缓存立刻失效
+            _lastTerminal = terminal;
         }
 
         // ===================== 让路策略（全部由 cfg 开关控制）=====================
@@ -372,8 +380,21 @@ namespace BadNorthNewMode
 
         // ===================== 状态行与自检日志 =====================
 
-        /// <summary>HUD 用的一行状态；无需提示时返回 null（零噪音）。用的都是缓存读取，不进每帧反射。</summary>
+        /// <summary>HUD 用的一行状态；无需提示时返回 null（零噪音）。用的都是缓存读取，不进每帧反射。
+        /// v1.7.3（P1）：**结果按 0.5s 缓存** —— HUD 每帧都会问它（装了整合包后恒非 null），
+        /// 而它每次都要拼字符串；状态切换（进/退局、终岛、联机）最迟 0.5s 内反映即可（另有 `Tick` 主动失效）。</summary>
         internal static string StatusLine()
+        {
+            float now = Time.realtimeSinceStartup;
+            if (_statusValid && now < _statusAt + StatusInterval) return _statusCache;
+
+            _statusCache = BuildStatusLine();
+            _statusValid = true;
+            _statusAt = now;
+            return _statusCache;
+        }
+
+        static string BuildStatusLine()
         {
             if (ForcedOffline) return null;
             if (TogetherOnlineCached)

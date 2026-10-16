@@ -59,7 +59,7 @@ namespace BadNorthNewMode
                     _map[vr.name] = vr.sprite2;
                 }
             }
-            catch { }
+            catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
         }
     }
 }

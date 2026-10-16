@@ -433,7 +433,7 @@ namespace BadNorthNewMode
                     cur = a.faction.island;
                     if (!ForeignUnit.Commandable(a)) { waiting = true; continue; }     // 还在船上 → 下一帧再看
 
-                    if (landed == null) landed = new List<ForeignUnit>();
+                    if (landed == null) landed = new List<ForeignUnit>(); // alloc-ok（惰性一次性分配：只有当本帧真有成员下船时才 new，不是每帧）
                     landed.Add(f);
                     rally.members.RemoveAt(i);
                 }

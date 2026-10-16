@@ -72,7 +72,7 @@ namespace BadNorthNewMode
                     }
                 }
             }
-            catch { }
+            catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
 
             if (_scans < 6) return;
 
@@ -106,7 +106,7 @@ namespace BadNorthNewMode
                     if (_btnSprite == null && Time.unscaledTime > 20f)
                         Util.LogOnce("btnbg:miss", Loc.T("[NewMode] 没借到原版按钮底（ButtonWidget/Image 都没有 sprite）→ 用自绘圆角"));
                 }
-                catch { }
+                catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
             }
 
             color = _btnColor;
@@ -162,7 +162,7 @@ namespace BadNorthNewMode
                     return c;
                 }
             }
-            catch { }
+            catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
 
             return fallback;
         }

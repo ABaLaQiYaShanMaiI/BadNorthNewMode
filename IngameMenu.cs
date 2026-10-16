@@ -36,6 +36,13 @@ namespace BadNorthNewMode
         static string _hud = "";
         static readonly List<string> _hudLines = new List<string>();
         static float _hudUntil;
+        // v1.7.3（P1）：HUD 仍是每帧画，但**文本按 0.2s 节流重建**（计数扫描 + 拼串都在重建里做）。
+        // 需要"立刻反映"的路径（提示/选中/开关菜单/鼠标悬停行）走 `_hudLinesValid = false` 立即失效。
+        const float HudInterval = 0.2f;
+        static bool _hudLinesValid;
+        static float _hudRebuildAt;
+        static bool _hudActive;                       // 上次重建时"有可选单位 / 有遥控小队"（决定 HUD 常显）
+        static string _hudHoverSeen;                  // 上次重建时的悬停行（鼠标一动就立刻跟着变）
         static bool _hudMirror;                       // 原版通知条没接住时，才在 HUD 里重复一遍
         static Rect _rect;
         static Rect _titleRect;
@@ -80,6 +87,7 @@ namespace BadNorthNewMode
             PlacementMarker.Get().Hide();
             ClickShield.Hide();
             _dragging = false;
+            _hudLinesValid = false;                  // v1.7.3：标题行要立刻变回"BadNorthNewMode"
         }
 
         /// <summary>状态提示：**短消息**走原版通知条（自带音效与淡入淡出）；太长（通知条一行放不下）或原版不可用就留在 HUD 里。</summary>
@@ -88,6 +96,7 @@ namespace BadNorthNewMode
             _hud = msg;
             _hudUntil = Time.time + 5f;
             _hudMirror = string.IsNullOrEmpty(msg) || (msg.Length > ToastMaxChars) || !VanillaUI.Toast(msg, 4f);
+            _hudLinesValid = false;                  // v1.7.3：提示变了 → 下一帧立刻重建 HUD 文本
         }
 
         /// <summary>菜单是否遮挡该屏幕坐标（IMGUI 的 y 轴自上而下，需翻转）。</summary>
@@ -178,26 +187,20 @@ namespace BadNorthNewMode
             _hudDrawn = false;
             if (!Util.V(ModConfig.ShowHud, true)) return;
 
-            int foreign = ForeignUnit.SelectableCount(false);
-            int nativeCount = ForeignUnit.SelectableCount(true);
-            int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
-            bool active = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;
-            string compat = Compat.StatusLine();                 // v1.7.1：整合包 / 联机状态行（没有就是 null）
-            if (!IsOpen && !active && !MarqueeSelect.Dragging && Time.time > _hudUntil && string.IsNullOrEmpty(compat)) return;
+            string compat = Compat.StatusLine();          // v1.7.3：它自带 0.5s 缓存 → 每帧调它不再拼串
+            // v1.7.3（P1）：文本按 0.2s 节流重建 —— HUD 每帧重画，但计数/提示远没这么快变；
+            // 悬停行例外（鼠标一动就要跟着变），其余"要立刻反映"的路径都会走 `Say()` 把缓存标脏。
+            if (!_hudLinesValid || Time.unscaledTime >= _hudRebuildAt ||
+                (IsOpen && !string.Equals(Hover, _hudHoverSeen, System.StringComparison.Ordinal)))
+            {
+                _hudRebuildAt = Time.unscaledTime + HudInterval;
+                _hudLinesValid = true;
+                BuildHudLines(compat);
+            }
+
+            if (!IsOpen && !_hudActive && !MarqueeSelect.Dragging && Time.time > _hudUntil && string.IsNullOrEmpty(compat)) return;
 
             List<string> lines = _hudLines;      // 复用同一个 List（HUD 每帧重画，不必每帧 new）
-            lines.Clear();
-            lines.Add((IsOpen ? Loc.T("投放菜单") : "BadNorthNewMode") + " · v" + Plugin.VERSION);
-            if (!string.IsNullOrEmpty(compat)) lines.Add(compat);
-            if (IsOpen && !string.IsNullOrEmpty(Hover)) lines.Add(Hover);
-            if (RemoteGroup.Any) lines.Add(Loc.F("遥控：{0}｜共 {1}", RemoteGroup.DescribeAll(), RemoteGroup.TotalCount));
-            if (RemoteGroup.HasRally) lines.Add(Loc.F("待登陆集结：{0} 人 / {1} 处", RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount));
-            if (foreign > 0) lines.Add(Loc.F("非原生单位 {0}{1}", foreign, (selected > 0) ? (Loc.T(", 已选中 ") + selected) : ""));
-            if (nativeCount > 0) lines.Add(Loc.F("原生单位 {0}｜可遥控", nativeCount));
-            if (LevelTools.CustomMode) lines.Add(Loc.T("无尽模式：本关不会自然结束，按 F3 退出"));
-            if (MarqueeSelect.Dragging) lines.Add(Loc.F("框选中…（每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40)));
-            if (_hudMirror && !string.IsNullOrEmpty(_hud) && Time.time <= _hudUntil) lines.Add(_hud);
-
             float w = 0f;
             for (int i = 0; i < lines.Count; i++)
                 w = Mathf.Max(w, MenuSkin.Measure(lines[i], (i == 0) ? MenuSkin.Title : MenuSkin.Line));
@@ -225,6 +228,29 @@ namespace BadNorthNewMode
                 if (i == 0) MenuSkin.DrawTitle(lr, lines[i]);
                 else MenuSkin.DrawLine(lr, lines[i]);
             }
+        }
+
+        /// <summary>重建 HUD 文本（v1.7.3 / P1：计数扫描与全部字符串拼接都收在这里，由 `DrawHud` 节流调用）。</summary>
+        static void BuildHudLines(string compat)
+        {
+            int foreign, nativeCount;
+            ForeignUnit.SelectableCounts(out foreign, out nativeCount);      // 一次遍历数两类（原本是两次）
+            int selected = (MarqueeSelect.Pending != null) ? MarqueeSelect.Pending.Count : 0;
+            _hudActive = (foreign > 0) || (nativeCount > 0) || RemoteGroup.Any;
+            _hudHoverSeen = IsOpen ? Hover : null;
+
+            List<string> lines = _hudLines;
+            lines.Clear();
+            lines.Add((IsOpen ? Loc.T("投放菜单") : "BadNorthNewMode") + " · v" + Plugin.VERSION);
+            if (!string.IsNullOrEmpty(compat)) lines.Add(compat);
+            if (IsOpen && !string.IsNullOrEmpty(Hover)) lines.Add(Hover);
+            if (RemoteGroup.Any) lines.Add(Loc.F("遥控：{0}｜共 {1}", RemoteGroup.DescribeAll(), RemoteGroup.TotalCount));
+            if (RemoteGroup.HasRally) lines.Add(Loc.F("待登陆集结：{0} 人 / {1} 处", RemoteGroup.RallyMemberCount(), RemoteGroup.RallyCount));
+            if (foreign > 0) lines.Add(Loc.F("非原生单位 {0}{1}", foreign, (selected > 0) ? (Loc.T(", 已选中 ") + selected) : ""));
+            if (nativeCount > 0) lines.Add(Loc.F("原生单位 {0}｜可遥控", nativeCount));
+            if (LevelTools.CustomMode) lines.Add(Loc.T("无尽模式：本关不会自然结束，按 F3 退出"));
+            if (MarqueeSelect.Dragging) lines.Add(Loc.F("框选中…（每队上限 {0}）", Util.V(ModConfig.RemoteSoftCap, 40)));
+            if (_hudMirror && !string.IsNullOrEmpty(_hud) && Time.time <= _hudUntil) lines.Add(_hud);
         }
 
         static void DrawMenu()
@@ -304,7 +330,7 @@ namespace BadNorthNewMode
             y = DrawCountRow(x, inner, y);
             y = DrawTakeoverRow(x, inner, y);
             DrawShipSpeedRow(x, inner, y);                 // v1.7.1：靠岸速度 4 档（拖拽）
-            DrawActions(x, inner, y);
+            CheckMenuHeight(DrawActions(x, inner, y), _rect.y + h);   // v1.7.3：内容底边 vs MenuHeight 预算（自检，只报日志）
         }
 
         /// <summary>标题栏：标题 + 版本 + 语言 + 关闭（标题栏同时是拖动手柄）。</summary>
@@ -392,7 +418,7 @@ namespace BadNorthNewMode
         }
 
         /// <summary>三个常用操作（清场/强制胜利也能从菜单点，不必记快捷键）。</summary>
-        static void DrawActions(float x, float inner, float y)
+        static float DrawActions(float x, float inner, float y)
         {
             y += Pad;
             float aw = (inner - Gap * 2f) / 3f;
@@ -416,6 +442,23 @@ namespace BadNorthNewMode
             string[] help = HelpTexts();
             for (int i = 0; i < help.Length; i++)
                 MenuSkin.DrawHint(new Rect(x, y + i * HelpH, inner, HelpH), help[i]);
+
+            return y + help.Length * HelpH;      // v1.7.3：把实际底边交回 DrawMenu，供 MenuHeight 自检
+        }
+
+        static bool _heightWarned;
+
+        /// <summary>自检（v1.7.3 / P2）：`MenuHeight` 是手写的累加式，必须与 `DrawMenu` 的推进顺序逐项对齐。
+        /// 两者一旦脱钩（比如新增一行忘了改高度），面板底边与内容底边就会不一致 → `ClickShield` 会挡住错误区域。
+        /// 这里只报一次日志，不改布局、不改行为。</summary>
+        static void CheckMenuHeight(float drawnBottom, float plannedBottom)
+        {
+            if (_heightWarned) return;
+            if (Mathf.Abs(drawnBottom - plannedBottom) <= 1.5f) return;
+
+            _heightWarned = true;
+            Util.Warn(Loc.F("[NewMode] 面板高度自检失败：内容底边 {0:F1} ≠ MenuHeight 预算 {1:F1}（差 {2:F1}px）—— 请同步 MenuHeight 与 DrawMenu",
+                drawnBottom, plannedBottom, drawnBottom - plannedBottom));
         }
 
         static string[] _help;

@@ -312,6 +312,7 @@ namespace BadNorthNewMode
             { "[NewMode][兼容] 遥控已让路：{0}", "[NewMode][compat] remote command stands down: {0}" },
             { "已拒绝：联机中拦波次会让主机的波次永远发不出去（单机不受影响）", "Refused: blocking waves online would stop the host's waves from ever launching (single-player is unaffected)" },
             { "不能开：{0}", "Cannot enable: {0}" },
+            { "[NewMode] 面板高度自检失败：内容底边 {0:F1} ≠ MenuHeight 预算 {1:F1}（差 {2:F1}px）—— 请同步 MenuHeight 与 DrawMenu", "[NewMode] panel height self-check failed: content bottom {0:F1} != MenuHeight budget {1:F1} (diff {2:F1}px) -- keep MenuHeight and DrawMenu in sync" },
         };
     }
 }

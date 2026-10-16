@@ -5,8 +5,11 @@ using Voxels.TowerDefense;
 
 namespace BadNorthNewMode
 {
-    /// <summary>左键从"非原生单位附近"起拖 = 框选（框选期间相机拖拽让位）；别处左键拖动仍由游戏平移相机。见 PROJECT_SPEC §4/§5。</summary>
-    internal static class MarqueeSelect
+    /// <summary>MarqueeSelect 的**状态机半边**（v1.7.3 / P2 拆分）：按下→拖动→松开的输入时序、选择应用、相机接管、
+    /// 选中减速与选中集合（`_pending`）。另两半：`MarqueeSelect.Hits.cs`（候选登记 / 命中测试 / 修饰键与光标行为）、
+    /// `MarqueeSelect.Overlay.cs`（框选矩形与标记绘制）。三份同为 `partial`，对外仍是同一个 `MarqueeSelect`。
+    /// 原职责说明：左键从"非原生单位附近"起拖 = 框选（框选期间相机拖拽让位）；别处左键拖动仍由游戏平移相机。见 PROJECT_SPEC §4/§5。</summary>
+    internal static partial class MarqueeSelect
     {
         static bool _held;
         static bool _grab;                 // 本次按下是否落在非原生单位附近（是 → 拖动即框选）
@@ -23,6 +26,8 @@ namespace BadNorthNewMode
         static bool _pressWasDrag;              // 这一次按下最终变成了拖动（框选/平移相机）→ 普通点击的延迟下令据此排除
         static bool _slowMo;                    // 是否已向 TimeManager 申请减速
         static readonly object SlowMoOwner = new object();   // TimeManager 按 requester 记账（取最小值合并）
+        static int _candFrame = -1;                          // v1.7.3：候选扫描的帧号（同帧去重用）
+        static readonly List<Agent> _candOurs = new List<Agent>();   // v1.7.3：复用"我们的单位"暂存表（别再每次 new）
 
         internal static bool Dragging { get { return _dragging; } }
         internal static bool ClickUsedForSelect { get { return _clickUsedForSelect; } }
@@ -309,126 +314,6 @@ namespace BadNorthNewMode
             if (Plugin.TryGetLandPoint(island, r.center, out land, out diag)) CamFor(land, r.center);
         }
 
-        /// <summary>世界四边形兜底框选：用 NavSpotCast 把矩形四角变成世界点，判单位脚点是否在四边形内（完全不依赖屏幕投影）。</summary>
-        static List<ForeignUnit> PickWorld(Rect r)
-        {
-            List<ForeignUnit> res = new List<ForeignUnit>();
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            Island island = (gm != null) ? gm.island : null;
-            if (island == null) return res;
-
-            Vector3 c0, c1, c2, c3;
-            string diag;
-            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMin, r.yMin), out c0, out diag)) return res;
-            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMax, r.yMin), out c1, out diag)) return res;
-            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMax, r.yMax), out c2, out diag)) return res;
-            if (!Plugin.TryGetLandPoint(island, new Vector2(r.xMin, r.yMax), out c3, out diag)) return res;
-
-            EnsureCandidates();
-            for (int i = 0; i < ForeignUnit.All.Count; i++)
-            {
-                ForeignUnit f = ForeignUnit.All[i];
-                Agent a = (f != null) ? f.agent : null;
-                if (!Usable(a)) continue;
-
-                Vector3 p = a.wPos;
-                if (InQuadXZ(p, c0, c1, c2, c3)) res.Add(f);
-            }
-            return res;
-        }
-
-        /// <summary>XZ 平面上的凸四边形包含判定（四角按矩形顺/逆时针皆可，取叉积同号）。</summary>
-        static bool InQuadXZ(Vector3 p, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
-        {
-            float s0 = Cross(a, b, p);
-            float s1 = Cross(b, c, p);
-            float s2 = Cross(c, d, p);
-            float s3 = Cross(d, a, p);
-
-            bool allNeg = (s0 <= 0f && s1 <= 0f && s2 <= 0f && s3 <= 0f);
-            bool allPos = (s0 >= 0f && s1 >= 0f && s2 >= 0f && s3 >= 0f);
-            return allNeg || allPos;
-        }
-
-        static float Cross(Vector3 a, Vector3 b, Vector3 p)
-        {
-            return (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
-        }
-
-        static List<ForeignUnit> Pick(Rect screenRect)
-        {
-            EnsureCandidates();
-            List<ForeignUnit> res = new List<ForeignUnit>();
-
-            Camera cam = Cam();
-            if (cam == null) return res;
-
-            for (int i = 0; i < ForeignUnit.All.Count; i++)
-            {
-                ForeignUnit f = ForeignUnit.All[i];
-                Agent a = (f != null) ? f.agent : null;
-                if (!Usable(a)) continue;
-
-                Vector3 sp = cam.WorldToScreenPoint(a.transform.position);
-                if (sp.z <= 0f) continue;                                    // 相机背后
-                if (screenRect.Contains(new Vector2(sp.x, sp.y))) res.Add(f);
-            }
-            return res;
-        }
-
-        /// <summary>候选来源：标记注册表 ∪ 在册 squad 成员（缺标记**自愈**补上）∪（可选）原生单位（原版上岛的敌人）。</summary>
-        internal static void EnsureCandidates()
-        {
-            ForeignUnit.Prune();
-
-            List<Agent> ours = new List<Agent>();
-            SpawnLedger.CollectOurAgents(ours);
-            for (int i = 0; i < ours.Count; i++)
-            {
-                Agent a = ours[i];
-                if (a == null || a.GetComponent<ForeignUnit>() != null) continue;
-
-                VikingAgent va = a.GetComponent<VikingAgent>();
-                ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name);
-            }
-
-            // 原生单位（原版上岛的敌人）也登记进来：与我们投放的（非原生）同为 vikings 阵营
-            if (!Util.V(ModConfig.ControlNativeUnits, true)) return;
-
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            Island island = (gm != null) ? gm.island : null;
-            Faction vik = (island != null) ? island.vikings : null;
-            if (vik == null || vik.agents == null) return;
-
-            int added = 0;
-            for (int i = 0; i < vik.agents.Count; i++)
-            {
-                Agent a = vik.agents[i];
-                if (a == null || a.GetComponent<ForeignUnit>() != null) continue;
-                if (!ForeignUnit.Selectable(a)) continue;                   // v1.6.0：船上的原生单位也先登记，能像我们的单位一样"上船前就选好"（落地自动去集结点）
-
-                VikingAgent va = a.GetComponent<VikingAgent>();
-                ForeignUnit.Attach(a, (va != null && va.vikingReference != null) ? va.vikingReference.name : a.name, true);
-                added++;
-            }
-
-            if (added > 0 && !object.ReferenceEquals(_loggedIsland, island))
-            {
-                _loggedIsland = island;
-                Util.Log(Loc.F("[NewMode] 已登记原生单位 {0} 个（可遥控；F1 菜单可关）。", added));
-            }
-        }
-
-        static Island _loggedIsland;
-
-        /// <summary>指针下的可选单位（世界距离主路径 + 屏幕半径兜底）。</summary>
-        internal static ForeignUnit PickAt(Vector2 screenPos)
-        {
-            ForeignUnit f = NearestForeignUnitWorld(screenPos);
-            if (f == null) f = NearestForeignUnit(screenPos);
-            return f;
-        }
-
         /// <summary>接管点击用的严格命中：落点不可站立（点海面）时跳过世界距离匹配，只留 24px 屏幕兜底（否则点击会被抢走，见 §5/T34）。</summary>
         internal static ForeignUnit PickAtTight(Vector2 screenPos)
         {
@@ -456,7 +341,7 @@ namespace BadNorthNewMode
         {
             // ① 原版同源：返回 null 就是"无效格"，直接采信——用自家全场景射线"翻案"会把点海面判成有效（见 §5/T34）
             try { return NavSpot.NavSpotCast(screenPos); }
-            catch { }                                        // 只有取点本身抛异常（currentLevel 未就绪等）才兜底
+            catch { }                                        // 只有取点本身抛异常（currentLevel 未就绪等）才兜底 // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
 
             // ② 兜底：照抄原版 NavSpotter.NavSpotCast（Voxels/Modules 命中点 → GetNavSpot → 同一道 1m 闸门）
             if (island != null && island.navSpotter != null)
@@ -470,7 +355,7 @@ namespace BadNorthNewMode
                     if (spot == null) return null;
                     return (Vector3.SqrMagnitude(spot.navPos.pos - hit.point) <= 1f) ? spot : null;
                 }
-                catch { }
+                catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
             }
 
             Vector3 land;
@@ -506,84 +391,6 @@ namespace BadNorthNewMode
             FabricWrapper.PostEvent("UI/InGame/Error");
         }
 
-        /// <summary>按下点附近最近的非原生单位（决定"单击选择"的目标；也决定拖动是否算框选）。</summary>
-        static ForeignUnit NearestForeignUnit(Vector2 screenPos)
-        {
-            return NearestForeignUnitWithin(screenPos, Util.V(ModConfig.RemoteGrabRadius, 64));
-        }
-
-        static ForeignUnit NearestForeignUnitWithin(Vector2 screenPos, int radius)
-        {
-            EnsureCandidates();
-            Camera cam = Cam();
-            if (cam == null) return null;
-
-            float r2 = (radius <= 0) ? float.MaxValue : (float)radius * radius;
-
-            ForeignUnit best = null;
-            float bestD = float.MaxValue;
-            for (int i = 0; i < ForeignUnit.All.Count; i++)
-            {
-                ForeignUnit f = ForeignUnit.All[i];
-                Agent a = (f != null) ? f.agent : null;
-                if (!Usable(a)) continue;
-
-                Vector3 sp = cam.WorldToScreenPoint(a.transform.position);
-                if (sp.z <= 0f) continue;
-
-                float dx = sp.x - screenPos.x;
-                float dy = sp.y - screenPos.y;
-                float d = dx * dx + dy * dy;
-                if (d > r2 || d >= bestD) continue;
-
-                bestD = d;
-                best = f;
-            }
-            return best;
-        }
-
-        /// <summary>点选（世界距离版，主路径）：用投放同一套 NavSpotCast 取世界点，再比单位世界距离——不依赖屏幕投影。</summary>
-        static ForeignUnit NearestForeignUnitWorld(Vector2 screenPos)
-        {
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            Island island = (gm != null) ? gm.island : null;
-
-            Vector3 land;
-            string diag;
-            if (!Plugin.TryGetLandPoint(island, screenPos, out land, out diag)) return null;
-
-            CamFor(land, screenPos);                     // 用"地面点 ↔ 点击处"校正相机（框选/标记也受益）
-
-            EnsureCandidates();
-            float radius = Util.V(ModConfig.RemoteClickRadius, 1.2f);
-            float best = radius;
-            ForeignUnit pick = null;
-
-            for (int i = 0; i < ForeignUnit.All.Count; i++)
-            {
-                ForeignUnit f = ForeignUnit.All[i];
-                Agent a = (f != null) ? f.agent : null;
-                if (!Usable(a)) continue;
-
-                Vector3 p = a.wPos;
-                p.y = land.y;
-                float d = Vector3.Distance(p, land);
-                if (d < best) { best = d; pick = f; }
-            }
-            return pick;
-        }
-
-        static bool SelectAllKeyDown()
-        {
-            return KeyDown(ModConfig.RemoteSelectAllKey);
-        }
-
-        /// <summary>我们自己的快捷键是否按下（None = 关闭；cfg 为空也不炸）。</summary>
-        static bool KeyDown(ConfigEntry<KeyCode> key)
-        {
-            return key != null && key.Value != KeyCode.None && Input.GetKeyDown(key.Value);
-        }
-
         /// <summary>一键全选：把所有"可选"的非原生单位加入待成队选择（等价于 Shift 全框）。</summary>
         internal static void SelectAll()
         {
@@ -605,93 +412,6 @@ namespace BadNorthNewMode
                 : Loc.F("已全选 {0}，点地块前进", DescribePending());
             IngameMenu.Say(msg);
             Util.Log(Loc.T("[NewMode][遥控] ") + msg);
-        }
-
-        /// <summary>最近可用单位的屏幕信息（距离/原始坐标/z/鼠标/屏幕尺寸）——用来判定投影是否可信。</summary>
-        static string NearestScreenInfo(Vector2 screenPos)
-        {
-            Camera cam = Cam();
-            if (cam == null) return Loc.T("相机不可用");
-
-            float best = float.MaxValue;
-            string info = Loc.T("无（没有可用的非原生单位）");
-            for (int i = 0; i < ForeignUnit.All.Count; i++)
-            {
-                ForeignUnit f = ForeignUnit.All[i];
-                Agent a = (f != null) ? f.agent : null;
-                if (!Usable(a)) continue;
-
-                Vector3 sp = cam.WorldToScreenPoint(a.transform.position);
-                float dx = sp.x - screenPos.x;
-                float dy = sp.y - screenPos.y;
-                float d = Mathf.Sqrt(dx * dx + dy * dy);
-                if (d >= best) continue;
-
-                best = d;
-                info = Loc.F("{0:F0}px（屏 {1:F0},{2:F0} z={3:F1}｜鼠标 {4:F0},{5:F0}｜屏幕 {6}×{7}｜相机 {8}）",
-                    d, sp.x, sp.y, sp.z, screenPos.x, screenPos.y, Screen.width, Screen.height, cam.name);
-            }
-            return info;
-        }
-
-        /// <summary>按住"自由框选键"→ 从任意位置起拖都算框选（相机交给框选）。左右 Alt 都认。</summary>
-        static bool FreeMarqueeKeyHeld()
-        {
-            ConfigEntry<KeyCode> key = ModConfig.RemoteFreeMarqueeKey;
-            if (key == null || key.Value == KeyCode.None) return false;
-            if (Input.GetKey(key.Value)) return true;
-
-            return (key.Value == KeyCode.LeftAlt || key.Value == KeyCode.RightAlt) &&
-                   (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt));
-        }
-
-        internal static bool ShiftHeld()
-        {
-            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        }
-
-        /// <summary>立即下令的修饰键：Shift（精确指挥）或按住"全选键"R（全选 + 批量下令）；不按也能下令，只是走"延迟仲裁"路径（见 §5/T22）。</summary>
-        internal static bool CommandModifierHeld()
-        {
-            if (ShiftHeld()) return true;
-            ConfigEntry<KeyCode> key = ModConfig.RemoteSelectAllKey;
-            return key != null && key.Value != KeyCode.None && Input.GetKey(key.Value);
-        }
-
-        internal static float ScreenDist2(Agent a, Vector2 center)
-        {
-            Camera cam = Cam();
-            if (cam == null || a == null) return float.MaxValue;
-
-            Vector3 sp = cam.WorldToScreenPoint(a.transform.position);
-            if (sp.z <= 0f) return float.MaxValue;
-
-            float dx = sp.x - center.x;
-            float dy = sp.y - center.y;
-            return dx * dx + dy * dy;
-        }
-
-        /// <summary>原版的单/双键设置（`Navigator.OnButtonUp` 正是按它分派的：双键=左选右走；单键=没选中→选、有选中→走）。</summary>
-        internal static UserSettings.CursorBehaviour CursorBehaviour()
-        {
-            UserSettings us = Profile.userSettings;
-            return object.ReferenceEquals(us, null) ? UserSettings.CursorBehaviour.TwoButton : us.cursorBehaviour;
-        }
-
-        /// <summary>单键 / 触摸：一个键按"当前有没有选中"承担选中与位移两件事（照抄原版映射，v1.5.6）。</summary>
-        internal static bool SingleButtonMode()
-        {
-            return CursorBehaviour() != UserSettings.CursorBehaviour.TwoButton;
-        }
-
-        internal static bool HasSelection()
-        {
-            return HasPending;      // 只看"本次选中"：已有小队在册 ≠ 有选中（未选中不得移动，见 §5）
-        }
-        /// <summary>可被框选/标记/点选：还活着、已生成——**含仍在船上**（v1.5.6 起可以在船上就选好）。</summary>
-        static bool Usable(Agent a)
-        {
-            return ForeignUnit.Selectable(a);
         }
 
         static void Cancel(IslandGameplayManager gm)
@@ -814,132 +534,5 @@ namespace BadNorthNewMode
             if (err < bestErr) { bestErr = err; best = c; }
         }
 
-        static Rect RectFrom(Vector2 a, Vector2 b)
-        {
-            float x = Mathf.Min(a.x, b.x);
-            float y = Mathf.Min(a.y, b.y);
-            return new Rect(x, y, Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
-        }
-
-        static Rect ToGui(Rect r)
-        {
-            return new Rect(r.x, Screen.height - r.y - r.height, r.width, r.height);   // IMGUI 的 y 轴翻转
-        }
-
-        /// <summary>框选矩形 + 受控单位 / 目标点标记（由 Plugin.OnGUI 调用）。</summary>
-        internal static void DrawOverlay()
-        {
-            if (!Util.V(ModConfig.RemoteHighlight, true)) return;
-
-            if (_dragging)
-            {
-                Rect r = ToGui(_screenRect);
-                GUI.color = new Color(0.4f, 1f, 1f, 0.12f);
-                GUI.DrawTexture(r, Texture2D.whiteTexture);
-                GUI.color = new Color(0.4f, 1f, 1f, 0.9f);
-                GUI.DrawTexture(new Rect(r.x, r.y, r.width, 1f), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(r.x, r.yMax - 1f, r.width, 1f), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(r.x, r.y, 1f, r.height), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(r.xMax - 1f, r.y, 1f, r.height), Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
-
-            Camera cam = Cam();
-            if (cam == null) return;
-
-            if (_pending != null && _pending.Count > 0)                  // 待成队/已选中：亮青十字（船上=琥珀色）
-            {
-                for (int i = 0; i < _pending.Count; i++)
-                {
-                    ForeignUnit f = _pending[i];
-                    Agent a = (f != null) ? f.agent : null;
-                    if (!Usable(a)) continue;
-
-                    Color c = ForeignUnit.Commandable(a)
-                        ? new Color(0.4f, 1f, 1f, 0.9f)
-                        : new Color(1f, 0.85f, 0.2f, 0.9f);             // 船上：只记了集结点，还没法移动
-                    DrawCross(cam, a.wPos, c, 9f);
-                }
-            }
-
-            if (RemoteGroup.Any || HasPending) DrawHoverCursor(cam);      // 原版同款：选中后鼠标下的地块亮起
-
-            for (int ri = 0; ri < RemoteGroup.RallyCount; ri++)           // 船上单位的"登陆后集结点"
-            {
-                NavSpot rs = RemoteGroup.RallySpot(ri);
-                if (rs != null) DrawRing(cam, rs.navPos.wPos, new Color(1f, 0.85f, 0.2f, 0.65f), 22f);
-            }
-
-            if (!RemoteGroup.Any) return;
-
-            for (int gi = 0; gi < RemoteGroup.GroupCount; gi++)
-            {
-                RemoteGroup.Group g = RemoteGroup.At(gi);
-                if (g == null) continue;
-
-                if (g.target != null)
-                    DrawRing(cam, g.target.navPos.wPos,
-                        g.selected ? new Color(0.4f, 1f, 1f, 0.85f) : new Color(1f, 1f, 1f, 0.25f), 20f);
-
-                Color color = g.selected ? new Color(1f, 0.85f, 0.2f, 0.8f) : new Color(1f, 1f, 1f, 0.35f);
-                for (int i = 0; i < g.orders.Count; i++)
-                {
-                    GroupOrder o = g.orders[i];
-                    Agent a = (o != null) ? o.agent : null;
-                    if (!Usable(a)) continue;
-                    DrawCross(cam, a.wPos, color, g.selected ? 7f : 5f);
-                }
-            }
-        }
-
-        /// <summary>十字标记（比小方块更容易看见：选中/受控单位用）。</summary>
-        static void DrawCross(Camera cam, Vector3 world, Color c, float size)
-        {
-            Vector3 sp = cam.WorldToScreenPoint(world);
-            if (sp.z <= 0f) return;
-
-            float x = sp.x;
-            float y = Screen.height - sp.y;
-            float h = size * 0.5f;
-
-            GUI.color = c;
-            GUI.DrawTexture(new Rect(x - h, y - 0.5f, size, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x - 0.5f, y - h, 1f, size), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
-        static void DrawRing(Camera cam, Vector3 world, Color c, float size)
-        {
-            Vector3 sp = cam.WorldToScreenPoint(world);
-            if (sp.z <= 0f) return;
-
-            float x = sp.x;
-            float y = Screen.height - sp.y;
-            float h = size * 0.5f;
-
-            GUI.color = c;
-            GUI.DrawTexture(new Rect(x - h, y - h, size, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x - h, y + h - 1f, size, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x - h, y - h, 1f, size), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x + h - 1f, y - h, 1f, size), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
-        /// <summary>鼠标落点光标：指针处的地面点吸附到最近的 NavSpot 再画框（原版选中我队时也用这个提示）。</summary>
-        static void DrawHoverCursor(Camera cam)
-        {
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
-            Island island = (gm != null) ? gm.island : null;
-            if (island == null) return;
-
-            Vector3 land;
-            string diag;
-            if (!Plugin.TryGetLandPoint(island, Input.mousePosition, out land, out diag)) return;
-
-            NavSpot spot = NavSpot.GetNavSpot(land, true);
-            if (spot == null) return;
-
-            DrawRing(cam, spot.navPos.wPos, new Color(0.4f, 1f, 1f, 0.5f), 22f);
-        }
     }
 }

@@ -115,12 +115,12 @@ namespace BadNorthNewMode
 
         internal static void Click()          // 原版按钮音 / 错误音（键鼠与手柄各一套，原版自己选）
         {
-            try { FabricWrapper.PostEvent(FabricID.uiButtonClick); } catch { }
+            try { FabricWrapper.PostEvent(FabricID.uiButtonClick); } catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
         }
 
         internal static void Error()
         {
-            try { FabricWrapper.PostEvent(FabricID.uiError); } catch { }
+            try { FabricWrapper.PostEvent(FabricID.uiError); } catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
         }
 
         static Font _font;
@@ -192,7 +192,7 @@ namespace BadNorthNewMode
                     }
                 }
             }
-            catch { }
+            catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
 
             return null;
         }
@@ -245,7 +245,7 @@ namespace BadNorthNewMode
         static Font OsCjkFont()
         {
             string[] installed = null;
-            try { installed = Font.GetOSInstalledFontNames(); } catch { }
+            try { installed = Font.GetOSInstalledFontNames(); } catch { } // silent-ok（v1.7.3：既有设计——失败即静默降级，不刷日志）
             bool haveList = (installed != null) && (installed.Length > 0);
 
             for (int i = 0; i < CjkNames.Length; i++)

@@ -1,0 +1,26 @@
+name: gates
+
+# 只跑"不需要游戏 DLL"的三道闸门（本地化 / 静态规则 / 文档引用）。
+# check-api 与 check-pack-compat 需要游戏自身的托管程序集（版权原因不入库）→ 只能在本地 build.ps1 里跑。
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  static-gates:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 本地化一致性（check-loc）
+        shell: pwsh
+        run: ./tools/check-loc.ps1 -Root .
+
+      - name: 静态规则（check-rules）
+        shell: pwsh
+        run: ./tools/check-rules.ps1 -Root .
+
+      - name: 文档引用（check-docrefs）
+        shell: pwsh
+        run: ./tools/check-docrefs.ps1 -Root .

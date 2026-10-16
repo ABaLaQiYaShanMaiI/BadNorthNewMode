@@ -65,6 +65,20 @@ namespace BadNorthNewMode
             return n;
         }
 
+        /// <summary>一次遍历同时数出"非原生 / 原生"两类可选数（v1.7.3：HUD 以前调两次 `SelectableCount`，白扫一遍表）。</summary>
+        internal static void SelectableCounts(out int foreign, out int native)
+        {
+            foreign = 0;
+            native = 0;
+            for (int i = 0; i < _all.Count; i++)
+            {
+                ForeignUnit f = _all[i];
+                if (f == null || !Selectable(f.agent)) continue;
+                if (f.native) native++;
+                else foreign++;
+            }
+        }
+
         internal static int UsableCount()
         {
             int n = 0;

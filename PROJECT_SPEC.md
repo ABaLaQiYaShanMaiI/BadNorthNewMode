@@ -264,7 +264,7 @@ Raid.IIslandFirstEnter:
 
 - 产物：`BadNorthNewMode.dll`；命名空间 `BadNorthNewMode`；GUID `badnorth.newmode`；部署到 `BepInEx\plugins`。
 - 仓库根另有 **`README.md`**（面向玩家的操作说明 + 链接 + 许可，≤250 汉字，不再写其他内容）。
-- **版本号统一**：`Plugin.VERSION` = `csproj Version` = 仓库提交 `vX.Y.Z`（自 v1.2.0 起）。**本次提交 = `v1.7.2`**（两处都写 `1.7.2`；作者手动提交）。
+- **版本号统一**：`Plugin.VERSION` = `csproj Version` = 仓库提交 `vX.Y.Z`（自 v1.2.0 起）。**本次提交 = `v1.7.3`**（两处都写 `1.7.3`；作者手动提交）。
 - 提交：一个里程碑一个提交，标题由作者撰写。
 - 文档纪律：只本文件（+ 可选 `开发日志.md`）；新改动只在 §5 追加一行、§8 表格追加一行，不写长叙事。
 - **代码结构**（v1.3.1 按职责拆分）：`Plugin`(入口/输入/取点) · `IngameMenu`(HUD + 兵种菜单) · `DropPlanner`(滩头解析/落差/占用/廊道，长方法拆成 `CheckClickHeight`/`CollectCandidates`/`PreferClearCorridor`) · `UnitCatalog`(兵种·船·人数) · `LandingInjector`(建树/投放/装配) · `FlotillaLauncher` · `SpawnLedger` · `DisembarkWatchdog` · `ShipboardThreat` · `PlacementMarker` · `ModConfig` · `UnitNames` · `Util`(向量格式化 / cfg 守卫 / 日志守卫)。
@@ -272,7 +272,7 @@ Raid.IIslandFirstEnter:
 - **日志文件开关**（v1.5.0）：`LogFileSwitch`(摘掉 BepInEx 磁盘日志监听 + 清启动残留；`[Diag] LogToFile` 默认 false)。
 - **菜单点击拦截面**（v1.5.6）：`ClickShield`(菜单矩形上的不可见 UI，阻断原版 EventSystem 点击；`[General] MenuBlocksWorldClicks` 默认 true)。
 - **点击路由 / 接管本关**（v1.5.6）：`RemoteCursor`(按下那一帧压 `CursorManager` 栈顶吃掉这一次点击：左键=选整队、右键=前进；`[Remote] RemoteOrderButton` 默认 Right) · `LevelTools`(拦下原版波次 + F3 强制胜利；`[Native] BlockVanillaWaves`) · `ClickShield`(菜单矩形上的不可见 UI)。
-- **构建闸门**：`tools/check-api.ps1`（全部被引用程序集的成员引用都要在游戏侧存在：BCL + UnityEngine* + BepInEx* + Assembly-CSharp，当前 **624 项**）+ `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key，当前 **213 条**）+ `tools/check-pack-compat.ps1`（对整合包替换的那份 `Assembly-CSharp.dll` 做同样的成员引用校验，当前 **165 项**）；三个闸门都已并进 `build.ps1`（包版闸门需传 `-PackAssemblyCSharp` 或环境变量 `BadNorthPackDll`）。
+- **构建闸门**（v1.7.3 起**五道**，全部并进 `build.ps1`）：① `tools/check-api.ps1`（全部被引用程序集的成员引用都要在游戏侧存在：BCL + UnityEngine* + BepInEx* + Assembly-CSharp，当前 **631 项**）② `tools/check-loc.ps1`（Loc 词条：无缺失 key、无死词条、`{n}` 占位符一致、无重复 key，当前 **214 条**）③ `tools/check-pack-compat.ps1`（对整合包替换的那份 `Assembly-CSharp.dll` 做同样的成员引用校验，当前 **165 项**；需传 `-PackAssemblyCSharp` 或环境变量 `BadNorthPackDll`）④ `tools/check-rules.ps1`（静态规则：空 catch 必须写 `silent-ok`、反射成员不许用 `== null` 判空、禁 `Debug.Log` 与盘符路径、热路径方法体不许每帧分配；**不需要游戏 DLL**）⑤ `tools/check-docrefs.ps1`（`.cs` 注释里的 `§N`/`§N.M` 必须在 md 里真有对应标题；**不需要游戏 DLL**）。④⑤ 可在 CI 跑（`.github/workflows/gates.yml`）。
 - **中英切换**（v1.5.1）：`Loc`(界面/日志文案对照表 + `[General] Language`) · `UnitNames`(增英文显示名) · `README.md`(双语)。
 
 - **借用原版 UI / 自绘外观**（v1.6.1）：`VanillaUI`（原版通知条 · `ModalOverlay` 确认框 · `FabricID` 按钮音 · 借原版 `Font`；`ModalShowing` 供各处让位） · `MenuSkin`（运行时生成圆角 9 宫格贴图与 `GUIStyle`，卸载时释放） · 新增依赖 `UnityEngine.TextRenderingModule`（只为 `UnityEngine.Font`） · cfg 段 `[UI] UseVanillaUI / UseVanillaFont / UiFontSize / ConfirmDestructive`。
@@ -321,7 +321,8 @@ Raid.IIslandFirstEnter:
 | **v1.7.0** | **1.7.0** | **与《旧灰复燃的战旗》3.0 整合包 / Together 联机共存立项（含 2026-10-14 重做）：`Compat` 检测与让路（投放 / 遥控 / 终岛 / 拦波次 / `F3`）、`tools/check-pack-compat.ps1` 闸门、外生兵种 UI 兼容** |
 | **v1.7.1** | **1.7.1** | **修 B1~B9（含"联机会话类名写错使让路静默全失效"、"拦波次在单机被误禁"、"盾兵挡不住我们投放的巨弓"）+ 局内「靠岸速度」4 档（`ShipSpeedRuntime` + F1 拖动条）** |
 | **v1.7.2** | **1.7.2** | **修 B10：`BlockVanillaWaves` 误伤自家 `ModWave`（→ 叠船 / 编队出发错峰失效）；自建波显式写 `waveStartTime = 0f`；联机拒绝拦波次的文案只针对 Together（见 §11.3）** |
-> **版本号口径**：本次提交 = **`v1.7.2`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.2**（v1.7.0 = 整合包 / Together 共存立项与重做；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave → 叠船 / 编队错峰失效，见 §11.3）。更早：v1.6.1 两批 = 借用原版 UI（提示条/确认框/外观）+ 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、数字改 Times New Roman、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
+| **v1.7.3** | **1.7.3** | **性能与结构（零行为变更）：热路径去分配（HUD 文本 0.2s 节流、状态行 0.5s 缓存、候选扫描同帧去重、拦波次扫描按需重扫）；`MarqueeSelect`/`Plugin` 按职责拆 `partial` 文件、删死代码 `PickAt`、`MenuHeight` 自检；新增两道闸门 `check-rules` / `check-docrefs` + CI（见 §11.7）** |
+> **版本号口径**：本次提交 = **`v1.7.3`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.3**（v1.7.0 = 整合包 / Together 共存立项与重做；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave → 叠船 / 编队错峰失效，见 §11.3）；**v1.7.3 = 性能与结构 + 两道新闸门**（零行为变更，见 §11.7）。更早：v1.6.1 两批 = 借用原版 UI（提示条/确认框/外观）+ 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、数字改 Times New Roman、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
 
 ## 9. UI 打磨路线
 
@@ -590,4 +591,53 @@ internal static void Forget(Island island);                          // 清场/�
 ③ 切岛/重开一局后登记表作废、新船按当前档生效；④ 调回 `×1` 应还原；⑤ 联机客机置灰、主机正常。
 
 
+
+
+### 11.7 v1.7.3：性能与结构（P1–P3，零行为变更，2026-10-16）
+
+> 触发方式：一次完整的代码质量体检（客观指标 + 全文件通读 + 产物 IL 分析），按性价比落地三批改动。
+> **总原则：本批不改变任何可见行为** —— 并已用 IL 级比对证明（见下"验证"）。
+
+**P1 热路径去分配**（玩家侧只表现为更少的 GC 抖动）
+
+| 位置 | 原来 | 现在 |
+|---|---|---|
+| `IngameMenu.DrawHud` | **每帧**做 2 次全表计数扫描 + `Compat.StatusLine()` 拼串 + 最多 8 次 `Loc.F` 拼串 | 文本按 **0.2s 节流重建**（`BuildHudLines`）；`Say()` / 开关菜单 / 悬停行变化会立即标脏，手感不变 |
+| `Compat.StatusLine()` | 每次调用都拼字符串（装了整合包后 HUD 每帧都会问） | 结果 **0.5s 缓存**，`Tick` 里终岛状态变化时主动失效 |
+| `ForeignUnit` | HUD 调 `SelectableCount(false)` + `SelectableCount(true)` 扫两遍 | 新增 `SelectableCounts(out foreign, out native)` —— 一次遍历数两类 |
+| `MarqueeSelect.EnsureCandidates` | 9 处调用、无帧级去重，每次 `new List<Agent>` + 逐单位 `GetComponent` | **同帧只扫一次**（`_candFrame`）+ 复用静态表 `_candOurs` |
+| `LevelTools.TryBlockWaves` | **每帧** `GetComponentsInChildren<Wave>(true)`（分配数组）+ 每帧重建 `_blockedLandings` | 拆出 `EnsureScanned`：只在"换 Raid / 容器子节点数变化 / 每 2s 保险丝"时重扫；每帧只做"重写 `waveStartTime`"（无分配） |
+
+**P2 结构拆分**（纯搬动 + 删死代码 + 一处自检）
+
+| 文件 | 现在 |
+|---|---|
+| `MarqueeSelect.cs` | 946 行 → **536 行**（状态机半边：输入时序 / 选择应用 / 相机 / 减速） |
+| `MarqueeSelect.Hits.cs`（新） | 查询半边：候选登记、矩形/点选命中（屏幕 + 世界两套）、最近单位查询、修饰键与光标行为 |
+| `MarqueeSelect.Overlay.cs`（新） | 绘制半边：框选矩形、十字/目标环、落点光标、IMGUI 坐标换算 |
+| `Plugin.cs` | 533 行 → **113 行**（只留入口 / `Update` / `OnGUI` / `OnDestroy` 与单例） |
+| `Plugin.Drop.cs` / `Plugin.Remote.cs`（新） | 投放半边（悬停预览 / `DoDrop` / 地形取点）与遥控半边（旧路径兜底 / 下令 / 全选释放 / 世界点击订阅） |
+| 死代码 | 删除 `MarqueeSelect.PickAt`（Cecil 反读确认全程序集零引用） |
+| `IngameMenu` | `MenuHeight`（手写累加式）与 `DrawMenu`（实际推进）新增**自检**：两者偏差 > 1.5px 时打一次日志（`DrawActions` 改为返回实际底边）—— 这是唯一会"新加一行忘改高度"导致 `ClickShield` 挡错区域的地方 |
+
+**P3 把教训固化成闸门**（详见 §7 的闸门清单）
+
+- `tools/check-rules.ps1`：空 `catch { }` 必须写 `// silent-ok`（现有 15 处已补标记，把"有意静默"变成显式约定）；反射成员禁止用 `== null` 判空（**作用域精确**：只认类级反射字段 + 同一方法内的反射局部，避免同名误判）；禁 `Debug.Log` / 盘符路径；热路径方法体（`Update/OnGUI/Draw*/Tick*`）禁 `new List/Dictionary/HashSet`（确有必要写 `// alloc-ok`，现有 1 处已标注）。
+- `tools/check-docrefs.ps1`：`.cs` 注释里的 `§N`/`§N.M`（当前 **89 处**）必须在 md 里真有对应标题 —— 把"文档引用腐烂"变成构建期红灯。
+- `.github/workflows/gates.yml`：CI 跑"不需要游戏 DLL"的三道（loc / rules / docrefs）。
+
+**验证（本机实测）**
+
+```
+[api-check]    631 个成员引用 → 全部存在 OK
+[loc-check]    词条 214（占位符 99）/ 调用点 214 → 全部一致 OK
+[pack-compat]  对包版 Assembly-CSharp 检查 165 个引用 → 全部存在 OK
+[rules]        扫描 33 个 .cs / 8107 行 / 热路径方法 46 个 → 全部通过 OK
+[docrefs]      .cs 里的 § 引用 89 处；md 标题编号 81 个 → 全部找得到 OK
+```
+
+- **IL 级零差异证明（P2 的关键证据）**：把 P2 之前的构建（`pre-p2.dll`，含 P1）与 P2 之后的构建逐方法比对（指令流 + 局部变量类型哈希，466 vs 466 个方法）：
+  差异**仅** `IngameMenu.DrawMenu` / `DrawActions`（新增自检）、新增 `IngameMenu.CheckMenuHeight`、`Loc..cctor`（新词条），以及**消失的 `PickAt`** ——
+  其余 460+ 个方法 IL 完全一致 ⇒ 跨 6 个文件的 40 个代码块搬移是**可证明的纯搬动**，没有语义漂移。
+- 顺带修掉一个**工具自身**的陷阱：早期比对脚本用了 Cecil 该版本不存在的 `MethodBody.GetILAsByteArray()`，被 `try/catch` 静默降级成 `'noil'` → 会给出"零差异"的**假阳性结论**。现在改为"指令流文本哈希"，并且先用一对已知有差异的 DLL 验证过工具确实能报差异。
 

@@ -1,4 +1,4 @@
-# Bad North - New Mode  v1.7.2
+# Bad North - New Mode  v1.7.3
 
 A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 
@@ -22,7 +22,7 @@ Coexists with the `旧灰复燃的战旗` mod pack (V3.0+, including its bundled
 
 ---
 
-# Bad North - New Mode v1.7.2（简体中文）
+# Bad North - New Mode v1.7.3（简体中文）
 
 BepInEx 模组：给《Bad North》加“投放敌舰”和“遥控敌方单位”两种玩法。
 
