@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
@@ -75,6 +75,7 @@ namespace BadNorthNewMode
         static bool _remoteWarned;
         static bool _sessionDropWarned;
         static bool _lastTerminal;
+        static bool _wasOnline;              // v1.8.0 热修：上一帧的"联机中"状态（会话刚建立时锁船速）
 
         /// <summary>状态行缓存（v1.7.3 / P1）：HUD 每帧都会调 `StatusLine()`，见那里的 XML 注释。</summary>
         const float StatusInterval = 0.5f;
@@ -310,12 +311,35 @@ namespace BadNorthNewMode
             bool terminal = TerminalIsland(gm);
             if (terminal != _lastTerminal) _statusValid = false;      // 终岛状态变了 → 状态行缓存立刻失效
             _lastTerminal = terminal;
+
+            // v1.8.0 热修：会话刚建立 → 把已经缩放过的船速还原并锁住。
+            // Together 的 WaveSignature 含 shipTravel.duration：主机 ×5、客机 ×1 会让**第一波**就报
+            // "逻辑波编成/航线校验不同" 并 `Fail` 把整局停成 0 倍速。
+            bool online = TogetherOnline;
+            if (online != _wasOnline)
+            {
+                _wasOnline = online;
+                if (online) LockShipSpeed(gm);
+            }
+
             TogetherBridge.ProbeSession(gm);                          // v1.7.7：Together 只读探测（[Compat] TogetherProbe）
+        }
+
+        /// <summary>v1.8.0 热修：进入联机会话时把在航/在场的船还原成原版用时，并提示档位暂不生效。</summary>
+        static void LockShipSpeed(IslandGameplayManager gm)
+        {
+            try { ShipSpeedRuntime.RestoreVanilla(gm); }
+            catch (System.Exception e) { Util.Warn(Loc.F("[NewMode] 还原船速出错（不影响联机）：{0}", e.Message)); }
+
+            string msg = Loc.T("联机中保持原版靠岸速度（两端波次签名必须一致）");
+            Util.Warn("[NewMode][兼容] " + msg);
+            IngameMenu.Say(msg);
         }
 
         // ===================== 让路策略（全部由 cfg 开关控制）=====================
 
-        /// <summary>投放是否让路：Together 联机中，或"整合包终岛无尽"正在接管本关。</summary>
+        /// <summary>投放是否让路：Together 联机中（**v1.8.0 起：装了同步版 Together 且本机是主机、基线已建立时放行**），
+        /// 或"整合包终岛无尽"正在接管本关。</summary>
         internal static bool DropBlocked(IslandGameplayManager gm, out string why)
         {
             why = null;
@@ -323,7 +347,12 @@ namespace BadNorthNewMode
 
             if (TogetherOnline)
             {
-                why = Loc.T("联机中（Together 在线）：本模组的投放会让整局联机冻结，已自动让路");
+                // v1.8.0：同步交给 BadNorthTogether（它在 wave.BeginWave 处登记逻辑波 + 发清单 + 开波）。
+                // 本模组只做"能不能投"的判定，绝不写 Together 状态。
+                string gate;
+                if (TogetherBridge.CanHostDispatch(out gate))
+                    return false;                       // 放行：客机由 BadNorthTogether 同步看到
+                why = gate;
                 return true;
             }
             if (PluginLoaded(GuidEndlessFinale) && !Util.V(ModConfig.CompatDropOnTerminal, false) && TerminalIsland(gm))
@@ -471,7 +500,10 @@ namespace BadNorthNewMode
             if (_sessionDropWarned) return;
             _sessionDropWarned = true;
 
-            string msg = Loc.T("注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上");
+            string gate;
+            string msg = TogetherBridge.CanHostDispatch(out gate)
+                ? Loc.T("联机投放已交给 BadNorthTogether 同步：本次投放的船与敌人会出现在客机（双端都要装 BadNorthTogether）")
+                : Loc.T("注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上");
             Util.Warn("[NewMode][兼容] " + msg);
             IngameMenu.Say(msg);
         }

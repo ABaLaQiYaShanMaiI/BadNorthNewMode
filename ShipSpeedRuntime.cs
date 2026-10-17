@@ -56,6 +56,7 @@ namespace BadNorthNewMode
         static bool _disabled;
         static float _nextTick;
         static Island _announcedIsland;       // 本关的"档位诊断行"只打一次
+        static bool _onlineWarned;            // v1.8.0 热修：联机锁速提示只打一次
 
         /// <summary>当前档位下标 0..3（cfg 值吸附到最近的档位）。</summary>
         internal static int GearIndex
@@ -95,12 +96,30 @@ namespace BadNorthNewMode
                 ModConfig.ShipSpeedGear.Value = Gears[index];
 
             _nextTick = 0f;                                  // 下一次 Tick 立刻重扫
+            // v1.8.0 热修：联机中不能立刻套用 —— Together 的 WaveSignature 含 shipTravel.duration，
+            // 两端档位不同（或一端改了）就会在开波时判"逻辑波编成/航线校验不同"并冻结整局。
+            if (Compat.TogetherOnline)
+            {
+                Util.Warn("[NewMode][船速] " + Loc.T("联机中保持原版靠岸速度：改动已记录，回到单机后生效"));
+                return;
+            }
             ApplyAll(island, true);
         }
 
         internal static void Tick(IslandGameplayManager gm)
         {
             if (_disabled) return;
+            // v1.8.0 热修：联机中一律不改船的用时（主机 ×5 / 客机 ×1 会让第一波签名就不同 → 整局 Fail 冻结）。
+            if (Compat.TogetherOnline)
+            {
+                if (!_onlineWarned)
+                {
+                    _onlineWarned = true;
+                    Util.Warn("[NewMode][船速] " + Loc.T("联机中保持原版靠岸用时（档位暂不生效，回单机后恢复）"));
+                }
+                return;
+            }
+            _onlineWarned = false;
             if (Time.unscaledTime < _nextTick) return;
             _nextTick = Time.unscaledTime + TickInterval;
 
