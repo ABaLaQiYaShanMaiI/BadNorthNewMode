@@ -1,4 +1,4 @@
-# BadNorthNewMode — 项目约束与说明
+﻿# BadNorthNewMode — 项目约束与说明
 
 本文件是**唯一**的需求 / 约束 / 知识来源。原版机制的因果链与踩过的坑只写在这里，代码里最多留一行索引。
 
@@ -356,7 +356,8 @@ Raid.IIslandFirstEnter:
 | **v1.7.5** | **1.7.5** | **在游戏原生设置界面里开关本模组：设置 → 控制 分类末尾两行（`BadNorthNewMode：启用模组` = 新 cfg `[General] Enabled` 总开关；`原生单位：可遥控` = 与 F1 菜单同键）。总开关关掉 = 完全静默（不接管点击 / 不画菜单·HUD / 快捷键失效 / 不拦波次 / 在航船速还原原版）；实现**零 Harmony·零 MMHOOK**（轮询 `UserSettingsMenu` + 反射 `AddBoolWidget` + 运行期注入 I2 词条，见 §11.12）** |
 | **v1.7.6** | **1.7.6** | **修"×2 靠岸速度退出岛屿再重进 → 船速叠乘"（真 bug，见 §11.13A：改存基准用时、登记表不再在离开战局时清空、每秒自愈比对）+ 修 F1 档位条"拖动状态卡死 → 平移相机时误换档"；新增 `[Landing] AllowShipStack`（船只可堆叠，默认关）并挂进原版设置 → 控制 分类第三行（与前两行同一套机制，见 §11.13B）；**生命周期与状态清理专题**（见 §11.14：关总开关还原被拦波次、离开战局/换岛清每局状态、卸载销毁我们创建的常驻对象与设置行）；顺带修"投放失败后半成品 Landing 留在编队里"** |
 | **v1.7.7** | **1.7.7** | **原版设置里给本模组一个独立分类标题（克隆原版分类容器、换 I2 词条写我们自己的标题，按层级顺序插到第 2 个标题位置；新 cfg `[UI] SettingsCategoryIndex`，克隆失败自动退回"塞进控制列"，见 §11.15A）+ Together 联机对接研究：新增 `TogetherBridge` **只读探测层**与 `[Compat] TogetherProbe`（版本/协议/账本序号/波签名/预检；**不写任何 Together 状态**、联机让路不变），并给出"只调一个私有 `AfterAccept` 即可登记"的实读结论与发射权冲突；**路线 A（全部在本 DLL 内、纯反射）实现说明书见 §11.16（未落地代码）**；实机两轮修：① 插入点改为"锚点标题块最前面"（标题与容器之间还夹着装饰节点，按"紧邻前一个兄弟"会插到标题后面）；② 标题改为克隆原版标题节点、关掉其美术层再放我们的 `Text`（字号照抄行标签、颜色照抄原版染色），观感与左边距对齐；③ 靠岸速度档位改为整数 **×1 / ×2 / ×5 / ×10**（档距 1/2/5/10，越高档变化越夸张；旧 cfg 值自动吸附到最近档） |
-> **版本号口径**：按"新增功能"递增版本号 ⇒ 当前 = **`v1.7.7`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.7**（**v1.7.7 = 设置界面独立分类 + Together 只读探测**，见 §11.15；v1.7.6 = 修船速叠乘 + 船只堆叠开关 + 生命周期清理，见 §11.13/§11.14；v1.7.5 = 原版设置里可开关本模组 + 模组总开关，见 §11.12；v1.7.4 的两批：第 1 批 = UI 可读性与挡岛（§11.8）、第 2 批 = UI 间距与排版 + 三项代码问题（§11.10）；v1.7.3 = 性能与结构 + 两道新闸门（零行为变更，§11.7）；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，§11.3）；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；v1.7.0 = 整合包 / Together 共存立项与重做。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
+| **v1.8.0（定稿）** | **1.8.0** | **联机投放改由 Together 侧解决**：删除早期在本 DLL 内的全部同步实现（借号广播 / 控制器壳 / 清单登记 / 开波跳游标，均未发布），本 DLL 回到 v1.7.7 行为，只保留一个**只读放行闸** `TogetherBridge.CanHostDispatch`（协议 14 + 本机主机 + `Epoch>0` + 未 `Fail`；不写任何 Together 状态）；"普通岛屿也能同步"由新工程 `BadNorthTogether/` 承担（反编译 Together 0.6.13 后加 3 处放行 + `HostRaidExternal`，程序集名仍为 `Together`、文件发布为 `BadNorthTogether.dll`、插件 GUID 不变，见 §11.17） |
+> **版本号口径**：按"新增功能"递增版本号 ⇒ 当前 = **`v1.8.0`（定稿）**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.8.0**（**v1.8.0 = 联机同步交给 BadNorthTogether，本 DLL 回退到 v1.7.7 + 只读放行闸**，见 §11.17）。更早：v1.7.7 = 设置界面独立分类 + Together 只读探测（§11.15/§11.16）；v1.7.6 = 修船速叠乘 + 船只堆叠开关 + 生命周期清理（§11.13/§11.14）；v1.7.5 = 原版设置里可开关本模组 + 模组总开关（§11.12）；v1.7.4 的两批：第 1 批 = UI 可读性与挡岛（§11.8）、第 2 批 = UI 间距与排版 + 三项代码问题（§11.10）；v1.7.3 = 性能与结构 + 两道新闸门（零行为变更，§11.7）；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，§11.3）；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；v1.7.0 = 整合包 / Together 共存立项与重做。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
 
 ## 9. UI 打磨路线
 
@@ -1214,5 +1215,66 @@ Launch()
 1. `waveStartTime = float.MaxValue` 守门是否 100% 不被原版抢发（B10 前科，必须观察到 `BeginWave` 只被调用一次）；
 2. `AfterAccept` 内部 `Capture` 对 `navPos.isNull` / 未 `placed` 的容忍度（我们预检已挡，但要确认无 NaN）；
 3. Together 升版（协议 14→15）时 `expectedLogicalId` / `AfterAccept` 是否改名 → 探测层已按名字取，缺一项即整体停用。
+
+### 11.17 v1.8.0：联机同步改由 **BadNorthTogether** 承担（2026-10-17 作者决策）
+
+> 决策：**不再在本 DLL 里做 Together 同步**。v1.8.0 的 B（借号广播）/ C（控制器壳）/ 清单登记 / 开波跳游标全部删除，
+> 本 DLL 回到 v1.7.7 的行为，只保留一个**只读**放行闸；真正的"普通岛屿也能同步"由 Together 的补丁版
+> `BadNorthTogether` 在 `Wave.BeginWave` 处接管 —— 任何模组在岛内新建的波都会被它登记并广播。
+
+#### A. 为什么必须在 Together 侧做（原实现为什么只能覆盖终岛）
+
+| 事实（反编译 Together 0.6.13 / 协议 14） | 后果 |
+|---|---|
+| `EndlessFinaleSession.IsLiveFinalRaid()` 要求 `levelNode.isEnd`，`RollingRaidController` 只在终岛创建 | 普通岛没有控制器 |
+| `HostRaidManifest.ResolveResources()`：`controllerType == null \|\| !GetComponent(controllerType)` → `IOException` | 客机在普通岛收到清单直接 `Fail` |
+| `HostRaidManifest.Build()`：`acceptWaves.Invoke(GetComponent(controllerType), …)` | 普通岛没有组件 → 空引用 / 失败 |
+| `HostRaidManifest.TryPatch()`：拿不到 EndlessFinale 类型就直接 `return`，**连 `travelFields` 都不初始化** | 没有 EndlessFinale 的客户端连装配都做不到 |
+
+⇒ 这四条都在 Together 的 DLL 内，外部模组无法"绕开"，只能改它（或让它给口子）。
+
+#### B. BadNorthTogether 的改法（`BadNorthTogether/`，源码级，≈300 行含注释）
+
+| # | 位置 | 改动 |
+|---|---|---|
+| 1 | `HostRaidManifest.TryPatch()` | `travelFields` 初始化移到 EndlessFinale 判断**之前**；缺 EndlessFinale / 无尽工厂接口不兼容时只关闭无尽接管、不再抛异常 |
+| 2 | `HostRaidManifest.ResolveResources()` | 去掉"必须有 RollingRaidController"，只校验 `island.navMesh` |
+| 3 | `HostRaidManifest.Build()` | `acceptWaves` 调用前判空（普通岛跳过 EndlessFinale 记账） |
+| 4 | `HostRaidManifest` | 新增 `nextExternalId`（`BeginIsland = initialCount`，`AfterAccept` 取 max）与 `TryAdopt(Wave)` / `CaptureExternal(Wave)` / `SignatureOf(id)` |
+| 5 | 新 `HostRaidExternal`（`[HarmonyPatch(typeof(Wave), "BeginWave")]`） | 主机 + 联机 + `DeploySync.BattleStarted` + `Epoch>0` 且该波未登记 → 拦下本机开波、登记编号、发清单；等客机 `ready` 后在 `HostRaidManifest.Tick` 里恢复开波，并补发 `WaveBegin` |
+| 6 | `RaidIdentity.IsRegistered` / `RegisterExternal` / `Prune`、`WaveSync.SendExternalBegin` | 判别"原版波/已登记波"；外部波不在 `raid.waves` 里，`Prune` 不能按"已触发但不在波列表"把它退休（否则人物永远发布不出去）；外部波单独补发开波命令（签名取清单里存的那份，避免船速档位在捕获后改写航线导致漂移） |
+
+**保持不变的**：协议 14、所有消息格式、原有终岛无尽流程、客机/主机权威模型、UI 与按键。
+**只多出来的**：普通岛屿上"非 Together 自己创建的波"也会被登记并同步。
+
+#### C. 命名与安装（重要）
+
+- **程序集名保持 `Together`**（`Compat.FindAssembly("Together")`、`Type.GetType("Together.*")`、其它模组的 `[BepInDependency("com.linfeng.together")]` 全部照旧）；
+- **文件发布为 `BadNorthTogether.dll`**，插件显示名 `BadNorthTogether`，GUID 仍是 `com.linfeng.together`（cfg 文件名不变）；
+- **不能和旧的 `Together.dll` 同时存在**（同名程序集两份会被加载两次）；`build.ps1 -Deploy` 会自动把旧 `Together.dll` 改名备份；
+- **双端必须同一份 BadNorthTogether**（协议号没变，但普通岛的放行逻辑在客机侧；旧 Together 客机收到普通岛清单仍会 `Fail`）。
+
+#### D. 本 DLL（BadNorthNewMode v1.8.0）的改动
+
+- 删除 v1.8.0 的 `TogetherBridge` 写路径、`FlotillaLauncher` 同步状态机、`ModConfig` 的三个联机键、`ShipSpeedRuntime.SuspendedBySession`、`SpawnLedger` 联机清理等；
+- 新增 `TogetherBridge.CanHostDispatch(out why)`（只读）：协议 14 + 本机主机 + `Epoch>0` + 未 `Fail`；
+- `Compat.DropBlocked`：Together 在线时改为"能投就放行，不能投给出具体原因"；
+- `Compat.NoteDropInSession`：放行时提示"已交给 BadNorthTogether 同步"，否则保留旧警告。
+
+#### E. 已知注意
+
+1. **靠岸速度档位**：清单在 `BeginWave` 时捕获航线用时；若主机档位 ≠ ×1，本模组的变速会在捕获之后才写到船上 → 主机本地船比客机快（单位位置仍以主机为准）。联机建议保持 **×1**。
+2. **教程关**：Together 在教程关沿用原版自动部署，人物基线仍可能超时（与本节无关，属它的机制）——先单机过教程再联机。
+3. **同 mod 集**：客机缺资源时会在 `ResolveResources` 抛错 → 整局 `Fail`；两端插件与资源必须一致。
+4. Together 升版（协议 / 类名变化）→ 本补丁需要按新版重新落一遍；`build.ps1` 只编译 `BadNorthTogether/Together` 下的源码。
+
+#### F. 验收
+
+1. 双端只装 `BadNorthTogether.dll`（删掉旧 `Together.dll`），战役地图开房 → 一起进普通岛；
+2. 主机 F1 投放 1 艘：客机看到船与敌人、可攻击、可死亡；双方存活数一致；
+3. 连续投放 3 次：`[主机波清单] 外部波登记 N` 的 N 连续；客机每次都出现；无 `Fail`；
+4. 终岛无尽：与 EndlessFinale 自己的波共用序号，仍连续；
+5. 会话在"进岛后"才建立（`Epoch=0`）：本模组拒绝投放并说明原因；BadNorthTogether 不接管（退回仅本机）。
+
 
 

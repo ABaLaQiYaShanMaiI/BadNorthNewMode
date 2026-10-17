@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Voxels.TowerDefense;
 using Voxels.TowerDefense.RaidGeneration;
 
@@ -26,12 +26,14 @@ namespace BadNorthNewMode
         static Island _probedIsland;      // 会话探测按岛屿去重
 
         static Assembly _asm;
-        static System.Type _session, _identity, _manifest, _authority, _protocol;
+        static System.Type _session, _identity, _manifest, _authority, _protocol, _features;
 
         static PropertyInfo _isHost;
         static MethodInfo _getWaveId, _isCommitted, _waveSignature, _isWaveReady, _canPublishWave;
         static FieldInfo _initialCount, _expectedLogicalId, _ready, _hostEntries;
         static FieldInfo _authorityEpoch, _authorityFailure;
+        // 探针修正：Together 里 Epoch / HasFailure 是**属性**而不是字段
+        static PropertyInfo _authorityEpochProp, _authorityFailureProp;
 
         internal static bool Available
         {
@@ -125,6 +127,87 @@ namespace BadNorthNewMode
             }
         }
 
+        /// <summary>v1.8.0：联机投放放行判定（**只读**，不写任何 Together 状态）。
+        /// 只有同时满足"装了同步版 Together（BadNorthTogether） + 本机是主机 + 战斗基线已建立（Epoch&gt;0）"才放行；
+        /// 具体同步由 Together 侧 `HostRaidExternal` 在 `wave.BeginWave()` 处接管（登记逻辑编号 + 清单 + 开波）。</summary>
+        internal static bool CanHostDispatch(out string why)
+        {
+            why = null;
+            if (!Compat.TogetherOnline) return true;                     // 单机：与本模组无关
+
+            if (!Probe())
+            {
+                why = Loc.F("联机同步不可用：{0}", _why);
+                return false;
+            }
+            if (!ExternalWaveSync())
+            {
+                why = Loc.T("当前 Together 不是 BadNorthTogether（没有普通岛外部波通道）：联机投放会只有主机可见，已让路");
+                return false;
+            }
+            if (ProtocolText() != "14")
+            {
+                why = Loc.F("Together 协议不是 14（当前 {0}）", ProtocolText());
+                return false;
+            }
+            if (IsHostText() != "Y")
+            {
+                why = Loc.T("本机是客机（只有主机能投放）");
+                return false;
+            }
+            if (EpochNow() <= 0)
+            {
+                why = Loc.T("本局没有建立联机战斗基线（进岛后才开房）：请回战役地图开房，再一起进岛");
+                return false;
+            }
+            if (FailureNow())
+            {
+                why = Loc.T("Together 已判定本局失败（请重开一局）");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>v1.8.0：对面 Together 是否是带"普通岛外部波通道"的 BadNorthTogether。
+        /// 读 `Together.BadNorthTogetherFeatures.ExternalWaves`（const bool）；原版 Together 没有这个类型 → false。</summary>
+        static bool ExternalWaveSync()
+        {
+            try
+            {
+                if (object.ReferenceEquals(_features, null)) return false;
+                FieldInfo f = _features.GetField("ExternalWaves", BindingFlags.Public | BindingFlags.Static);
+                if (object.ReferenceEquals(f, null)) return false;
+                object v = f.GetRawConstantValue();
+                return v is bool && (bool)v;
+            }
+            catch (System.Exception) { return false; }
+        }
+
+        static int EpochNow()
+        {
+            try
+            {
+                if (!object.ReferenceEquals(_authorityEpochProp, null))
+                    return (int)_authorityEpochProp.GetValue(null, null);
+            }
+            catch (System.Exception) { }
+            return IntStatic(_authorityEpoch);
+        }
+
+        static bool FailureNow()
+        {
+            try
+            {
+                if (!object.ReferenceEquals(_authorityFailureProp, null))
+                {
+                    object v = _authorityFailureProp.GetValue(null, null);
+                    return v is bool && (bool)v;
+                }
+            }
+            catch (System.Exception) { }
+            return BoolStatic(_authorityFailure);
+        }
+
         /// <summary>预检（正式登记前的硬条件，逐项只读）：landing 已放置 / navPos 有效 / 资源名可解析 / 数量不超限。</summary>
         static string Preflight(Wave wave)
         {
@@ -208,6 +291,7 @@ namespace BadNorthNewMode
                 _manifest = TypeOf("Together.HostRaidManifest");
                 _authority = TypeOf("Together.AgentAuthority");
                 _protocol = TypeOf("Together.Net.Protocol");
+                _features = TypeOf("Together.BadNorthTogetherFeatures");
                 if (object.ReferenceEquals(_identity, null) || object.ReferenceEquals(_manifest, null))
                 { Fail("缺少 RaidIdentity / HostRaidManifest"); return false; }
 
@@ -236,6 +320,8 @@ namespace BadNorthNewMode
                 {
                     _authorityEpoch = Field(_authority, "Epoch");
                     _authorityFailure = Field(_authority, "HasFailure");
+                    _authorityEpochProp = Prop(_authority, "Epoch");
+                    _authorityFailureProp = Prop(_authority, "HasFailure");
                 }
                 return true;
             }

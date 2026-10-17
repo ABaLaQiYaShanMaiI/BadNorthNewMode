@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
@@ -315,7 +315,8 @@ namespace BadNorthNewMode
 
         // ===================== 让路策略（全部由 cfg 开关控制）=====================
 
-        /// <summary>投放是否让路：Together 联机中，或"整合包终岛无尽"正在接管本关。</summary>
+        /// <summary>投放是否让路：Together 联机中（**v1.8.0 起：装了同步版 Together 且本机是主机、基线已建立时放行**），
+        /// 或"整合包终岛无尽"正在接管本关。</summary>
         internal static bool DropBlocked(IslandGameplayManager gm, out string why)
         {
             why = null;
@@ -323,7 +324,12 @@ namespace BadNorthNewMode
 
             if (TogetherOnline)
             {
-                why = Loc.T("联机中（Together 在线）：本模组的投放会让整局联机冻结，已自动让路");
+                // v1.8.0：同步交给 BadNorthTogether（它在 wave.BeginWave 处登记逻辑波 + 发清单 + 开波）。
+                // 本模组只做"能不能投"的判定，绝不写 Together 状态。
+                string gate;
+                if (TogetherBridge.CanHostDispatch(out gate))
+                    return false;                       // 放行：客机由 BadNorthTogether 同步看到
+                why = gate;
                 return true;
             }
             if (PluginLoaded(GuidEndlessFinale) && !Util.V(ModConfig.CompatDropOnTerminal, false) && TerminalIsland(gm))
@@ -471,7 +477,10 @@ namespace BadNorthNewMode
             if (_sessionDropWarned) return;
             _sessionDropWarned = true;
 
-            string msg = Loc.T("注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上");
+            string gate;
+            string msg = TogetherBridge.CanHostDispatch(out gate)
+                ? Loc.T("联机投放已交给 BadNorthTogether 同步：本次投放的船与敌人会出现在客机（双端都要装 BadNorthTogether）")
+                : Loc.T("注意：联机中投放的单位不会广播给对方（Together 只同步它自己清单里的波次）—— 对方看不到这些船与敌人，但伤害与结算仍会算到他头上");
             Util.Warn("[NewMode][兼容] " + msg);
             IngameMenu.Say(msg);
         }
