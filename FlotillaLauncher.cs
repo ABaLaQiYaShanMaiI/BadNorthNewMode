@@ -114,6 +114,10 @@ namespace BadNorthNewMode
             wave.timeSpreadGroup = spread;      // 覆盖 Wave.Awake 的随机散布，避免编队拖到十几秒
             wave.timeSpreadShip = spread;
             wave.RefreshLandings();
+
+            // v1.7.7：Together 联机**只读探测**（`[Compat] TogetherProbe`，默认关）。不写任何 Together 状态。
+            TogetherBridge.ProbeWave(wave);
+
             if (wave.raid != null) wave.raid.StartCoroutine(wave.BeginWave());
             Util.Log(Loc.F("[NewMode] 编队出发：{0} 艘（一条接近音乐）", group.landings.Count));
         }

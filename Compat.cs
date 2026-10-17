@@ -107,7 +107,7 @@ namespace BadNorthNewMode
         /// <summary>按简单名找**已加载**的程序集（`AppDomain.GetAssemblies`）。
         /// ⚠️ 为什么不用 `Type.GetType("NS.T, 程序集")`：宿主可能以 LoadFrom 上下文装载插件，
         /// 那种带程序集限定的取法实测会返回 null（32 位 PowerShell 已复现）→ 会让探测静默失效。</summary>
-        static Assembly FindAssembly(string simpleName)
+        internal static Assembly FindAssembly(string simpleName)
         {
             try
             {
@@ -310,6 +310,7 @@ namespace BadNorthNewMode
             bool terminal = TerminalIsland(gm);
             if (terminal != _lastTerminal) _statusValid = false;      // 终岛状态变了 → 状态行缓存立刻失效
             _lastTerminal = terminal;
+            TogetherBridge.ProbeSession(gm);                          // v1.7.7：Together 只读探测（[Compat] TogetherProbe）
         }
 
         // ===================== 让路策略（全部由 cfg 开关控制）=====================

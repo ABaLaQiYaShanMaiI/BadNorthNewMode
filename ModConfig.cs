@@ -43,6 +43,10 @@ namespace BadNorthNewMode
         /// <summary>数字字体（v1.7.4）：留空 = **跟正文同字体**（= 原版字体）；填 `Times New Roman` 才用系统衬线体（旧行为）。</summary>
         public static ConfigEntry<string> UiNumberFont;
 
+        /// <summary>v1.7.7：模组三行在**原版设置界面**里所在的分类标题位置（1 = 排第一个标题前，2 = 成为第 2 个标题…）。
+        /// 默认 2：作者要求"单独一个标题、排在标题 2 的位置"。</summary>
+        public static ConfigEntry<int> SettingsCategoryIndex;
+
         /// <summary>兵种显示名的补充/覆盖（`内部名=显示名;…`）。给"添加兵种的 mod"用：纯 UI，不影响投放逻辑。</summary>
         public static ConfigEntry<string> UnitNameOverrides;
 
@@ -88,7 +92,7 @@ namespace BadNorthNewMode
         // ============ Landing ============
         public static ConfigEntry<float> ShipSpeedMultiplier;
 
-        /// <summary>局内"靠岸速度"档位（v1.7.1）：1 / 1.25 / 1.5 / 2 —— 原生与非原生船只都生效（4 档 UI 写这个键）。</summary>
+        /// <summary>局内"靠岸速度"档位（v1.7.1，v1.7.7 起整数档）：1 / 2 / 5 / 10 —— 原生与非原生船只都生效（4 档 UI 写这个键）。</summary>
         public static ConfigEntry<float> ShipSpeedGear;
         public static ConfigEntry<float> MaxShoreDistance;
         public static ConfigEntry<float> MaxLandHeight;
@@ -133,6 +137,11 @@ namespace BadNorthNewMode
         public static ConfigEntry<bool> CompatForceWinConfirm;
 
         /// <summary>启动时打印一行环境自检（整合包 / 联机 / MMHOOK / 游戏本体）。</summary>
+        /// <summary>v1.7.7：**Together 联机只读探测**（默认 false）。开启后每次投放打一行"本波在 Together 眼里是什么样"
+        /// （版本 / 协议 / 账本序号 / 是否已提交 / 签名 / 预检），用来验证 L2 对接方案；
+        /// **不写任何 Together 状态**、不改让路逻辑，单机无影响。</summary>
+        public static ConfigEntry<bool> TogetherProbe;
+
         public static ConfigEntry<bool> CompatReport;
 
         /// <summary>排障用：强制认为"没有整合包、没有联机"（让所有让路失效）。</summary>
@@ -222,6 +231,10 @@ namespace BadNorthNewMode
             UiNumberFont = cfg.Bind("UI", "NumberFont", "",
                 "数字用的字体。**留空（默认）= 跟正文同字体**（= 原版艺术字，观感统一）。\n" +
                 "要以前的衬线数字就填 Times New Roman（系统字体，取不到则回退正文）。");
+            SettingsCategoryIndex = cfg.Bind("UI", "SettingsCategoryIndex", 2,
+                "v1.7.7：本模组在**原版设置界面**里那个分类标题的位置（1 = 排在第 1 个标题之前；2 = 自己成为第 2 个标题）。\n" +
+                "默认 2（作者要求）。原版共 4 个分类（显示 / 控制 / 画面 / 音频），填 1~5 都有效（超出就排到最后）。\n" +
+                "分类容器是**克隆**原版分类得到的（字体 / 间距 / 竖排都与原版一致），标题固定显示 \"BadNorthNewMode 模组\"。");
         }
 
         static void BindLanding(ConfigFile cfg)
@@ -229,9 +242,10 @@ namespace BadNorthNewMode
             ShipSpeedMultiplier = cfg.Bind("Landing", "ShipSpeedMultiplier", 1f,
                 "航行速度倍率（原版 TryPlace 的 speedMultiplier）。");
             ShipSpeedGear = cfg.Bind("Landing", "ShipSpeedGear", 1f,
-                "局内\"靠岸速度\"档位（v1.7.1）：只认这 4 档 —— 1（初始速度）/ 1.25 / 1.5 / 2（二倍速）。\n" +
+                "局内\"靠岸速度\"档位（v1.7.7 起整数档，档距逐步拉大）：只认这 4 档 —— 1（初始速度）/ 2 / 5 / 10。\n" +
                 "作用是船只**靠岸/撤离**用时按档位缩放；**原生波次的船和本模组投放的船都生效**，在航的船也会立刻变。\n" +
-                "改这个值等于改速度：越大越快（1.5 = 用时变 1/1.5）。通常用 F1 菜单里那根 4 档拖动条调节，不用手改。\n" +
+                "改这个值等于改速度：越大越快（5 = 用时变 1/5，10 = 用时变 1/10）。旧版的历史值会自动吸附到最近的整数档。\n" +
+                "通常用 F1 菜单里那根 4 档拖动条调节，不用手改。\n" +
                 "联机中只有主机侧有意义（客机侧船由主机权威，界面会置灰）。");
             MaxShoreDistance = cfg.Bind("Landing", "MaxShoreDistance", 3f,
                 "点击处到最近可登陆岸线的最大距离（米），超过就拒绝投放。");
@@ -363,6 +377,11 @@ namespace BadNorthNewMode
                 "报障时这一行就够定位环境。默认开。");
             CompatForceOffline = cfg.Bind("Compat", "ForceOffline", false,
                 "排障用：强制认为\"没有整合包、没有联机\"，让上面所有让路失效（回旧行为）。默认关。");
+            TogetherProbe = cfg.Bind("Compat", "TogetherProbe", false,
+                "v1.7.7：Together 联机**只读探测**。开启后每次投放打一行：Together 版本 / 协议号 / 主机与否 /\n" +
+                "账本 initial 与 expected 序号 / 本波 id 是否已提交 / 波签名 / 预检（landing 已放置、资源名可解析、上限）。\n" +
+                "**只读、不写任何 Together 状态**、不改\"联机让路\"；用来在真人双端上验证 L2 对接方案（见 PROJECT_SPEC §11.15）。\n" +
+                "排障时打开即可，平时保持 false（不刷日志）。");
         }
     }
 }

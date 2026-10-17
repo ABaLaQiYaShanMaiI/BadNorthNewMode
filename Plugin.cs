@@ -17,7 +17,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.7.6";
+        public const string VERSION = "1.7.7";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -171,7 +171,7 @@ namespace BadNorthNewMode
                 //    我们**已经投放**的船与单位**不销毁**（那是玩家摆出来的，关模组不等于删场景）。
                 SessionCleanup.PurgeBattleState();
 
-                Util.Log(Loc.T("[NewMode] 总开关已关（原版设置 → 控制 最前面可再打开）：菜单/HUD 已收起、遥控已归还、波次与船速已还原"));
+                Util.Log(Loc.T("[NewMode] 总开关已关（原版设置 → 分类「BadNorthNewMode 模组」可再打开）：菜单/HUD 已收起、遥控已归还、波次与船速已还原"));
             }
             catch (System.Exception e)
             {

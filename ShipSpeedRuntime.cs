@@ -7,7 +7,7 @@ using Voxels.TowerDefense.RaidGeneration;
 namespace BadNorthNewMode
 {
     /// <summary>
-    /// 局内"靠岸速度"4 档（v1.7.1）：1 / 1.25 / 1.5 / 2.0 —— **原生波次的船与本模组投放的船都生效**。
+    /// 局内"靠岸速度"4 档（v1.7.1；v1.7.7 起为整数档 ×1 / ×2 / ×5 / ×10，档距逐步拉大 ⇒ 高档差别非常明显）：**原生波次的船与本模组投放的船都生效**。
     ///
     /// 原理（见 PROJECT_SPEC §10）：原版 `Longship.UpdateIncoming` / `get_timeRemaining` 每帧读
     /// `landing.shipTravel.duration`，`UpdateOutGoing` 读 `fleeDuration`
@@ -28,8 +28,9 @@ namespace BadNorthNewMode
     /// </summary>
     internal static class ShipSpeedRuntime
     {
-        /// <summary>4 个档位（作者口径）：1 = 初始速度。</summary>
-        internal static readonly float[] Gears = new float[] { 1f, 1.25f, 1.5f, 2f };
+        /// <summary>4 个档位（作者口径）：1 = 初始速度；v1.7.7 起改为整数 ×1 / ×2 / ×5 / ×10
+        /// （档距逐步拉大：相邻档差别一眼能看出来；旧 cfg 的历史值会由 `GearIndex` 自动吸附到最近档）。</summary>
+        internal static readonly float[] Gears = new float[] { 1f, 2f, 5f, 10f };
 
         const float MinDuration = 0.05f;      // 极端档位下也不给游戏喂 0/负值
         const float TickInterval = 1f;        // 周期扫描（新出现的船）节流；换档时是**立即**套用
@@ -67,7 +68,8 @@ namespace BadNorthNewMode
                 for (int i = 1; i < Gears.Length; i++)
                 {
                     float d = Mathf.Abs(Gears[i] - g);
-                    if (d < diff) { diff = d; best = i; }
+                    // `<=`：距离打平时取更高的档（例如旧 cfg 的 7.5 夹在 5 与 10 中间 → 落 10），与玩家的直觉一致
+                    if (d <= diff + 0.0001f) { diff = d; best = i; }
                 }
                 return best;
             }

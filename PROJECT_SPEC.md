@@ -355,7 +355,8 @@ Raid.IIslandFirstEnter:
 | **v1.7.4（第 2 批）** | **1.7.4** | **UI 间距与排版（作者实机反馈）：行距 10→13、说明行与按钮拉开 6px、说明文字垂直居中、数量行预设铺满到右边界、靠岸速度改成"轨道在上/说明在下"；环境自检挪到第一次 Update（修"整合包=0 个插件"的误导数字）；`[Diag] CleanLogOnStart`（默认不再删共享日志）；点击路由 / 框选加 UI 门控（点原版 UI 不再对世界下令，见 §11.10）** |
 | **v1.7.5** | **1.7.5** | **在游戏原生设置界面里开关本模组：设置 → 控制 分类末尾两行（`BadNorthNewMode：启用模组` = 新 cfg `[General] Enabled` 总开关；`原生单位：可遥控` = 与 F1 菜单同键）。总开关关掉 = 完全静默（不接管点击 / 不画菜单·HUD / 快捷键失效 / 不拦波次 / 在航船速还原原版）；实现**零 Harmony·零 MMHOOK**（轮询 `UserSettingsMenu` + 反射 `AddBoolWidget` + 运行期注入 I2 词条，见 §11.12）** |
 | **v1.7.6** | **1.7.6** | **修"×2 靠岸速度退出岛屿再重进 → 船速叠乘"（真 bug，见 §11.13A：改存基准用时、登记表不再在离开战局时清空、每秒自愈比对）+ 修 F1 档位条"拖动状态卡死 → 平移相机时误换档"；新增 `[Landing] AllowShipStack`（船只可堆叠，默认关）并挂进原版设置 → 控制 分类第三行（与前两行同一套机制，见 §11.13B）；**生命周期与状态清理专题**（见 §11.14：关总开关还原被拦波次、离开战局/换岛清每局状态、卸载销毁我们创建的常驻对象与设置行）；顺带修"投放失败后半成品 Landing 留在编队里"** |
-> **版本号口径**：按"新增功能"递增版本号 ⇒ 当前 = **`v1.7.6`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.6**（**v1.7.6 = 修船速叠乘 + 船只堆叠开关**，见 §11.13；v1.7.5 = 原版设置里可开关本模组 + 模组总开关，见 §11.12；v1.7.4 的两批：第 1 批 = UI 可读性与挡岛（§11.8）、第 2 批 = UI 间距与排版 + 三项代码问题（§11.10）；v1.7.3 = 性能与结构 + 两道新闸门（零行为变更，§11.7）；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，§11.3）；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；v1.7.0 = 整合包 / Together 共存立项与重做。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
+| **v1.7.7** | **1.7.7** | **原版设置里给本模组一个独立分类标题（克隆原版分类容器、换 I2 词条写我们自己的标题，按层级顺序插到第 2 个标题位置；新 cfg `[UI] SettingsCategoryIndex`，克隆失败自动退回"塞进控制列"，见 §11.15A）+ Together 联机对接研究：新增 `TogetherBridge` **只读探测层**与 `[Compat] TogetherProbe`（版本/协议/账本序号/波签名/预检；**不写任何 Together 状态**、联机让路不变），并给出"只调一个私有 `AfterAccept` 即可登记"的实读结论与发射权冲突；**路线 A（全部在本 DLL 内、纯反射）实现说明书见 §11.16（未落地代码）**；实机两轮修：① 插入点改为"锚点标题块最前面"（标题与容器之间还夹着装饰节点，按"紧邻前一个兄弟"会插到标题后面）；② 标题改为克隆原版标题节点、关掉其美术层再放我们的 `Text`（字号照抄行标签、颜色照抄原版染色），观感与左边距对齐；③ 靠岸速度档位改为整数 **×1 / ×2 / ×5 / ×10**（档距 1/2/5/10，越高档变化越夸张；旧 cfg 值自动吸附到最近档） |
+> **版本号口径**：按"新增功能"递增版本号 ⇒ 当前 = **`v1.7.7`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.7**（**v1.7.7 = 设置界面独立分类 + Together 只读探测**，见 §11.15；v1.7.6 = 修船速叠乘 + 船只堆叠开关 + 生命周期清理，见 §11.13/§11.14；v1.7.5 = 原版设置里可开关本模组 + 模组总开关，见 §11.12；v1.7.4 的两批：第 1 批 = UI 可读性与挡岛（§11.8）、第 2 批 = UI 间距与排版 + 三项代码问题（§11.10）；v1.7.3 = 性能与结构 + 两道新闸门（零行为变更，§11.7）；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，§11.3）；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；v1.7.0 = 整合包 / Together 共存立项与重做。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
 
 ## 9. UI 打磨路线
 
@@ -593,7 +594,7 @@ internal static void Forget(Island island);                          // 清场/�
 
 ### 11.6 局内"靠岸速度"4 档（v1.7.1 / b4，取代 §10 的连续滑条）
 
-**需求**：局内可调**原生波次 + 本模组投放**的船只"靠岸/撤离"速度；档位 4 档：`1`（初始）/ `1.25` / `1.5` / `2`（二倍速）。
+**需求**：局内可调**原生波次 + 本模组投放**的船只"靠岸/撤离"速度；档位 4 档：`1`（初始）/ `2` / `5` / `10`（v1.7.7 起为整数档、档距逐步拉大 ⇒ 高档差别非常明显；旧 cfg 值自动吸附到最近档）。
 
 **机制（已实测核对 IL）**
 
@@ -615,7 +616,7 @@ internal static void Forget(Island island);                          // 清场/�
 | 联机**客机**（`Compat.SessionClient`） | 控件置灰并提示"由主机决定"（船由主机权威，本地改无意义）；主机/单机正常 |
 | 运行期异常 | 全部 `try/catch`；本条 Landing 跳过，不影响其他船 |
 
-**UI**：F1 菜单新增一行 —— 一句提示 + **四等分拖动条**（每格写 `×1 / ×1.25 / ×1.5 / ×2`）：按下即选、按住横扫即换档、松手播一次点击音 + 打一行日志；换档时立即写 cfg（`[Landing] ShipSpeedGear`）并套用到全船。面板高度/宽度已同步（`MenuHeight`/`MenuWidth`）。
+**UI**：F1 菜单新增一行 —— 一句提示 + **四等分拖动条**（每格写 `×1 / ×2 / ×5 / ×10`）：按下即选、按住横扫即换档、松手播一次点击音 + 打一行日志；换档时立即写 cfg（`[Landing] ShipSpeedGear`）并套用到全船。面板高度/宽度已同步（`MenuHeight`/`MenuWidth`）。
 
 **顺带修掉的一个真 bug（闸门抓到）**：`FieldInfo == null` 会编译成 `MemberInfo.op_Equality`，那是 .NET 4.0 才有的成员、**游戏 mscorlib 2.0 里不存在** → 运行期 `MissingMethodException`。
 `tools/check-api.ps1` 当场拦下（`方法不存在: System.Reflection.FieldInfo::op_Equality(2 参)`），已全部改为 `object.ReferenceEquals`。**反射代码必须走这个约定。**
@@ -1010,4 +1011,208 @@ SessionCleanup.DestroyHelpers()        销毁我们 new 出来的常驻对象 / 
 3. 框选拖到一半按 ESC / 退出岛屿 → 回来之后**相机仍能拖动**（L4）；
 4. 从岛屿 A 退出回地图再进岛屿 B → 底部头像条、HUD 计数、菜单兵种列表都应立刻是 B 的（不残留 A）；
 5. 热重载插件（或换 DLL 重启）→ 原版设置里**始终三行**，不重复；世界里没有 `BadNorthNewMode.*` 残留对象。
+
+### 11.15 v1.7.7：设置界面独立分类 + Together 联机对接研究（2026-10-17，作者需求）
+
+#### A. 原版设置里给本模组一个**独立标题**（不再塞进「控制键」）
+
+**需求原文**：*"游戏设置菜单是有标题区分的，我们关于模组的按钮也单独设置一个标题，排在标题 2 的位置，不要放在'控制键'的标题分布内容。"*
+
+**原版结构（反编译 + 反射核实）**
+
+```
+UserSettingsMenu : GeneratedMenu
+  四个分类 = 四个"容器（VerticalLayoutGroup）+ 场景里预置的标题 + 一个列表 Transform"
+      categoryControls / categoryDisplay / categoryGraphics / categoryAudio   ← 列表节点（控件往这里加）
+      ×.parent                                                              ← 容器（标题 + 列表）
+  标题文字是**场景对象**，不在代码里创建（所以不能"new 一个标题"，只能克隆）
+```
+
+**做法（`VanillaSettings.EnsureCategory`，零 Harmony）**
+
+| 步 | 动作 |
+|---|---|
+| ① | 克隆 `categoryDisplay.parent`（**一整个分类容器**）→ 字体 / 行距 / 标题样式 / 竖排布局全部自动继承 |
+| ② | 清空克隆体里"列表节点"的原版控件（用源容器里 `categoryDisplay` 的 `GetSiblingIndex()` 定位同一个节点） |
+| ③ | 标题：**先把原版标题节点一起克隆**（原版每个分类 = "标题块 + 容器"两个兄弟）。标题有 `Localize` 就**换 I2 词条**（艺术字也适用）；只有 `Text` 就写文字；两者都没有（艺术字/图片组件）→ **克隆该节点 → 关掉它原本的 `Graphic`/`Renderer` 美术层 → 在同一个矩形上放我们的 `Text`**（字体/字号取原版开关行标签、颜色取原版标题染色否则用暖灰）⇒ 左边距 / 行高 / 宽度 / 锚点与原版标题完全一致，并打一行结构诊断 |
+| ④ | 位置：把四个分类容器按**场景层级顺序**排序（同层比 `siblingIndex`，跨列比共同祖先下的顺序），锚点 = 第 `[UI] SettingsCategoryIndex`（默认 **2**）个容器；插入点 = **锚点前面最近的分类容器之后的第一个节点**（= 锚点标题块最前面），**不是**"紧邻的前一个兄弟" → **我们的标题就是第 2 个**。插完打一行 `分类定位`（锚点/标题参照/插入点）与一行完整层级（每次安装只打一次，用于下次实机定案） |
+| ⑤ | 三行开关用原版 `AddBoolWidget(..., overrideParentTransform: 我们克隆的列表)` 创建（仍是原版控件、原版音效、原版导航） |
+| ⑥ | 克隆/定位失败 → **退回**"塞进控制列"的旧行为 + Warn（任何原版改版都不会让设置项消失） |
+| ⑦ | 卸载时 `DestroyWidgets()` 连**整个分类容器**一起销毁（热重载不会出现两份）；关总开关**保留**（那是逃生门） |
+
+**新 cfg**：`[UI] SettingsCategoryIndex`（默认 `2`，1~5；超出排到最后）。
+
+**为什么用 `Loc` 而不是 I2 词条**：标题是我们自己的品牌文字，不需要进游戏词条表；停用 `Localize` 后由我们每 15 帧写一次，切换语言立即跟上（与原版行的 `ForceUpdate` 同节奏）。
+
+#### B. Together 联机：能兼容吗？—— **接口层已就绪，先交付"只读探测"**
+
+**分析对象**：`Together.dll` **0.6.13 / 协议 14**（`Mono.Cecil` 实读，完整报告见本地 `TOGETHER_V177_COMPAT_PLAN.md`）。
+
+**本轮最关键的三个发现**
+
+| # | 发现 | 意义 |
+|---|---|---|
+| 1 | 需要的入口**大多已经是 `public static`**：`RaidIdentity.RegisterWave / GetWaveId / IsCommitted / WaveSignature`、`AgentAuthority.RegisterGroup`、`HostRaidManifest.IsWaveReady / CanPublishWave` | 不需要 Harmony 改 Together，纯反射即可 |
+| 2 | 私有的 `HostRaidManifest.Capture` + `hostEntries` 不用自己拼 —— **`AfterAccept(waves, firstId, budget, retry)` 一条龙**做完全部登记（IL 逐条确认：`RegisterWave` → `RegisterGroup` → `Capture` → `hostEntries` → 日志） | 只需要反射调**一个**私有方法 |
+| 3 | **但 `IsCommitted` 要求 `island.raid.waves.Contains(wave)`**，而把波放进 `raid.waves` 会让原版 `Raid.MaybeLaunchWaves()` 按 `waveIndex` **接管发射** | 与我们的 `FlotillaLauncher` 抢发射权 → 可能双发 / 卡波。**这是必须先解决的硬冲突**（两条路线见本地笔记 §2.3） |
+
+**另一个必须一起改的点**：`WaveSignature` 用 `shipTravel.duration ×1000` 参与签名，而 `ShipSpeedRuntime` 会持续改 `duration`（每秒自愈 / 换档即时）⇒ 联机外部波必须**在 Capture 前定稿**（建议联机中把档位锁 `×1`）。
+
+**本轮交付（只读，默认关）**
+
+| 项 | 内容 |
+|---|---|
+| 新文件 | `TogetherBridge.cs`：版本 / 协议 / 主机探测 + 账本读取 + 波签名 + 预检（`placed` / `navPos` / 资源名可解析 / 上限 / 是否在 `raid.waves`），**不写任何 Together 状态** |
+| 新 cfg | `[Compat] TogetherProbe`（默认 `false`）：`Compat.Tick` 每岛一行"会话探测"（`initial / expected / ready / entries / epoch / fail` + 每条原版波 `id/committed/ready`），`FlotillaLauncher.Launch` 每次投放一行"本波探测"（`id / committed / ready / publish / sig / groups / landings / 预检`） |
+| 不变 | **联机让路照旧**（不投放 / 不遥控 / 拦波次被拒）；探测失败只 Warn 一次并停用 |
+| 不上线写入的原因 | 见上表第 3 点：在确定"谁发射"之前写入会把整局打停在冻结态（`IOException → Fail`），风险远大于"客机看不见" |
+
+**下一步（v1.7.8 建议）**：用真人双端的探测数据定 A/B 路线 → 落地 `[Compat] ExperimentalExternalWave`（默认关）→ 三组场景验收后再谈默认开。
+
+> **2026-10-17 决策**：作者选定 **路线 A（全部在本 DLL 内、纯反射；不改 `Together.dll`、不加桥接 DLL、不用 Harmony）**。
+> 可照抄的实现说明书已写入 **§11.16**（边界 / cfg / 反射成员 / 时序 / 守门 / 签名 / 撤销 / 验收），**本轮不落地代码**。
+
+#### C. 验证
+
+**构建闸门**：`api-check` / `loc-check` / `rules`（含规则⑧）/ `docrefs` 全绿（数字见提交说明）。
+
+**实机验收**
+1. ESC → 设置：**第 2 个标题**变成「BadNorthNewMode 模组」，三行开关在它下面（**不是**挂在「图像」标题下面）；标题的字号/颜色/左边距与原版标题一致；原「控制键」分类里不再有我们的项；日志里有一行 `分类定位`（锚点 / 标题参照 / 插入点）；
+2. 切中/英：标题与三行文字都跟着变；
+3. 把 `[UI] SettingsCategoryIndex` 改成 1 / 3 / 5 重启：标题位置相应变化（越界排到最后）；
+4. 联机（Together 在线）且 `TogetherProbe=true`：进入岛屿后应看到一行"会话探测"与每条原版波一行；**不投放也不影响对局**。
+
+### 11.16 Together 联机对接：**路线 A 设计定稿**（全部在本 DLL 内，纯反射；**尚未落地代码**）
+
+> 2026-10-17 作者决策：**走 A** —— 不改 `Together.dll`、**不新增桥接 DLL**、**不用 Harmony 打它的补丁**；
+> 所有对接代码都放在本模组自己的 DLL 里，用**反射**调用 Together 已经提供的入口。
+> 本节是"可照抄的实现说明书"，等 §11.15B 的只读探测在真人双端跑完、确认发射权与签名时序后再落地。
+
+#### A. 边界（明确不做什么）
+
+| 不做 | 原因 |
+|---|---|
+| 改 `Together.dll` / 替换它 | 升级即失效，且属于别人的作品 |
+| 新增 `BadNorthNewMode.Together.dll` | 玩家要多装一个文件、还要配对版本；用反射已足够，**没有实质收益** |
+| Harmony 补丁 `HostRaidManifest` / `CanPublishActor` | 绕过它的清单/签名校验 = 直接 `IOException → Fail` 冻结整局；也违背本项目"零 Harmony"原则 |
+| 客机 → 主机的投放 | 本模组在联机里仍是"主机侧功能"；客机只要求**看得见**（由 Together 姿态流驱动） |
+
+#### B. 新增 cfg（全部默认关 / 安全值）
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `[Compat] ExperimentalExternalWave` | `false` | **总开关**。只有明确知道"两端同版本 Together + 同 mod 集合"时才开 |
+| `[Compat] ExternalWaveWaitSeconds` | `3.0` | 登记后等客机回执（`IsWaveReady`）的上限；超时撤销本次投放 |
+| `[Compat] ExternalWaveFailLimit` | `1` | 允许的连续失败次数；达到后**本会话永久停用**并写回 `false` |
+| `[Compat] ExternalWaveLockShipSpeed` | `true` | 联机外部波期间把「靠岸速度」锁 `×1`（见 §F 签名） |
+
+#### C. 反射成员（实读 `Together 0.6.13`；探测层已缓存大部分）
+
+| 用途 | 成员 | 可见性 |
+|---|---|---|
+| 序号 | `HostRaidManifest.expectedLogicalId`（字段） | private static |
+| 账本 | `HostRaidManifest.initialCount` / `ready` / `hostEntries`（字段） | private static |
+| **一条龙登记** | `HostRaidManifest.AfterAccept(List<Wave>, int firstId, int budget, int retry)` | **private static** |
+| 就绪/放行 | `IsWaveReady(int)` / `CanPublishWave(Wave)` | public static |
+| 身份 | `RaidIdentity.RegisterWave(Wave,int)` / `GetWaveId` / `IsCommitted` / `WaveSignature` / `ReleaseWave(int)` | public / internal |
+| 群组 | `AgentAuthority.RegisterGroup(ShipGroup, Squad)` | public static |
+| 健康度 | `AgentAuthority.Epoch` / `HasFailure` | public static |
+
+> `AfterAccept` 的 IL 已逐条读过：它自己会 `RegisterWave → RegisterGroup → Capture → hostEntries`；
+> 我们**不要**自己拼 `Manifest`，也不要在它之外再调 `RegisterWave`（会重复/抛）。
+
+#### D. 投放时序（唯一入口：`FlotillaLauncher.Launch()`）
+
+```
+Launch()
+ ├ 0. 条件：TogetherProbe 可用 && Session.IsHost && cfg.ExperimentalExternalWave
+ │         && 本会话未停用 && !AgentAuthority.HasFailure
+ ├ 1. 预检（TogetherBridge.Preflight，已有）：
+ │      landing.placed / navPos 有效 / shipPrefab 与 vikingRef 名字可解析 /
+ │      groups≤64、landings≤128、loads≤16、agents≤8192 / wave.raid == island.raid
+ │      任一失败 → 只走"仅主机可见"（现状），并打一行原因
+ ├ 2. id = expectedLogicalId（绝不跳号；读不到就放弃）
+ ├ 3. wave.raid = raid；raid.waves.Add(wave)          // IsCommitted 的硬条件
+ ├ 4. wave.waveStartTime = float.MaxValue             // 守门：见 §E，防原版抢先发射
+ ├ 5. AfterAccept([wave], id, budget: 0, retry: 0)（反射）
+ │      抛 IOException → 撤销（§G）并计一次失败
+ ├ 6. 等待 IsWaveReady(id)：每帧检查，最多 ExternalWaveWaitSeconds
+ │      · 就绪 → wave.waveStartTime = 0f；StartCoroutine(wave.BeginWave())（我们发射）
+ │      · 超时 → 撤销（§G）
+ └ 7. 发射后：不释放任何 Together 状态（波由 Together 的 Prune/ReleaseWave 自行管理）
+```
+
+**为什么"自己发射"而不是让原版调度发射**（发射权，§11.15B 的 A/B 里选 **B**）：
+
+- `Raid.MaybeLaunchWaves()` 只处理 `waves[waveIndex]`，**严格顺序**；
+- 把我们的波 `Insert` 到 `waveIndex` 会改变后面所有波的下标（`Raid` 自用 + Together 的 `OnBeginWave(index)`），风险远大于收益；
+- `Add` 到末尾又会让"中途投放"必须等完所有待发原版波 —— 实战中不可接受；
+- 因此：**保持自建发射**，只把 `waveStartTime` 临时设 `float.MaxValue` 挡住原版，等 `IsWaveReady` 后恢复 `0` 并自己 `BeginWave`。
+  `MaxValue` 对 `Landing.startTime` 的影响只存在于 `TryPlace`（此时已执行完），且 `Wave.BeginWave` 只用各 landing `startTime` 的**差值**（同时被抵消）→ 技术上安全，但仍列为**实机必验项**（B10 前科）。
+
+#### E. 守门细节（防"双发"）
+
+| 时刻 | 原版会看到什么 | 我们要保证 |
+|---|---|---|
+| `Add` 之后、`IsWaveReady` 之前 | `waves[waveIndex]` 可能正好是我们的波；`timer >= MaxValue` 永远 false | **原版不会发射**（`waveStartTime` 守门） |
+| 我们自己 `BeginWave()` 之后 | `wave.triggered = true`；`haveAllLaunched` 变 true | `MaybeLaunchWaves` 只会 `waveIndex++`，不会重发 |
+| 撤销时 | 波要从 `raid.waves` 移除并销毁 | 否则 `Prune()` 会把它标成"退休 id"，后续同 id 登记会抛 |
+
+#### F. 签名与「靠岸速度」（必须一起做）
+
+`RaidIdentity.LandingSignature` 把 `shipTravel.duration ×1000` 与坐标取整一起混进 `WaveSignature`；而 `ShipSpeedRuntime` 会**持续**改写 `duration`（换档立即、每秒自愈）。规则：
+
+1. `ExternalWaveLockShipSpeed = true`（默认）→ 联机外部波模式期间 `ShipSpeedRuntime` 对**本波 landing** 不写 `duration`（或全局锁 ×1）；
+2. 顺序：**先定稿 `duration`，再 `AfterAccept`**；之后不再改；
+3. 若做不到（例如玩家在等回执时拖了档位）→ 放弃本次登记（登记前后各算一次 `WaveSignature`，不一致就撤）。
+
+#### G. 失败与撤销（任何一条都不得留半截）
+
+`Abort(reason)` 的顺序（**从后往前退**）：
+
+1. `RaidIdentity.ReleaseWave(id)`（若可反射；失败只 Warn）
+2. `raid.waves.Remove(wave)`
+3. `wave.StopAllCoroutines()`
+4. `UnityEngine.Object.Destroy(wave.gameObject)`（`SpawnLedger` 会在下一帧自动摘掉死根）
+5. `IngameMenu.Say("本条未能同步给队友（" + reason + "）")` + `Util.Warn`
+6. `failCount++`；达到 `ExternalWaveFailLimit` → `ExperimentalExternalWave=false`（写回 cfg）+ 本会话停用
+
+> 注意：一旦清单已经**发出去**且客机已按它建了波，就**不能**单方面撤销（会造成两端不一致）⇒ 因此步骤 6 只允许在
+> "`AfterAccept` 抛异常 / 预检失败 / 回执超时且从未 ready"时触发。
+
+#### H. 与现有模块的交互
+
+| 模块 | 影响 |
+|---|---|
+| `Compat.DropBlocked` | **保持不变**：联机默认仍让路；只有 `ExperimentalExternalWave=true` 时 `IngameMenu.Toggle` 才放行投放（新增条件） |
+| `SpawnLedger` | 波现在**也在 `raid.waves` 里** → 原版结算/清场会一并处理；我们的 `Destroy` 仍保留（幂等） |
+| `LevelTools`（拦波次） | 联机中本来就拒绝；无需改动。`EnsureScanned` 仍会跳过 `SpawnLedger.Owns` 的自家波 |
+| `ShipSpeedRuntime` | 见 §F |
+| `SessionCleanup` | `PurgeBattleState` 已有 `FlotillaLauncher.Cancel()` 会销毁挂起的波；新增"若已登记则先 `ReleaseWave`" |
+| HUD | 新增一行（仅 verbose）：`[Together] 本波已登记 id=N，等待队友确认…` |
+
+#### I. 落地顺序（建议 v1.7.8，分三步提交）
+
+1. **探测复跑**：用现有 `[Compat] TogetherProbe` 收双端日志 → 确认 `expectedLogicalId` / `waveIndex` / `initialCount` 关系与 `sig` 稳定性；
+2. **只写"登记 + 等回执"**（发射仍走现状，即登记后**不**改变发射逻辑，只观察 `IsWaveReady` 是否变 true）→ 验证清单能被客机接受、且**不冻结**；
+3. **开启守门 + 自己发射**（§D/§E），双端跑完 §J。
+
+#### J. 验收清单（真人双端，缺一不可）
+
+| # | 场景 | 判据 |
+|---|---|---|
+| 1 | 普通关，主机投放 1 艘 | 客机看到**真船/真敌人**并在下船后正常行动；两端 `vikingsAlive` 一致 |
+| 2 | 同一关连续投放 3 次（含 Flotilla 合并窗口） | 每次 `id` 连续递增；客机三次都看到；无 `Fail` |
+| 3 | 终岛无尽（EndlessFinale 接管波次） | 与它的动态波共享序号流，仍连续；不冻结 |
+| 4 | 中途投放（原版仍有未发射波） | 我们的波**立即**出发（不被 `waveIndex` 卡住）；原版波不受影响 |
+| 5 | 客机断线 / 回执超时 | 主机侧撤销并提示；不出现"船在开、清单没接受" |
+| 6 | 档位 ×2 时投放 | 签名不漂移（或按 §F 锁 ×1）；客机显示一致 |
+| 7 | 任意异常一次后 | 开关写回 `false`、本会话不再尝试、**不冻结** |
+
+#### K. 未决 / 需实机确认
+
+1. `waveStartTime = float.MaxValue` 守门是否 100% 不被原版抢发（B10 前科，必须观察到 `BeginWave` 只被调用一次）；
+2. `AfterAccept` 内部 `Capture` 对 `navPos.isNull` / 未 `placed` 的容忍度（我们预检已挡，但要确认无 NaN）；
+3. Together 升版（协议 14→15）时 `expectedLogicalId` / `AfterAccept` 是否改名 → 探测层已按名字取，缺一项即整体停用。
+
 
