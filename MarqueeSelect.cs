@@ -244,6 +244,27 @@ namespace BadNorthNewMode
             UpdateSlowMo(false);
         }
 
+        /// <summary>v1.7.6：**换岛 / 回地图 / 关总开关**时把遥控侧的运行时状态全部复位（见 `SessionCleanup` / §11.14）。
+        /// 相机让位要**先还回去再丢引用** —— 同岛重开时 `CursorManager` 与相机控制器可能还是同一批对象，
+        /// 直接丢 `_detached` 会让"相机再也不能拖动"（这是最容易漏、也最难查的一类残留）。</summary>
+        internal static void ClearSession()
+        {
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            if (gm != null && gm.cursorManager != null) AttachCamera(gm);
+            _detached = null;
+
+            _pending = null;
+            _pendingCenter = Vector2.zero;
+            _held = false;
+            _grab = false;
+            _dragging = false;
+            _pressUnit = null;
+            _clickUsedForSelect = false;
+            _pressWasDrag = false;
+            _screenRect = new Rect(0f, 0f, 0f, 0f);
+            ClearSlowMo();
+        }
+
         /// <summary>框选：默认替换选择，按住 Shift 则并入现有选择。</summary>
         static void ApplySelection()
         {
@@ -474,7 +495,13 @@ namespace BadNorthNewMode
             if (_detached == null) return;
 
             CursorManager cm = (gm != null) ? gm.cursorManager : null;
-            if (cm != null && !cm.Contains(_detached)) cm.Add(_detached);
+            // v1.7.6：相机可能已随场景销毁（离开战局 / 重开战局）→ 不要把它塞回 CursorManager
+            //（否则原版 `CameraController.OnDrag` 会在销毁对象上被调用）。Unity 的 `!= null` 能识别已销毁对象。
+            CameraController cam = _detached as CameraController;
+            if (cam != null)
+            {
+                if (cm != null && !cm.Contains(_detached)) cm.Add(_detached);
+            }
             _detached = null;
         }
 

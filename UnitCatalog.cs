@@ -222,5 +222,13 @@ namespace BadNorthNewMode
             _pickUnit = found;
             return found;
         }
+
+        /// <summary>v1.7.6：换岛 / 回地图时清掉"按（岛, 兵种名）缓存"的那份引用（见 `SessionCleanup` / §11.14）。</summary>
+        internal static void ClearCache()
+        {
+            _pickIsland = null;
+            _pickName = null;
+            _pickUnit = null;
+        }
     }
 }

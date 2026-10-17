@@ -34,6 +34,18 @@ namespace BadNorthNewMode
 
         internal static bool Visible { get { return _slots.Count > 0; } }
 
+        /// <summary>v1.7.6：换岛 / 回地图 / 关总开关时立刻清空（不等下一次 0.3s 扫描），避免旧局的 slot 被画出来 / 被点到。</summary>
+        internal static void ClearSession()
+        {
+            _slots.Clear();
+            _widths.Clear();
+            _rect = new Rect(0f, 0f, 0f, 0f);
+            _laidOut = false;
+            _avoidY = float.MaxValue;
+            _nextScan = 0f;
+            _nextAvoidScan = 0f;
+        }
+
         /// <summary>头像条矩形（IMGUI 坐标；ClickShield 按它摆位，用上一帧的值）。</summary>
         internal static Rect BarRect { get { return _rect; } }
 

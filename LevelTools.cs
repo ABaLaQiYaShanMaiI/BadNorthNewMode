@@ -140,7 +140,9 @@ namespace BadNorthNewMode
             }
         }
 
-        static void ReleaseWaves()
+        /// <summary>把 `waveStartTime` 全部还回原值并清空记录。v1.7.6 起由 `SessionCleanup.RestoreGameState` 调
+        /// （关总开关 / 插件卸载）—— 旧实现只在"关掉拦波次开关"时调，于是关总开关后波次永远不来。</summary>
+        internal static void ReleaseWaves()
         {
             foreach (KeyValuePair<Wave, float> kv in _origStart)
                 if (kv.Key != null) kv.Key.waveStartTime = kv.Value;
@@ -154,6 +156,20 @@ namespace BadNorthNewMode
             _island = null;
             _announced = false;
             DropPlanner.InvalidateOccupancy();
+        }
+
+        /// <summary>v1.7.6：**离开战局 / 换岛**时丢掉"扫描缓存"（见 `SessionCleanup` / §11.14）。
+        /// ⚠️ 有意**保留** `_origStart`（每条原版波被我们改之前的时间）与 `_island`：
+        /// 它们是"还回原版"的唯一凭据 —— 丢了就再也还原不了 `waveStartTime`（波次会永远停在 MaxValue）。
+        /// 死掉的 Wave 由 `ReleaseWaves` 里的 Unity null 判定跳过。</summary>
+        internal static void ClearScanCache()
+        {
+            _scanRaid = null;
+            _scanChildren = -1;
+            _nextRescan = 0f;
+            _vanillaWaves.Clear();          // 只是"需要每帧重写"的清单：下一次 EnsureScanned 会重建
+            _blockedLandings.Clear();
+            _announced = false;
         }
 
         /// <summary>菜单按钮入口（与 F3 共用同一实现）。</summary>

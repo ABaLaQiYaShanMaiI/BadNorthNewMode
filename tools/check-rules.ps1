@@ -11,6 +11,8 @@
 #   ⑦ 禁用清单（`tools\banned-api.txt`）：逐行扫全部 .cs，命中即拦（该行写 `// ok:` 可豁免）
 #      —— 目前含 `IsPointerOverGameObject`（本游戏恒为真，会把我们的世界点击静默吞掉；v1.0.4 / v1.7.4 各栽一次）
 #      与 `Array.Empty`（游戏 mscorlib 2.0 没有）。**加一条清单 = 永久拦截**，不再依赖"谁记得"。
+#   ⑧ `DontDestroyOnLoad` 的常驻对象必须有 `static void Destroy()` → 插件卸载 / 热重载时才能清掉
+#      （v1.7.6 专题：Ledger / Flotilla / Watchdog / Marker / RemoteCursor 曾经全都只创建不销毁，见 PROJECT_SPEC §11.14）
 # 用法：.\tools\check-rules.ps1 -Root <仓库根>
 param([Parameter(Mandatory = $true)][string]$Root)
 $ErrorActionPreference = 'Stop'
@@ -187,6 +189,15 @@ foreach ($f in $files) {
             if ($code -match 'new\s+List<') { [void]$v.Add(("⑤ 热路径 " + $name + " 里有 new List<（每帧分配；确有必要写 // alloc-ok）  " + $f.Name + ":" + ($k + 1) + "   " + $lines[$k].Trim())) }
             if ($code -match 'new\s+Dictionary<') { [void]$v.Add(("⑤ 热路径 " + $name + " 里有 new Dictionary<（每帧分配；确有必要写 // alloc-ok）  " + $f.Name + ":" + ($k + 1) + "   " + $lines[$k].Trim())) }
             if ($code -match 'new\s+HashSet<') { [void]$v.Add(("⑤ 热路径 " + $name + " 里有 new HashSet<（每帧分配；确有必要写 // alloc-ok）  " + $f.Name + ":" + ($k + 1) + "   " + $lines[$k].Trim())) }
+        }
+    }
+
+    # ---- E. ⑧ 常驻对象必须有 Destroy()（用了 DontDestroyOnLoad 就必须能清）----
+    # 场景：插件卸载 / 热重载 / 关游戏。只创建不销毁 ⇒ 辅助对象与运行时贴图永远留着（v1.7.6 专题，见 §11.14）。
+    $text = [System.IO.File]::ReadAllText($f.FullName)
+    if ($text -match 'DontDestroyOnLoad\s*\(') {
+        if ($text -notmatch 'static\s+void\s+Destroy\s*\(') {
+            [void]$v.Add(("⑧ 用了 DontDestroyOnLoad 但没有 static void Destroy()（卸载后清不掉；见 PROJECT_SPEC §11.14）  " + $f.Name))
         }
     }
 }

@@ -6,29 +6,32 @@ using Voxels.TowerDefense.UI;
 
 namespace BadNorthNewMode
 {
-    /// <summary>把两行开关挂进**原版设置界面**（v1.7.5）。见 PROJECT_SPEC §11.12。
+    /// <summary>把三行开关挂进**原版设置界面**（v1.7.5 两行 + v1.7.6「船只可堆叠」）。见 PROJECT_SPEC §11.12 / §11.13。
     ///
     /// 原版结构（反编译 `BadNorthDatabase` 核实）：
     ///   `UserSettingsMenu : GeneratedMenu : UIMenu`；`GeneratedMenu.Initialize()`（由 `Awake` / `IGameSetup.OnGameAwake`
     ///   经 `MaybeInitialize()` 只调一次）里用 `AddBoolWidget(词条, getter, setter, 分类Transform)` 建出各项；
-    ///   分类容器挂 `VerticalLayoutGroup` → **后加的子项会自动排版**，所以只要等它初始化完成再追加两行即可。
+    ///   分类容器挂 `VerticalLayoutGroup` → **后加的子项会自动排版**，所以只要等它初始化完成再追加即可。
     ///
     /// 三条设计约束：
     ///   ① **不引入 Harmony / MMHOOK**（本模组一贯"零补丁"）：改为每秒轮询一次私有 `_instance` + `initialized`，
     ///      初始化完成后追加；结构不符就**一次性放弃并 Warn**，F1 菜单与 cfg 照旧可用。
-    ///   ② 标签走游戏的 **I2 本地化**（原版控件只认"词条"，缺词条 = 空白）→ 运行期把两条词条注入
+    ///   ② 标签走游戏的 **I2 本地化**（原版控件只认"词条"，缺词条 = 空白）→ 运行期把三条词条注入
     ///      `LocalizationManager.Sources`（中/英各一份）并 `UpdateDictionary(true)`。
-    ///   ③ 两行的 getter/setter **直接读写 cfg**（`[General] Enabled` / `[Native] ControlNativeUnits`）⇒
-    ///      原版设置、F1 菜单、cfg 文件三处天然同步，不需要任何额外状态。</summary>
+    ///   ③ 每行的 getter/setter **直接读写 cfg**（`[General] Enabled` / `[Native] ControlNativeUnits` /
+    ///      `[Landing] AllowShipStack`）⇒ 原版设置、F1 菜单、cfg 文件三处天然同步，不需要任何额外状态。</summary>
     internal static class VanillaSettings
     {
         // 注入游戏本地化表的词条名（不是我们 Loc 的词条；中英文本各写一份）
         const string TermEnabled = "BADNORTHNEWMODE/SETTINGS/ENABLED";
         const string TermNative = "BADNORTHNEWMODE/SETTINGS/NATIVE";
+        const string TermStack = "BADNORTHNEWMODE/SETTINGS/STACK";
         const string TextEnabledZh = "BadNorthNewMode：启用模组";
         const string TextEnabledEn = "BadNorthNewMode: mod enabled";
         const string TextNativeZh = "原生单位：可遥控";
         const string TextNativeEn = "Native units: controllable";
+        const string TextStackZh = "船只可堆叠（影响观感）";
+        const string TextStackEn = "Ships may stack (visual only)";
 
         const float ScanInterval = 1f;         // 每秒找一次菜单；挂上后只做一次"实例还在不在"的比较
 
@@ -38,13 +41,14 @@ namespace BadNorthNewMode
         static bool _probed;
         static bool _failed;                   // 结构不符 / 出错 → 永久放弃（不刷日志、不每帧重试）
         static UserSettingsMenu _installedOn;  // 已挂好的实例（换场景换了实例就重挂）
-        static Widget _wEnabled, _wNative;     // 我们那两行的控件（菜单开着时按原版节奏重刷显示用）
+        static Widget _wEnabled, _wNative, _wStack;  // 我们那几行的控件（菜单开着时按原版节奏重刷显示用）
         static float _nextScan;
 
         static MethodInfo _addBoolWidget;      // GeneratedMenu.AddBoolWidget(string, Func<bool>, Func<bool,bool>, Transform)
         static System.Type _funcBool;          // 游戏侧的 System.Func<bool> —— ⚠️ 在 System.Core 里，**不在 mscorlib**
         static System.Type _funcBoolBool;      // 游戏侧的 System.Func<bool,bool>
         static System.Delegate _getEnabled, _setEnabled, _getNative, _setNative;   // 按游戏侧委托类型现造的委托
+        static System.Delegate _getStack, _setStack;
 
         /// <summary>由 `Plugin.Update` 每帧调用（内部自己节流）。**总开关关掉时也要调** ——
         /// 关掉模组后还得靠这一项从原版设置里再打开它。</summary>
@@ -80,7 +84,7 @@ namespace BadNorthNewMode
             }
         }
 
-        /// <summary>菜单开着时按 15 帧节奏重刷两行：`Widget.ForceUpdate()` → `ValueWidget.onForceUpdate(GetValue())`
+        /// <summary>菜单开着时按 15 帧节奏重刷这几行：`Widget.ForceUpdate()` → `ValueWidget.onForceUpdate(GetValue())`
         /// ⇒ 读我们的 getter（cfg）重新显示。设置界面没开着就什么都不做。</summary>
         static void RefreshRows()
         {
@@ -89,6 +93,7 @@ namespace BadNorthNewMode
 
             if (_wEnabled != null) _wEnabled.ForceUpdate();
             if (_wNative != null) _wNative.ForceUpdate();
+            if (_wStack != null) _wStack.ForceUpdate();
         }
 
         static bool Probe()
@@ -137,20 +142,23 @@ namespace BadNorthNewMode
 
             Widget w1 = _addBoolWidget.Invoke(menu, new object[] { TermEnabled, _getEnabled, _setEnabled, column }) as Widget;
             Widget w2 = _addBoolWidget.Invoke(menu, new object[] { TermNative, _getNative, _setNative, column }) as Widget;
+            Widget w3 = _addBoolWidget.Invoke(menu, new object[] { TermStack, _getStack, _setStack, column }) as Widget;
 
             // 位置：**显式**排到该分类列表的**最前面**（作者要求"在所有选项的第一位"）。
             // `AddBoolWidget` 内部是 `InstantiateChild` → `SetParent(parent, false)`（只追加、不动 siblingIndex），
-            // 所以位置不能靠创建顺序碰运气 —— 这里直接定死 0 / 1（顺序 = 启用模组 → 原生单位）。
+            // 所以位置不能靠创建顺序碰运气 —— 这里直接定死 0 / 1 / 2（顺序 = 启用模组 → 原生单位 → 船只可堆叠）。
             if (w1 != null) { w1.transform.SetSiblingIndex(0); w1.ForceUpdate(); }
             if (w2 != null) { w2.transform.SetSiblingIndex(1); w2.ForceUpdate(); }
+            if (w3 != null) { w3.transform.SetSiblingIndex(2); w3.ForceUpdate(); }
 
             _wEnabled = w1;
             _wNative = w2;
+            _wStack = w3;
             _installedOn = menu;
-            Util.Log(Loc.T("[NewMode] 已把两行开关挂进原版设置界面（控制 分类末尾）：启用模组 / 原生单位可遥控"));
+            Util.Log(Loc.T("[NewMode] 已把三行开关挂进原版设置界面（控制 分类最前面）：启用模组 / 原生单位可遥控 / 船只可堆叠"));
         }
 
-        /// <summary>反射拿到 `AddBoolWidget` 与它那两个委托参数的类型，并现造四个委托（只做一次）。</summary>
+        /// <summary>反射拿到 `AddBoolWidget` 与它那两个委托参数的类型，并现造六个委托（只做一次）。</summary>
         static bool PrepareWidgetApi()
         {
             if (!object.ReferenceEquals(_addBoolWidget, null)) return true;
@@ -182,9 +190,12 @@ namespace BadNorthNewMode
             _setEnabled = MakeDelegate(_funcBoolBool, "SetEnabled");
             _getNative = MakeDelegate(_funcBool, "GetNative");
             _setNative = MakeDelegate(_funcBoolBool, "SetNative");
+            _getStack = MakeDelegate(_funcBool, "GetStack");
+            _setStack = MakeDelegate(_funcBoolBool, "SetStack");
 
             if (object.ReferenceEquals(_getEnabled, null) || object.ReferenceEquals(_setEnabled, null) ||
-                object.ReferenceEquals(_getNative, null) || object.ReferenceEquals(_setNative, null))
+                object.ReferenceEquals(_getNative, null) || object.ReferenceEquals(_setNative, null) ||
+                object.ReferenceEquals(_getStack, null) || object.ReferenceEquals(_setStack, null))
             {
                 _failed = true;
                 Util.Warn(Loc.T("[NewMode] 原版设置项的回调委托创建失败 → 不挂设置项；F1 菜单与 cfg 仍可用"));
@@ -212,6 +223,7 @@ namespace BadNorthNewMode
                 if (src == null) continue;
                 AddTerm(src, TermEnabled, TextEnabledZh, TextEnabledEn);
                 AddTerm(src, TermNative, TextNativeZh, TextNativeEn);
+                AddTerm(src, TermStack, TextStackZh, TextStackEn);
             }
         }
 
@@ -235,7 +247,7 @@ namespace BadNorthNewMode
             src.UpdateDictionary(true);                       // 立刻可查（否则新词条要等下次重建字典）
         }
 
-        // ---- 两行的取值与落值：直接读写 cfg（与原版设置、F1 菜单、cfg 文件同步）----
+        // ---- 各行的取值与落值：直接读写 cfg（与原版设置、F1 菜单、cfg 文件同步）----
         static bool GetEnabled() { return Util.V(ModConfig.Enabled, true); }
 
         static bool SetEnabled(bool v)
@@ -255,6 +267,37 @@ namespace BadNorthNewMode
         {
             if (ModConfig.ControlNativeUnits != null) ModConfig.ControlNativeUnits.Value = v;
             return true;                                                       // 同上：返回"设置成功"，不是新值
+        }
+
+        static bool GetStack() { return Util.V(ModConfig.AllowShipStack, false); }
+
+        static bool SetStack(bool v)
+        {
+            bool changed = (Util.V(ModConfig.AllowShipStack, false) != v);
+            if (ModConfig.AllowShipStack != null) ModConfig.AllowShipStack.Value = v;
+
+            // 只在真的变了时打一行：这行日志是"玩家说船叠起来了，是不是我们干的"的第一手证据
+            //（只影响**之后**的投放，已经在场的船不会被挪动）。
+            if (changed) Util.Log(Loc.T("[NewMode][投放] 船只堆叠已切换（只影响之后的投放；见原版设置 → 控制）"));
+            return true;                                                       // 同上：返回"设置成功"，不是新值
+        }
+
+        /// <summary>v1.7.6：插件卸载时把三行从原版设置里摘掉（热重载后不会出现两份，见 `SessionCleanup` / §11.14）。
+        /// 关总开关**不**调 —— 那三行是"再打开模组"的逃生门，必须留着。</summary>
+        internal static void DestroyWidgets()
+        {
+            DestroyWidget(_wEnabled);
+            DestroyWidget(_wNative);
+            DestroyWidget(_wStack);
+            _wEnabled = null;
+            _wNative = null;
+            _wStack = null;
+            _installedOn = null;
+        }
+
+        static void DestroyWidget(Widget w)
+        {
+            if (w != null) UnityEngine.Object.Destroy(w.gameObject);
         }
     }
 }

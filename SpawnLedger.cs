@@ -28,6 +28,17 @@ namespace BadNorthNewMode
             return _instance;
         }
 
+        /// <summary>插件卸载：销毁登记册与它名下**我们投放的**对象（Wave / 登录 squad）。
+        /// 见 `SessionCleanup.DestroyHelpers` / §11.14 —— 卸载后这些对象没有主人，留着就是幽灵船。</summary>
+        internal static void Destroy()
+        {
+            if (_instance == null) return;
+            try { _instance.DestroyAll(); }
+            catch (System.Exception e) { Util.Warn(Loc.F("[NewMode][清理] 卸载时销毁投放对象出错：{0}", e.Message)); }
+            UnityEngine.Object.Destroy(_instance.gameObject);
+            _instance = null;
+        }
+
         /// <summary>登记一次投放的根节点（在 LandingInjector 建树后立即调用）。</summary>
         internal static void Track(GameObject root, Island island)
         {
@@ -77,7 +88,10 @@ namespace BadNorthNewMode
         {
             TrySubscribeLevelEnd();
 
-            if (ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown() && !VanillaUI.ModalShowing)
+            // v1.7.6：F2 也受**总开关**约束 —— v1.7.5 的承诺是"关掉总开关后 F1/F2/F3/R 全部失效"，
+            // 而本组件是独立 MonoBehaviour（不经过 `Plugin.Update`），不判断就会在"完全静默"下照样清场。
+            // 注意：自动清理（离开战局 / 换岛 / 战局结束）**不**受它影响 —— 那是防止幽灵船的必要收尾。
+            if (Plugin.Enabled && ModConfig.CleanupHotkey != null && ModConfig.CleanupHotkey.Value.IsDown() && !VanillaUI.ModalShowing)
                 RequestCleanup();
 
             if (_items.Count == 0) { _seenContainer = null; return; }

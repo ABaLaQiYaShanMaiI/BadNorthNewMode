@@ -53,6 +53,10 @@ namespace BadNorthNewMode
 
             // 逐个尝试候选滩头（原版 Raid 也用随机序遍历候选）；失败主因是廊道被 Modules 挡住或与已有 Landing 重叠。
             List<Landing> placed = DropPlanner.CollectPlaced(raid);
+            // v1.7.6：[Landing] AllowShipStack = true 时**不把已有船交给 TryPlace 做朝向盒重叠检查** ——
+            // 否则原版 `ColCube.CheckBox` 仍会拒绝，叠船开关就成了空话（`DropPlanner` 那边已同时跳过占用判定）。
+            // `TryPlace` 会往这个列表里 `Add(this)`，所以只能用每次新建的这份（`CollectPlaced` 返回），清了也不影响占用缓存。
+            if (Util.V(ModConfig.AllowShipStack, false)) placed.Clear();
             Beaches.Beach.Pos used = t.beach;
             bool placedOk = false;
             int tried = 0;
@@ -74,6 +78,12 @@ namespace BadNorthNewMode
 
             if (!placedOk)
             {
+                // v1.7.6：失败要把这条半成品 Landing 从编队里摘掉 —— 否则它会一直挂在 `ShipGroup.landings` 里，
+                // 编队发射时对着一艘"永远没放好"的船 `Launch()`（实例已 Destroy）→ 徒增异常面。
+                // 注意：**不动 SpawnLedger** —— 那个 Wave 仍归 `FlotillaLauncher` 管（窗口内可继续复用，
+                // 且 `SpawnLedger.Owns` 必须继续认得它，否则"拦下原版波次"会误伤自家波，见 §4 坑表 B10）。
+                if (group.landings != null) group.landings.Remove(landing);
+                landing.shipGroup = null;
                 UnityEngine.Object.Destroy(landingGo);
                 info = Loc.F("附近 {0} 个滩头都被地形/建筑挡住或被占用，换个位置点", tried);
                 return false;

@@ -97,6 +97,12 @@ namespace BadNorthNewMode
         public static ConfigEntry<float> MarkerSeconds;
         public static ConfigEntry<float> MinLandingSpacing;
         public static ConfigEntry<bool> LandingFallbackAnywhere;
+
+        /// <summary>v1.7.6：**允许船只堆叠**（默认 false = 保持一直以来的"占位互斥"）。
+        /// 玩家要求的口子：打开后投放**不再避让已有船只**（也不做原版朝向盒重叠检查），
+        /// 多条船会叠在同一滩头 —— 纯观感/摆拍用途，逻辑上不影响船的装人、下船与编队。
+        /// 游戏内可在**原版设置**（ESC → 设置 → 控制 分类最前面）切换，见 `VanillaSettings`。</summary>
+        public static ConfigEntry<bool> AllowShipStack;
         public static ConfigEntry<float> FlotillaDelay;
         public static ConfigEntry<float> FlotillaSpread;
         public static ConfigEntry<int> FlotillaMaxShips;
@@ -243,6 +249,11 @@ namespace BadNorthNewMode
                 "附近都没有才放宽到\"不重叠\"；调大只会更倾向留空档，不会导致投不出来。");
             LandingFallbackAnywhere = cfg.Bind("Landing", "LandingFallbackAnywhere", true,
                 "附近没有空位时改用全岛最近的滩头。true = 小岛后期也投得出来；false = 直接拒绝并提示。");
+            AllowShipStack = cfg.Bind("Landing", "AllowShipStack", false,
+                "允许船只堆叠（v1.7.6，默认 false）。\n" +
+                "false = 一直以来的行为：新船会避让已有船（首选间距 = MinLandingSpacing + 船长，附近满了会自动换滩头）。\n" +
+                "true  = **不再避让**：同一滩头可以叠多条船（也不做原版朝向盒重叠检查）—— 纯观感用途，船照常装人、下船、编队。\n" +
+                "游戏里也能切：ESC → 设置（原版界面）→ 控制 分类最前面的「船只可堆叠（影响观感）」。");
             FlotillaDelay = cfg.Bind("Landing", "FlotillaDelay", 1f,
                 "编队窗口（秒）：窗口内连续投放的船合并成一支编队（只播一条接近音乐）。0 = 每艘各自出发。");
             FlotillaSpread = cfg.Bind("Landing", "FlotillaSpread", 2f,

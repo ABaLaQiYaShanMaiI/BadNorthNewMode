@@ -17,7 +17,7 @@ namespace BadNorthNewMode
     {
         public const string GUID = "badnorth.newmode";
         public const string NAME = "Bad North - New Mode";
-        public const string VERSION = "1.7.5";
+        public const string VERSION = "1.7.6";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
@@ -27,6 +27,7 @@ namespace BadNorthNewMode
         internal static bool Enabled { get { return Util.V(ModConfig.Enabled, true); } }
 
         bool _disabledApplied;             // v1.7.5：总开关"关掉"的收尾只做一次
+        Island _lastIsland;                // v1.7.6：上一帧的岛屿实例（变了 / 变 null = 离开战局或换岛 → 清每局状态）
 
         bool _subscribed;
         bool _subscribeFailed;
@@ -92,6 +93,17 @@ namespace BadNorthNewMode
                 Util.Log(Loc.T("[NewMode] 总开关已开：投放菜单 / HUD / 点击遥控恢复（原版设置里可随时再关）"));
             }
 
+            // v1.7.6 专题（见 §11.14）：**岛屿实例变了 / 回地图** → 立刻清一次"每局状态"。
+            // 判定用岛屿引用而不是 `InBattle`：后者在暂停时为 false，而暂停绝不能清遥控组。
+            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
+            Island curIsland = (gm != null) ? gm.island : null;
+            if (!object.ReferenceEquals(curIsland, _lastIsland))
+            {
+                // 首次进岛（_lastIsland == null）不用清；之后每次离开 / 换岛都清（离开时 curIsland 为 null）。
+                if (!object.ReferenceEquals(_lastIsland, null)) SessionCleanup.PurgeBattleState();
+                _lastIsland = curIsland;
+            }
+
             IngameMenu.HandleDrag();                    // 菜单标题栏 / 提示框拖动
             // 菜单 / 头像条上盖住原版点击（见 §6 T2），用上一帧矩形；原版确认框在前台时反而要让开（它自己会挡世界点击）
             bool modal = VanillaUI.ModalShowing;
@@ -116,7 +128,6 @@ namespace BadNorthNewMode
                 if (!IngameMenu.IsOpen) return;
             }
 
-            IslandGameplayManager gm = Singleton<IslandGameplayManager>.instance;
             Compat.Tick(gm);                               // v1.7.1：记录本关是否终岛（HUD 兼容状态行用）
             ShipSpeedRuntime.Tick(gm);                     // v1.7.1：靠岸速度档位（原生 + 非原生船；1s 节流）
 
@@ -142,20 +153,25 @@ namespace BadNorthNewMode
         }
 
         /// <summary>v1.7.5：总开关从"开"变"关"的那一帧做一次收尾（**不每帧跑**）。目标 = 完全不介入：
-        /// 菜单 / HUD / 拦截面收起、遥控归还给原版、时间减速的账清掉、在航船速还原原版；此后 Update/OnGUI 全部早退。</summary>
+        /// 菜单 / HUD / 拦截面收起、遥控归还给原版、时间减速的账清掉、**被拦的原版波次放回去**、在航船速还原原版；
+        /// 此后 Update/OnGUI 全部早退。v1.7.6：收尾统一走 `SessionCleanup`（见 §11.14）。</summary>
         void ApplyDisabled()
         {
             try
             {
                 IngameMenu.Close();                       // 关菜单 + 收起 HUD（内部会 Hide ClickShield）
                 ClickShield.Hide();
-                RemoteCursor.ForceRelease();              // 从 CursorManager 栈上摘掉（否则原版 Navigator 会一直是停用态）
-                RemoteGroup.Clear();                      // 归还 order / 销毁我们挂的组件
-                MarqueeSelect.ClearPending();
-                MarqueeSelect.ClearSlowMo();              // 释放时间减速，别在 TimeManager 里留残账
-                PlacementMarker.Get().Hide();
-                ShipSpeedRuntime.RestoreVanilla(Singleton<IslandGameplayManager>.instance);
-                Util.Log(Loc.T("[NewMode] 总开关已关（原版设置 → 控制 末尾可再打开）：菜单/HUD 已收起、遥控已归还、船速已还原"));
+
+                // ① 把我们**改到游戏里**的东西还回去。旧实现漏了 `LevelTools.ReleaseWaves()` ——
+                //    "拦下原版波次"开着时关掉总开关，`waveStartTime` 还停在 float.MaxValue ⇒ 整局永远不出波，
+                //    而 Update 已早退、再也不会有人去还原它（这是最隐蔽的一类"关掉了但没真关"）。
+                SessionCleanup.RestoreGameState(Singleton<IslandGameplayManager>.instance);
+
+                // ② 每局状态（选中 / 遥控组 / 看门狗 / 编队窗口 / 各类缓存）立刻清掉；
+                //    我们**已经投放**的船与单位**不销毁**（那是玩家摆出来的，关模组不等于删场景）。
+                SessionCleanup.PurgeBattleState();
+
+                Util.Log(Loc.T("[NewMode] 总开关已关（原版设置 → 控制 最前面可再打开）：菜单/HUD 已收起、遥控已归还、波次与船速已还原"));
             }
             catch (System.Exception e)
             {
@@ -163,12 +179,11 @@ namespace BadNorthNewMode
             }
         }
 
+        /// <summary>插件卸载（关游戏 / 热重载）：先还原游戏状态，再销毁我们创建的一切（见 `SessionCleanup` / §11.14）。</summary>
         void OnDestroy()
         {
-            MarqueeSelect.ClearSlowMo();          // 卸载时释放减速，避免 TimeManager 里留残账
-            ClickShield.Destroy();
-            RemoteCursor.ForceRelease();
-            MenuSkin.Destroy();                   // 释放菜单的运行时贴图
+            SessionCleanup.RestoreGameState(Singleton<IslandGameplayManager>.instance);
+            SessionCleanup.DestroyHelpers();
         }
 
     }

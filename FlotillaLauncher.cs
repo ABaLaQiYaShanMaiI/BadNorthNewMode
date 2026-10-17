@@ -71,6 +71,25 @@ namespace BadNorthNewMode
             if (_instance != null) _instance.Launch();
         }
 
+        /// <summary>v1.7.6：**放弃还没发射的编队窗口**（换岛 / 回地图 / 关总开关时）。
+        /// 旧实现只靠 `Update` 里"wave 被销毁了才知道"—— 但窗口期内岛屿还在、wave 也还活着，
+        /// 于是关掉总开关后它仍会照常 `BeginWave()`（"完全静默"就断了一半）。</summary>
+        internal static void Cancel()
+        {
+            Wave wave = _wave;
+            GameObject waveGo = (wave != null) ? wave.gameObject : null;
+            Clear();
+            if (waveGo != null) UnityEngine.Object.Destroy(waveGo);
+        }
+
+        /// <summary>插件卸载：销毁这个常驻辅助对象（先取消挂起的编队）。</summary>
+        internal static void Destroy()
+        {
+            Cancel();
+            if (_instance != null) UnityEngine.Object.Destroy(_instance.gameObject);
+            _instance = null;
+        }
+
         void Update()
         {
             if (_wave == null) return;

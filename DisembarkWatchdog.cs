@@ -38,8 +38,24 @@ namespace BadNorthNewMode
             _entries.Add(e);
         }
 
+        /// <summary>v1.7.6：换岛 / 回地图 / 关总开关时忘掉所有被盯的船（见 `SessionCleanup` / §11.14）。
+        /// 不清的话：这些 Landing 会一直被静态表引用（哪怕已经销毁），而且重进战局后还会拿旧船做诊断。</summary>
+        internal static void ForgetAll()
+        {
+            if (_instance != null) _instance._entries.Clear();
+        }
+
+        /// <summary>插件卸载：销毁这个常驻辅助对象。</summary>
+        internal static void Destroy()
+        {
+            ForgetAll();
+            if (_instance != null) UnityEngine.Object.Destroy(_instance.gameObject);
+            _instance = null;
+        }
+
         void Update()
         {
+            if (!Plugin.Enabled) return;          // v1.7.6：总开关关掉 = 完全静默，不再诊断 / 兜底下船
             if (_entries.Count == 0) return;
 
             bool fix = Util.V(ModConfig.DisembarkFix, false);

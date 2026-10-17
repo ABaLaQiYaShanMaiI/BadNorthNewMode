@@ -69,9 +69,12 @@ namespace BadNorthNewMode
             if (!CollectCandidates(island, landPoint, ship, seaY, maxH, maxShore, out cand, out candSq, out reason)) return false;
 
             // 两级间距：首选"基础 + 船长"；附近找不到就放宽到"只要不重叠"（原版本就是朝向盒不相交，见 §4 坑表）
+            // v1.7.6：[Landing] AllowShipStack = true 时**完全跳过占用判定**（间距 0）→ 玩家可以把船叠在同一滩头
+            // （纯观感；`LandingInjector` 同时不再把已有船交给 `TryPlace` 做重叠检查）。
+            bool allowStack = Util.V(ModConfig.AllowShipStack, false);
             float baseSpacing = Mathf.Max(0f, Util.V(ModConfig.MinLandingSpacing, 1f));
-            float prefer = baseSpacing + ship.length;
-            float minimal = Mathf.Max(0.35f, ship.radius * 2f);
+            float prefer = allowStack ? 0f : (baseSpacing + ship.length);
+            float minimal = allowStack ? 0f : Mathf.Max(0.35f, ship.radius * 2f);
 
             Beaches.Beach.Pos pick;
             int pickIdx;
@@ -194,6 +197,7 @@ namespace BadNorthNewMode
             for (int t = 0; t < 2; t++)
             {
                 float spacing = (t == 0) ? prefer : minimal;
+                if (t == 1 && Mathf.Abs(minimal - prefer) < 0.0001f) break;   // v1.7.6：叠船模式两级间距相同，扫一遍就够
 
                 for (int i = 0; i < cand.Count; i++)
                 {
@@ -277,6 +281,19 @@ namespace BadNorthNewMode
             _occDirty = true;
         }
 
+        /// <summary>v1.7.6：换岛 / 回地图时把**岸线采样**与**占位表**一起丢掉（见 `SessionCleanup` / §11.14）。
+        /// 采样缓存按岛屿引用复用，正常不会错；但岛屿换掉后它还握着上一座的 Island + 采样点，
+        /// 既占内存、也让"到底哪一份才是当前关"变得难判断。</summary>
+        internal static void ClearCache()
+        {
+            _cacheIsland = null;
+            _cacheBeaches = null;
+            _occIsland = null;
+            _occDirty = true;
+            _occPos.Clear();
+            _occName.Clear();
+        }
+
         static void RebuildOccupancy(Island island, Raid raid)
         {
             _occPos.Clear();
@@ -299,6 +316,9 @@ namespace BadNorthNewMode
         {
             dist = float.MaxValue;
             who = null;
+
+            // v1.7.6：允许船只堆叠 → 间距 0 = 永不算"被占"（也不必重建占用缓存）
+            if (spacing <= 0.0001f) return false;
 
             if (_occDirty || !object.ReferenceEquals(_occIsland, island)) RebuildOccupancy(island, raid);
 

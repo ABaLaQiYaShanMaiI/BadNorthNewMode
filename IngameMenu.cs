@@ -84,7 +84,7 @@ namespace BadNorthNewMode
             IsOpen = !IsOpen;
             Hover = "";
             PlacementMarker.Get().Hide();
-            if (!IsOpen) { ClickShield.Hide(); _dragging = false; }
+            if (!IsOpen) { ClickShield.Hide(); _dragging = false; CancelGearDrag(); }
             Say(IsOpen ? Loc.T("投放模式：点兵种 → 点滩头陆地") : Loc.T("投放模式已关"));
             Util.Log("[NewMode] " + _hud);
         }
@@ -96,6 +96,7 @@ namespace BadNorthNewMode
             PlacementMarker.Get().Hide();
             ClickShield.Hide();
             _dragging = false;
+            CancelGearDrag();                        // v1.7.6：别把"正在拖档位"的状态留到下次开菜单
             _hudLinesValid = false;                  // v1.7.3：标题行要立刻变回"BadNorthNewMode"
         }
 
@@ -394,6 +395,7 @@ namespace BadNorthNewMode
             {
                 VanillaUI.Click();
                 _collapsed = !_collapsed;
+                CancelGearDrag();                       // v1.7.6：折叠后档位条不再绘制 → 不能留着拖动状态
                 _measuredH = -1f;                       // 展开后重新量一次高度（折叠期间不写 _measuredH）
             }
             MenuSkin.DrawBtn(fold, _collapsed ? Loc.T("展开") : Loc.T("收起"), false);
@@ -600,10 +602,16 @@ namespace BadNorthNewMode
             Event e = Event.current;
             if (e == null) return;
 
+            // v1.7.6：拖动状态**必须能自己结束**。旧实现只认"轨道内的 MouseDown + 任意 MouseDrag/MouseUp"：
+            // 若松手发生在面板外 / 游戏窗口外（或那一帧 OnGUI 没跑到），`_gearDrag` 会一直挂着 →
+            // 之后**任何左键拖动**（比如平移相机）都会按鼠标 x 改档位，玩家就会莫名其妙发现"船越靠越快"。
+            if (_gearDrag && !Input.GetMouseButton(0)) _gearDrag = false;
+
             Vector2 m = e.mousePosition;                            // IMGUI 坐标（与面板同一坐标系）
             switch (e.type)
             {
                 case EventType.MouseDown:
+                    if (e.button != 0) return;                      // 只认左键
                     if (!track.Contains(m)) return;
                     _gearDrag = true;
                     _gearMoved = false;
@@ -613,12 +621,17 @@ namespace BadNorthNewMode
 
                 case EventType.MouseDrag:
                     if (!_gearDrag) return;
+                    if (e.button != 0) return;
+                    // 只认"还在轨道附近"的横向拖动：指针跑远（拖去转相机 / 拖到面板外）就结束本次拖动，
+                    // 不再跟着 x 改档位（横向越界无所谓，`ApplyGear` 会夹到首/末档）。
+                    if (m.y < track.y - track.height || m.y > track.yMax + track.height) { _gearDrag = false; return; }
                     ApplyGear(m.x, track, segW);
                     e.Use();
                     break;
 
                 case EventType.MouseUp:
                     if (!_gearDrag) return;
+                    if (e.button != 0) return;
                     _gearDrag = false;
                     if (_gearMoved)                                     // 只在真的换过档时给一次声音 + 日志
                     {
@@ -628,6 +641,13 @@ namespace BadNorthNewMode
                     e.Use();
                     break;
             }
+        }
+
+        /// <summary>彻底结束"正在拖档位"的状态（关菜单 / 折叠 / 卸载时调用）。</summary>
+        internal static void CancelGearDrag()
+        {
+            _gearDrag = false;
+            _gearMoved = false;
         }
 
         static void ApplyGear(float mouseX, Rect track, float segW)
@@ -827,6 +847,29 @@ namespace BadNorthNewMode
             _island = island;
             _units = UnitCatalog.AvailableUnits(island);
             Util.Log(Loc.F("[NewMode] 菜单：本关可用兵种 {0} 种", _units.Count));
+        }
+
+        /// <summary>v1.7.6：换岛 / 回地图 / 关总开关时清掉"每局一份"的菜单缓存（见 `SessionCleanup` / §11.14）。
+        /// 只清**数据**，不动玩家的手感偏好（面板位置 `_pos`、折叠状态 `_collapsed` 保留）。</summary>
+        internal static void ClearSessionCache()
+        {
+            _units = null;
+            _island = null;
+            Hover = "";
+            _tip = "";
+            _hud = "";
+            _hudUntil = 0f;
+            _hudMirror = false;
+            _hudActive = false;
+            _hudHoverSeen = null;
+            _hudLines.Clear();
+            _hudLinesValid = false;
+            _menuUnits = 0;
+            _measuredH = -1f;
+            _heightWarned = false;
+            _help = null;
+            _helpKey = null;
+            CancelGearDrag();
         }
     }
 }

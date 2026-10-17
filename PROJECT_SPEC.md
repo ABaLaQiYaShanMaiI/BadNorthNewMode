@@ -354,7 +354,8 @@ Raid.IIslandFirstEnter:
 | **v1.7.4（第 1 批）** | **1.7.4** | **UI 可读性与挡岛：面板高度改"实测自纠"（修 77px 空高）；删冗余说明、说明块可关（`[UI] ShowHelp`）、船速 ×1 标"（原版）"；数字字体默认跟随原版（`[UI] NumberFont`）；修"切语言后字体不重挑"；菜单开着时 HUD 并入面板 + 标题栏可收起（见 §11.8）** |
 | **v1.7.4（第 2 批）** | **1.7.4** | **UI 间距与排版（作者实机反馈）：行距 10→13、说明行与按钮拉开 6px、说明文字垂直居中、数量行预设铺满到右边界、靠岸速度改成"轨道在上/说明在下"；环境自检挪到第一次 Update（修"整合包=0 个插件"的误导数字）；`[Diag] CleanLogOnStart`（默认不再删共享日志）；点击路由 / 框选加 UI 门控（点原版 UI 不再对世界下令，见 §11.10）** |
 | **v1.7.5** | **1.7.5** | **在游戏原生设置界面里开关本模组：设置 → 控制 分类末尾两行（`BadNorthNewMode：启用模组` = 新 cfg `[General] Enabled` 总开关；`原生单位：可遥控` = 与 F1 菜单同键）。总开关关掉 = 完全静默（不接管点击 / 不画菜单·HUD / 快捷键失效 / 不拦波次 / 在航船速还原原版）；实现**零 Harmony·零 MMHOOK**（轮询 `UserSettingsMenu` + 反射 `AddBoolWidget` + 运行期注入 I2 词条，见 §11.12）** |
-> **版本号口径**：v1.7.4 的两批改动 + **v1.7.5**（原版设置里的开关，见 §11.12）在同一轮交付，但按"新增功能"递增版本号 ⇒ 本次 = **`v1.7.5`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.5**（v1.7.0 = 整合包 / Together 共存立项与重做；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，见 §11.3）；**v1.7.3 = 性能与结构 + 两道新闸门**（零行为变更，见 §11.7）；**v1.7.4（第 1 批）= UI 可读性与挡岛**（见 §11.8）；**v1.7.4（第 2 批）= UI 间距与排版 + 三项代码问题**（见 §11.10）；**v1.7.5 = 原版设置里可开关本模组 + 模组总开关**（见 §11.12）。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
+| **v1.7.6** | **1.7.6** | **修"×2 靠岸速度退出岛屿再重进 → 船速叠乘"（真 bug，见 §11.13A：改存基准用时、登记表不再在离开战局时清空、每秒自愈比对）+ 修 F1 档位条"拖动状态卡死 → 平移相机时误换档"；新增 `[Landing] AllowShipStack`（船只可堆叠，默认关）并挂进原版设置 → 控制 分类第三行（与前两行同一套机制，见 §11.13B）；**生命周期与状态清理专题**（见 §11.14：关总开关还原被拦波次、离开战局/换岛清每局状态、卸载销毁我们创建的常驻对象与设置行）；顺带修"投放失败后半成品 Landing 留在编队里"** |
+> **版本号口径**：按"新增功能"递增版本号 ⇒ 当前 = **`v1.7.6`**，`Plugin.VERSION` / `csproj Version` / HUD / 菜单 / 日志一律显示 **1.7.6**（**v1.7.6 = 修船速叠乘 + 船只堆叠开关**，见 §11.13；v1.7.5 = 原版设置里可开关本模组 + 模组总开关，见 §11.12；v1.7.4 的两批：第 1 批 = UI 可读性与挡岛（§11.8）、第 2 批 = UI 间距与排版 + 三项代码问题（§11.10）；v1.7.3 = 性能与结构 + 两道新闸门（零行为变更，§11.7）；**v1.7.2 = 修 B10**（拦下原版波次误伤自家 Wave，§11.3）；v1.7.1 = B1~B9 + 局内「靠岸速度」4 档；v1.7.0 = 整合包 / Together 共存立项与重做。更早：v1.6.1 两批 = 借用原版 UI + 原版艺术字 + 底部小队头像条 + 提示框可拖动；v1.6.2 = 官网配色、菜单两列紧凑、兵种头像读原版 `sprite2`，见 §5「UI 第二轮」与 §9；**v1.6.3 = 代码体检**（纯优化、零行为变更，见 §5）。）。提交由作者手动执行，标题由作者撰写。
 
 ## 9. UI 打磨路线
 
@@ -860,4 +861,153 @@ UserSettingsMenu : GeneratedMenu : UIMenu
 | 位置希望更显眼（"在所有选项的第一位"） | `AddBoolWidget` 走 `InstantiateChild` → `SetParent(parent, false)`：**只追加、不动 siblingIndex**，位置取决于容器现状（此前是排在末尾） | 显式 `SetSiblingIndex(0/1)`：两行**固定排在「控制」分类最前面**，顺序 = `启用模组` → `原生单位` |
 
 **验证**：五道闸门全绿（`api-check 651` / `loc-check 227（占位符 103）` / `rules 34 文件 8699 行 / 禁用清单 2 条` / `docrefs 96 处` / `pack-compat 172`）；产物与仓库构建**逐方法 IL 零差异**。
+
+### 11.13 v1.7.6：船只快速靠岸排查 + 船只堆叠开关（2026-10-17，玩家反馈驱动）
+
+#### A. 报障 1「船只快速靠岸」—— **是我们的锅**（档位被重复缩放 / 叠乘），已根治
+
+**玩家的原话（决定性线索）**：*"只要把船的二倍速开着，然后退出岛屿再重进，不要点重新开始，就会一直船速叠加。"*
+
+**旧实现为什么会叠乘（逐步推演）**
+
+| 步 | 旧代码（v1.7.1 ~ v1.7.5） | 发生了什么 |
+|---|---|---|
+| 1 | `Adjust`：`k = 旧档 / 新档`，`duration' = duration × k`，并把档位记进 `_applied[Landing]` | 首次 ×2：`k = 1/2` → 用时 ÷2 |
+| 2 | `Tick`：`island == null \|\| !generated \|\| state != Playing` → **`_applied.Clear()`**（当时注释："离开战局 / 换岛：登记表作废"） | 退出岛屿的瞬间，记账全没了；但 **Landing 与它们被改过的 `shipTravel` 还在**（不点"重新开始"= 同一批对象） |
+| 3 | 再进岛 → `ApplyAll` → `seen` 取不到 ⇒ 默认 `1`（"原版速度的新船"） | 对**已经 ÷2 的值**再乘 `1/2` → **÷4** |
+| 4 | 再进出一次 | **÷8** …… 表现就是"每次进出岛屿船都更快一截" |
+
+**结论**：**是**本模组的问题，触发条件 = `[Landing] ShipSpeedGear ≠ 1`（默认 ×1 时 `Adjust` 在第一步就早退，**一次读写都不做**，
+所以没碰过滑条的玩家完全不受影响；这也解释了为什么只有部分玩家遇到）。
+
+**根治（三道，缺一不可）**
+
+| # | 改法 | 为什么这样就不会再叠 |
+|---|---|---|
+| ① | 每条船改记**基准用时** `baseDur / baseFlee`（= 第一次见到时的原版值，已含该船 `TryPlace` 的随机档位与难度倍率），目标值恒为 `基准 / 档位` | 同一艘船无论被套用多少次，结果都是同一个数 —— **结构上不可能叠乘**（旧实现是"对当前值再乘一次"） |
+| ② | 登记表**不再在"离开战局 / 换岛"时清空**，只 `Prune()` 掉已销毁的 Landing | 回到同一座岛时 `Entry.gear` 还在 ⇒ `Adjust` 直接跳过；真正换了岛，旧条目随对象销毁被摘掉，新 Landing 重新捕捉基准（原版速度） |
+| ③ | 档位 ≠ ×1 时每秒做一次**自愈比对**（`MatchesApplied`） | 原版若重新 `TryPlace` 把某条船的 `shipTravel` 写回原版速度 → 检测到"当前值 ≠ 我们写出的值" ⇒ 重新捕捉基准并再套一次（否则会变成"显示 ×2、实际原版"） |
+
+配套：
+- `RestoreVanilla`（总开关关掉）改为**直接写回基准用时**；**不在战局里就保留记账**，等回到战局再还原（旧实现会清表 → 再启用时又叠一次）。
+- 新增**每岛一行**诊断：`[NewMode][船速] 本关按 ×N 缩放靠岸用时（含原版波次；档位来自 F1 菜单 / cfg）`；档位 = ×1 时不打（不刷屏）。
+  以后玩家再报"船快"，**这一行就能一眼定案**（是档位在起作用，还是别的东西）。
+
+**同症状的第二个真 bug（独立存在，也已修）：F1 档位条的拖动状态会卡死**
+
+| 项 | 内容 |
+|---|---|
+| 根因 | `HandleGearDrag` 只在"轨道内 `MouseDown` + `MouseUp`"结束 `_gearDrag`，且 `MouseDrag` / `MouseUp` **不校验按键、不校验指针位置**。松手落在面板外 / 游戏窗口外（或那一帧 OnGUI 没跑到）→ 标志位一直为 true → 之后**任何左键拖动**（例如平移相机）都按鼠标 x 调 `ApplyGear` ⇒ 档位被静默改到 ×2、**原版波次的船真的变快**，玩家却完全不知道是自己"拖"出来的 |
+| 修法 | ① 只认左键（`e.button != 0` 直接忽略）；② `_gearDrag && !Input.GetMouseButton(0)` 自动清（鼠标早就松了）；③ `MouseDrag` 时指针离开轨道上下各一格就结束本次拖动；④ 菜单关闭 / 折叠 / 总开关关闭时 `IngameMenu.CancelGearDrag()` |
+
+**不改的原版语义**：档位仍然"原生波次 + 本模组投放的船都生效"（v1.7.1 作者口径），只是不再叠乘；×1 时完全不读不写。
+
+#### B. 需求 2：**船只堆叠开关**（挂进原版设置界面，与"启用模组"同一套机制）
+
+| 项 | 内容 |
+|---|---|
+| 新 cfg | `[Landing] AllowShipStack`（默认 `false` = 一直以来的"滩头占位互斥"） |
+| 原版设置 | ESC → 设置 → **控制** 分类最前面**第三行**：`船只可堆叠（影响观感）` / `Ships may stack (visual only)`。与 v1.7.5 那两行**完全同一套机制**：运行期注入 I2 词条 → 反射 `AddBoolWidget` → `SetSiblingIndex(2)` → 每 15 帧 `ForceUpdate()` → setter `return true` → getter/setter 直读 cfg（原版设置 / cfg 文件天然同步） |
+| 打开后（投放侧） | `DropPlanner.TryResolve`：首选间距与最低间距都设 **0**；`IsOccupied` 见到间距 0 直接返回"未占用"（也不重建占用缓存）⇒ 永远选**最近的、廊道通**的滩头 |
+| 打开后（原版侧） | `LandingInjector` **不再把已有船交给 `Landing.TryPlace`**（否则原版 `ColCube.CheckBox` 的朝向盒重叠判定仍会拒绝，开关就成了空话）⇒ 同一滩头可叠任意多条船 |
+| **不变** | 仍做**进近廊道预检**（`CorridorClear`：挡的是地形 / 建筑，不是船）；船照常装人、下船、编队出发、播接近音乐；「船员自检」照常 |
+| 作用范围 | 只影响**之后**的投放（已在场的船不会被挪动）；只影响**本模组投放**（原版波次仍按原版规则占位）；纯观感，不参与胜负/数值 |
+
+#### C. 顺带修掉的两处（代码体检产出）
+
+| 位置 | 问题 | 修法 |
+|---|---|---|
+| `LandingInjector` 失败路径 | 候选全失败时只 `Destroy(landingGo)`，但这条 Landing 早已 `group.AddLanding()` 进了 `ShipGroup.landings` → 编队 `Launch()` 会对着一艘已销毁的 Landing 调 `Launch()` | 失败前把它从 `landings` 摘掉、`shipGroup = null`；**不动 `SpawnLedger`** —— 那个 Wave 仍归 `FlotillaLauncher` 复用，且 `SpawnLedger.Owns` 必须继续认得它（否则"拦下原版波次"会误伤自家波，见 §11.3 B10） |
+| `ShipSpeedRuntime.Reset()` | 旧实现顺带清 `_applied`（同一类叠乘风险） | 只重置节流时间，**不清基准 / 记账** |
+
+#### D. 验证
+
+**构建闸门**：`api-check 654` / `loc-check 234（占位符 108）` / `rules 35 文件 9172 行 / 禁用清单 2 条` / `docrefs 119 处` 全绿（`pack-compat` 需提供整合包 DLL 时才有意义）。
+
+**实机验收（待作者）**：
+1. 档位 ×2 → **退出岛屿再进（不点重新开始）×3**：船的靠岸用时应始终是"原版 ÷2"，**不再逐次变快**（日志里 `本关按 ×2 …` 每岛一行）；
+2. 档位拨回 `×1（原版）` 或关掉总开关 → 在航船的用时**立刻回到原版**；
+3. 原版设置 → 控制 最前面应看到三行，第三行能点、能保存；
+4. 打开「船只可堆叠」→ 往同一滩头连投 3 艘：船叠在一起、都能正常下船与编队（HUD 不再提示"滩头都被船占着"）；关掉后恢复避让。
+
+
+### 11.14 v1.7.6 专题：生命周期与状态清理（2026-10-17，作者要求"退出地图 / 重启后我们的添加要及时消除"）
+
+> 来源：作者要求 —— **"用户退出地图或重启游戏，我们的一些添加也要及时消除；之前我们生成的非原生单位也遇到过类似情况，建议做专题排查，避免泄漏后再泄漏。"**
+
+这次把"我们加到游戏里 / 我们自己缓存的东西"**全部列出来**逐项核对，发现的问题都属同一类：
+**状态的生命周期和它依赖的游戏对象不同步** —— 有的只清一半、有的根本没人清、有的清了但没还原游戏侧的值。
+v1.6.0 的"重开战局后我们的单位还在"与 v1.7.6 的"退出岛屿再进 → 船速叠乘"都是这类。
+
+#### A. 清单：我们到底加了什么、谁负责清
+
+| # | 类别 | 我们加的东西 | 离开战局 / 换岛 | 关总开关 | 插件卸载 |
+|---|---|---|---|---|---|
+| 1 | 世界对象 | `Wave` / `Landing` / `ShipLoad` / `Longship` / `ShipGroup`（挂在 `raid.landingContainer`） | `SpawnLedger.DestroyAll()`（离开 / 重开 / 结算） | **保留**（玩家摆出来的） | `SpawnLedger.Destroy()` |
+| 2 | 世界对象 | 维京 `Squad` 与其中的 `Agent`（挂在 `island.runContainer`，**不在** Wave 树里） | `SpawnLedger.TrackSquad` → `DestroyAll` | 保留 | 同 1 |
+| 3 | 组件 | `ForeignUnit`（非原生标记）、`ShipboardThreat`（船上可被索敌） | 随 1 / 2 销毁；登记表 `ForeignUnit.Prune()` | 保留 | 随 1 / 2 |
+| 4 | 游戏状态 | `brain.order` / `orderMono`（`GroupOrder`） | `RemoteGroup.Clear()` | `RemoteGroup.Clear()` | `RemoteGroup.Clear()` |
+| 5 | 游戏状态 | `Landing.shipTravel.duration/fleeDuration`（靠岸速度） | **保留**（要跨"退出再进"记基准，见 §11.13A） | `RestoreVanilla` 写回基准 | `RestoreVanilla` |
+| 6 | 游戏状态 | `Wave.waveStartTime = float.MaxValue`（拦下原版波次） | **保留**（同一岛重进要继续拦） | **`ReleaseWaves()`（本轮补）** | `ReleaseWaves()` |
+| 7 | 游戏状态 | `TimeManager.RequestTimeScale`（框选减速） | `MarqueeSelect.ClearSession()` | `ClearSession()` | `ClearSession()` |
+| 8 | 游戏状态 | `CursorManager` 栈（点击路由）/ 相机 `IDragListener` 让位 | `RemoteCursor.ForceRelease()` / `AttachCamera` | 同左 | 同左 |
+| 9 | 游戏 UI | 原版设置里**三行**词条控件 + I2 词条 | 不适用（在原版设置菜单里，随菜单活） | **保留**（逃生门） | **`DestroyWidgets()`（本轮补，热重载不会两份）** |
+| 10 | 常驻对象 | `BadNorthNewMode.Ledger / Flotilla / Watchdog / Marker / RemoteCursor / ClickShield`（均 `DontDestroyOnLoad`） | 只清数据，对象留着复用 | 同左 | **`DestroyHelpers()`（本轮补，旧实现只销毁了 ClickShield 与菜单贴图）** |
+| 11 | 静态缓存 | `IngameMenu` 兵种列表 / HUD 行；`SquadBar` slots；`DropPlanner` 岸线采样 + 占位表；`UnitCatalog` 查找缓存；`LevelTools` 扫描缓存；`DisembarkWatchdog._entries`；`FlotillaLauncher._wave/_group` | **`SessionCleanup.PurgeBattleState()`（本轮新增）** | 同左 | 同左 |
+| 12 | 跨局账 | `ShipSpeedRuntime` 每船基准用时；`LevelTools._origStart`（waveStartTime 原值） | **必须保留**（丢了船速会叠乘 / 波次永远不来） | 保留（还原时不删账） | 随进程结束 |
+
+#### B. 本轮修掉的真实残留（每条都对应一次"泄漏后再泄漏"）
+
+| # | 问题 | 后果 | 修法 |
+|---|---|---|---|
+| **L1** | **关总开关不还原被拦的波次**：`ApplyDisabled` 从没调过 `LevelTools.ReleaseWaves()`，而 `Plugin.Update` 之后全早退 | "拦下原版波次"开着时关掉模组 ⇒ 本局 `waveStartTime` 永远是 `float.MaxValue`，**再也不会出波**，且没有任何代码会去救它 | `SessionCleanup.RestoreGameState()` → `ReleaseWaves()`；与 `ShipSpeedRuntime.RestoreVanilla` 同一处收尾 |
+| **L2** | **编队窗口关不掉**：`FlotillaLauncher` 只在 `Update` 里发现"wave 被销毁"才清；关总开关后 Update 仍在跑 | 关掉模组后 1 秒内仍会 `BeginWave()` —— "完全静默"只断了画面与点击，船照样出发 | 新增 `FlotillaLauncher.Cancel()`：销毁挂起的 Wave + 清静态引用；由 `PurgeBattleState` / 关总开关调用 |
+| **L3** | **下船看门狗的静态表不清**：`DisembarkWatchdog._entries` 只在 Update 里删"船没了"的条目，而关总开关后 Update 早退 | 旧局的 `Landing` 被静态表长期引用；重进战局后还可能拿旧船做诊断 | 新增 `ForgetAll()`；`PurgeBattleState` 调用；Update 里也加了 `Plugin.Enabled` 门控（上一轮） |
+| **L4** | **相机让位可能永久丢失**：`MarqueeSelect._detached` 只有 `AttachCamera` 会还；离开时若 `cursorManager` 已空就再也没机会还 | 同岛重开（`CursorManager` 复用）时相机拖拽彻底失效，玩家只能重启游戏 | 新增 `MarqueeSelect.ClearSession()`：**先尝试 `AttachCamera` 再丢引用**，并复位拖动/选择/减速 |
+| **L5** | **大量"每局一份"的静态缓存不清**：兵种列表、HUD 行、头像条 slots、岸线采样、占位表、兵种查找、波扫描、编队引用 | 旧局对象被静态引用（内存）；极少数还会被画出来 / 点到（换岛那一帧的头像条） | 新增 `SessionCleanup.PurgeBattleState()` 一处调齐（各子系统新增 `ClearSession/ClearCache/ClearScanCache`） |
+| **L6** | **常驻对象从不销毁**：Ledger / Flotilla / Watchdog / Marker / RemoteCursor 只有 `ClickShield` 与菜单贴图被销毁 | 热重载 / 卸载后残留 5 个 `DontDestroyOnLoad` 对象 + 2 张 128×128 贴图；`Marker` 的贴图还永远不释放 | 各加 `Destroy()`；`SessionCleanup.DestroyHelpers()` 统一调；`SpawnLedger.Destroy()` 先 `DestroyAll()` |
+| **L7** | **原版设置三行在卸载后残留** | 热重载会出现两份同名开关（一份还指向旧程序集的委托） | `VanillaSettings.DestroyWidgets()`（**只在卸载**；关总开关必须保留，那是逃生门） |
+| **L8** | `IngameMenu` 文件尾有 13 行空行、`ShipSpeedRuntime.Reset()` 死代码 | 无行为影响，属代码卫生 | 一并清掉 |
+
+> **有意"不清理"的两处**（写在这里，避免以后有人当 bug 又"修"回去）：
+> ① `ShipSpeedRuntime` 的每船基准（§11.13A）—— 清了就是"×2 叠乘"；
+> ② `LevelTools._origStart` —— 它是把 `waveStartTime` 还回原版的唯一凭据，清了波次就再也回不来。
+> 两者都按"对象被销毁时自动摘除"收敛规模（`Prune` / Unity null 判定），不会无限长。
+
+#### C. 设计：三条时机，一个入口
+
+```
+SessionCleanup.PurgeBattleState()      每局一份的运行时状态（幂等）
+        ├─ 离开战局 / 换岛：Plugin.Update 里"岛屿引用变了"→ 调一次
+        ├─ 关总开关：ApplyDisabled
+        └─ 卸载：DestroyHelpers 之前
+SessionCleanup.RestoreGameState(gm)    把改到游戏里的东西还回去
+        ├─ 关总开关
+        └─ 插件卸载
+SessionCleanup.DestroyHelpers()        销毁我们 new 出来的常驻对象 / 贴图 / 设置行
+        └─ 插件卸载
+```
+
+**为什么用"岛屿引用变了"判定离开**：试过 `InBattle()`，但它在**暂停时也为 false** —— 按 ESC 暂停会误清遥控组。
+改为 `!ReferenceEquals(gm.island, _lastIsland)`：离开地图时 `island` 变 `null`、换岛时变成另一个实例，暂停时不变。
+首次进岛（`_lastIsland == null`）不清 —— 那会把刚建好的东西清掉。
+
+**为什么离开战局时"不"调 `RestoreGameState`**：那一帧正在拆场景，把 `waveStartTime` 提前放回原值会让原版波次
+在拆场过程中抢跑 `BeginWave()`；而 `waveStartTime` 的原值账（`_origStart`）保留着，真正需要还原的时机是
+"关总开关"（人在局内）或"插件卸载"，两处都能准确还原。
+
+#### D. 验证
+
+**新增闸门（永久防线）**：`tools/check-rules.ps1` **规则⑧** —— 任何 `.cs` 只要用了 `DontDestroyOnLoad`，
+就必须定义 `static void Destroy()`，否则**构建直接失败**。这样"以后再加一个常驻辅助对象、忘了写清理"会在编译期被拦下，
+而不是等玩家报"退出地图后还剩东西"。
+
+**构建闸门**：`api-check 654` / `loc-check 234（占位符 108）` / `rules 35 文件 9172 行 / 禁用清单 2 条 / 规则⑧` / `docrefs 119 处` 全绿。
+
+**实机验收（待作者）**
+1. **拦下原版波次**开着 → **关掉总开关** → 波次应立刻恢复（原来会永远不出波）；
+2. 投放后**立刻**关总开关（1 秒编队窗口内）→ 不应再有船出发；
+3. 框选拖到一半按 ESC / 退出岛屿 → 回来之后**相机仍能拖动**（L4）；
+4. 从岛屿 A 退出回地图再进岛屿 B → 底部头像条、HUD 计数、菜单兵种列表都应立刻是 B 的（不残留 A）；
+5. 热重载插件（或换 DLL 重启）→ 原版设置里**始终三行**，不重复；世界里没有 `BadNorthNewMode.*` 残留对象。
 

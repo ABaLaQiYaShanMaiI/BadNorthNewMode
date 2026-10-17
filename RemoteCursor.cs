@@ -193,5 +193,14 @@ namespace BadNorthNewMode
         {
             if (_instance != null) _instance.Pop();
         }
+
+        /// <summary>v1.7.6：插件卸载时销毁这个常驻辅助对象（先从栈上摘掉，见 `SessionCleanup` / §11.14）。</summary>
+        internal static void Destroy()
+        {
+            ForceRelease();
+            if (_instance != null) UnityEngine.Object.Destroy(_instance.gameObject);
+            _instance = null;
+            _unavailable = false;
+        }
     }
 }

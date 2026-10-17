@@ -74,6 +74,25 @@ namespace BadNorthNewMode
             if (gameObject.activeSelf) gameObject.SetActive(false);
         }
 
+        /// <summary>v1.7.6：只在实例已存在时隐藏 —— 清理路径**不新建**对象（见 `SessionCleanup` / §11.14）。</summary>
+        internal static void HideIfAny()
+        {
+            if (_instance != null) _instance.Hide();
+        }
+
+        /// <summary>插件卸载：销毁标记对象与它运行时生成的贴图（`_shader` 是游戏资源，不能销毁）。</summary>
+        internal static void Destroy()
+        {
+            if (_instance != null) UnityEngine.Object.Destroy(_instance.gameObject);
+            _instance = null;
+
+            if (_ringTex != null) UnityEngine.Object.Destroy(_ringTex);
+            if (_discTex != null) UnityEngine.Object.Destroy(_discTex);
+            _ringTex = null;
+            _discTex = null;
+            _shader = null;
+        }
+
         void Update()
         {
             if (Time.time >= _until) { Hide(); return; }
