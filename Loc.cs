@@ -342,6 +342,8 @@ namespace BadNorthNewMode
             { "联机中保持原版靠岸用时（档位暂不生效，回单机后恢复）", "Online: ship approach timing stays vanilla (the gear is inactive until you return to single-player)" },
             { "联机中保持原版靠岸速度（两端波次签名必须一致）", "Online: ship approach speed is locked to vanilla (both sides must produce the same wave signature)" },
             { "[NewMode] 还原船速出错（不影响联机）：{0}", "[NewMode] failed to restore ship speed (co-op unaffected): {0}" },
+            { "联机中不支持「清场」：直接销毁本地单位会让两端不同步（请退出联机后再用）", "Cleanup is unavailable online: destroying local units directly would desync the two sides (leave the session first)" },
+            { "联机客机不能强制胜利：胜负由主机决定（请让主机按 F3）", "The client cannot force a win online: the host decides the result (ask the host to press F3)" },
             { "当前 Together 不是 BadNorthTogether（没有普通岛外部波通道）：联机投放会只有主机可见，已让路", "The installed Together is not BadNorthTogether (no ordinary-island external-wave channel): an online drop would only be visible to the host, so this mod stands down" },
             { "终岛无尽由整合包接管：本关投放已自动让路（可在 cfg 的 [Compat] 段调整）", "The final island's endless mode is run by the pack: dropping stands down here (see the [Compat] section in the cfg)" },
             { "Together 联机中：拦波次会与主机的波次校验冲突", "Together session: blocking waves would clash with the host's wave validation" },

@@ -162,6 +162,16 @@ namespace BadNorthNewMode
         /// <summary>F2 快捷键与菜单「清场」按钮共用：先弹原版确认框（可关掉），取消就什么都不做。</summary>
         internal static void RequestCleanup()
         {
+            // v1.8.1：联机中禁用清场 —— 直接销毁本地对象不会经过主机权威，客机会保留幽灵单位；
+            // 现在投放的波已登记进 Together 清单，更不能单边删除。
+            if (Compat.TogetherOnline)
+            {
+                string msg = Loc.T("联机中不支持「清场」：直接销毁本地单位会让两端不同步（请退出联机后再用）");
+                Util.Warn("[NewMode][兼容] " + msg);
+                IngameMenu.Say(msg);
+                return;
+            }
+
             if (VanillaUI.ModalShowing) return;
 
             int total = PendingCount();

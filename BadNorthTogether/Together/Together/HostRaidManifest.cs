@@ -723,7 +723,16 @@ internal static class HostRaidManifest
 				}
 				if (!global::UnityObjectOps.Truthy((Object)(object)landing.Prefab))
 				{
-					throw new IOException("找不到主机指定船资源：" + landing.Ship);
+					// BadNorthTogether（借鉴 BadNorthMP 的 VisualOnlyPrefab）：levelNode 里没有时按名字兜底
+					landing.Prefab = FindAsset<Longship>(landing.Ship);
+					if (global::UnityObjectOps.Truthy((Object)(object)landing.Prefab))
+					{
+						Plugin.Log.LogWarning((object)("[主机波清单] 船资源不在 levelNode 列表，已按名字兜底：" + landing.Ship));
+					}
+				}
+				if (!global::UnityObjectOps.Truthy((Object)(object)landing.Prefab))
+				{
+					throw new IOException("找不到主机指定船资源：" + landing.Ship + "（两端船资源不一致）");
 				}
 				foreach (LoadData load in landing.Loads)
 				{
@@ -740,11 +749,49 @@ internal static class HostRaidManifest
 					}
 					if (!global::UnityObjectOps.Truthy((Object)(object)load.Prefab))
 					{
-						throw new IOException("找不到主机指定敌人资源：" + load.Reference + "/" + load.Agent);
+						// BadNorthTogether（借鉴 BadNorthMP 的 VisualOnlyPrefab）：levelNode 里没有时按名字兜底
+						load.Prefab = FindEnemy(load.Reference, load.Agent);
+						if (global::UnityObjectOps.Truthy((Object)(object)load.Prefab))
+						{
+							Plugin.Log.LogWarning((object)("[主机波清单] 敌人资源不在 levelNode 列表，已按名字兜底：" + load.Reference + "/" + load.Agent));
+						}
+					}
+					if (!global::UnityObjectOps.Truthy((Object)(object)load.Prefab))
+					{
+						throw new IOException("找不到主机指定敌人资源：" + load.Reference + "/" + load.Agent + "（两端插件/资源不一致）");
 					}
 				}
 			}
 		}
+	}
+
+	// BadNorthTogether（借鉴 BadNorthMP 的 VisualOnlyPrefab）：levelNode 列表里找不到时，按名字在运行时资源里兜底，
+	// 专门对付"两端插件集不完全一致 / 外生兵种不在 levelNode 列表里"的情况。
+	private static T FindAsset<T>(string name) where T : Object
+	{
+		T[] all = Resources.FindObjectsOfTypeAll<T>();
+		for (int i = 0; i < all.Length; i++)
+		{
+			if (global::UnityObjectOps.Truthy((Object)(object)all[i]) && ((Object)all[i]).name == name)
+			{
+				return all[i];
+			}
+		}
+		return null;
+	}
+
+	private static VikingReference FindEnemy(string reference, string agent)
+	{
+		VikingReference[] all = Resources.FindObjectsOfTypeAll<VikingReference>();
+		for (int i = 0; i < all.Length; i++)
+		{
+			VikingReference vikingReference = all[i];
+			if (global::UnityObjectOps.Truthy((Object)(object)vikingReference) && ((Object)vikingReference).name == reference && global::UnityObjectOps.Truthy((Object)(object)vikingReference.agent) && ((Object)vikingReference.agent).name == agent)
+			{
+				return vikingReference;
+			}
+		}
+		return null;
 	}
 
 	private static IEnumerator Build(Manifest data)
@@ -830,6 +877,7 @@ internal static class HostRaidManifest
 						shipAnimator.enabled = true;
 					}
 					val5.gameObject.SetActive(true);
+					val5.gameObject.AddComponent<ExternalShipWatch>();
 					Plugin.Log.LogInfo((object)("[主机波清单] 装配船 " + ((Object)val5).name + "：载员 " + val5.agents.Count + "，动画=" + (global::UnityObjectOps.Truthy((Object)(object)shipAnimator) ? "ok" : "无")));
 					SquadEvacuationLocation[] componentsInChildren = ((Component)val5).GetComponentsInChildren<SquadEvacuationLocation>(true);
 					for (int j = 0; j < componentsInChildren.Length; j++)

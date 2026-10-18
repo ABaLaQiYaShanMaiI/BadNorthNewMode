@@ -184,6 +184,15 @@ namespace BadNorthNewMode
             string why;
             if (!Plugin.InBattle(gm, out why)) { IngameMenu.Say(why); return; }
 
+            // v1.8.1：联机客机不能强制胜利（胜负由主机权威，客机本地结算会让两端结果不一致）
+            if (Compat.SessionClient)
+            {
+                string msg = Loc.T("联机客机不能强制胜利：胜负由主机决定（请让主机按 F3）");
+                Util.Warn("[NewMode][兼容] " + msg);
+                IngameMenu.Say(msg);
+                return;
+            }
+
             EndOfLevel eol = gm.endOfLevel;
             if (eol == null) { IngameMenu.Say(Loc.T("EndOfLevel 未就绪")); return; }
             if (eol.reason != EndOfLevel.Reason.None) { IngameMenu.Say(Loc.T("本关已经结束过了")); return; }

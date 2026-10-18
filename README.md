@@ -19,6 +19,8 @@ A BepInEx mod for Bad North: drop enemy ships and command enemy units.
 
 **Online co-op (Together) works through the bundled `BadNorthTogether`.** Since v1.8.0 this repo also ships `BadNorthTogether` — a patched Together 0.6.13 (`BadNorthTogether.dll`; remove the old `Together.dll`, never keep both). On the host it registers any mod-created wave into Together's raid manifest, so on **ordinary islands** the client sees and can fight the ships/enemies we drop. This mod itself only runs a read-only gate (host + protocol 14 + battle baseline established) and never writes Together state; the client does not need this mod. Remote command, wave blocking and the pack's Endless Finale still stand down online as before. Switches live in `BepInEx/config/badnorth.newmode.cfg`, section `[Compat]`. Unit mods: rename their units for the drop menu with `[UI] UnitNameOverrides` (e.g. `Viking_Spearman=Spearman`).
 
+**Who can do what online (v1.8.1):** dropping is **host-only**; selecting/moving the **shared** squads is available to **both** players — that is Together's co-op design (client commands are forwarded to the host), not something this mod enables. Remote command, wave blocking, cleanup (`F2`), client force-win (`F3`) and ship-speed gear are all locked or stood down online. Full matrix: `PROJECT_SPEC.md` §11.18.
+
 ## Links & License
 
 - Project: https://github.com/ABaLaQiYaShanMaiI/BadNorthNewMode
@@ -46,6 +48,8 @@ BepInEx 模组：给《Bad North》加“投放敌舰”和“遥控敌方单位
 **适用范围：单机。** 与《旧灰复燃的战旗》整合包（V3.0+；包会替换游戏本体程序集并自带约 21 个插件）在**单机**下已适配：投放 / 遥控 / 清场（`F2`）/ 强制胜利（`F3`）全部可用；唯一的自动让路是整合包的 **终岛无尽**（该岛波次由包接管，`[Compat] DropOnTerminal=true` 可强行开放投放）。「拦下原版波次」在单机照常可用。
 
 **联机（Together）由本仓库的 `BadNorthTogether` 承担。** v1.8.0 起仓库同时提供 `BadNorthTogether` —— Together 0.6.13 的补丁版（文件名 `BadNorthTogether.dll`；**先删掉旧的 `Together.dll`**，两份同名程序集不能共存）。它在主机侧把任何模组新建的波登记进 Together 的波次清单，所以**普通岛屿**上客机也能看到并攻击我们投放的船与敌人。本模组自己只做**只读放行判定**（主机 + 协议 14 + 战斗基线已建立），绝不写 Together 状态；客机不装本模组也能看见。遥控、拦波次、终岛无尽接管在联机中仍照旧让路。开关在 `BepInEx/config/badnorth.newmode.cfg` 的 `[Compat]` 段；**加兵种的 mod** 可用 `[UI] UnitNameOverrides` 改菜单里的显示名（例 `Viking_Spearman=长矛兵`）。
+
+**联机分工（v1.8.1）**：投放**只有主机**能做；**共享小队**的选中/移动**双方都能做** —— 那是 Together 的合作设计（客机命令会转给主机执行），**不是本模组打开的**。遥控、拦波次、清场（F2）、客机强制胜利（F3）、靠岸速度档位在联机中一律锁住或让路。完整矩阵见 `PROJECT_SPEC.md` §11.18。
 
 ## 链接与许可
 

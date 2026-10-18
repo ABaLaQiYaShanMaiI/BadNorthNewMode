@@ -42,6 +42,8 @@
 | 4 | `HostRaidManifest` | 新增 `nextExternalId`（`BeginIsland = initialCount`，`AfterAccept` 取 max）、`TryAdopt` / `CaptureExternal` / `SignatureOf` |
 | 5 | `HostRaidExternal`（`[HarmonyPatch(typeof(Wave), "BeginWave")]`） | 主机 + 联机 + `DeploySync.BattleStarted` + `Epoch>0` 且该波未登记 → 拦下本机开波、登记编号、发清单；客机 `ready` 后恢复开波并补发 `WaveBegin` |
 | 6 | `RaidIdentity.IsRegistered` / `WaveSync.SendExternalBegin` | 判别原版波/已登记波；外部波单独补发开波命令（签名取清单里存的那份，避免船速档位在捕获后改写航线导致漂移） |
+| 7 | `HostRaidManifest.ResolveResources` / `FindAsset<T>` / `FindEnemy` | `levelNode` 里找不到船/敌人资源时，按名字在 `Resources.FindObjectsOfTypeAll` 里兜底（借鉴 BadNorthMP `VisualOnlyPrefab`），成功记 Warning，失败才 `Fail` |
+| 8 | `HostRaidManifest.Build` + `ExternalShipWatch` | 客机装配船后 `SetActive(true)` + `Animator.cullingMode = AlwaysAnimate`；`onShipLaunch` 后 4 秒仍 disabled 则 `LaunchAnimComplete()` 兜底 |
 
 **保持不变**：协议 14、所有消息格式、原有终岛无尽流程、主机/客机权威模型、UI 与按键。
 **新增**：岛内新建的、未登记的 Wave 会被登记并广播（设计上对任何模组的波都生效，不只本模组）。
